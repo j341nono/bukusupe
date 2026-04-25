@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "ブクスペ",
+  "version": "1.0",
+  "description": "ブックマークを空間で管理する新しいタブ",
+  "permissions": ["bookmarks", "tabs"],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
