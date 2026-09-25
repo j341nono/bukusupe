@@ -1,4 +1,8 @@
-# AGENTS.md
+# ブクスペ（Bookmark Space）
+
+> このファイルは `CLAUDE.md` と `AGENTS.md` で**同じ内容**にしている。片方を直したら、もう片方も同じにすること。
+
+Chrome のブックマークを「星」として意味的に配置し、検索で引き寄せ、自分で選んだ星を線で結んで「星座」として保存・再表示する Chrome 拡張機能（Manifest V3）。
 
 ## はじめに必ず読むもの
 
@@ -10,26 +14,16 @@
 **各段階を終えたら `docs/HANDOFF.md` を更新すること**（到達点、新しく決めたこと、
 つまずいた点、`check:ext` に足した確認項目）。次に引き継ぐ人が読むのはこのファイル。
 
----
-
-## ブクスペ（Bookmark Space）
-
-Chrome のブックマークを「星」として意味的に配置し、検索で引き寄せ、自分で選んだ星を線で結んで「星座」として保存・再表示する Chrome 拡張機能（Manifest V3）。
-
-- 仕様書：`docs/SPEC.md`（**判断に迷ったら必ずこれを優先する**）
-- 実装計画と各段階の完了条件：`docs/PLAN.md`
-- 引き継ぎ（決めたこと・失敗したこと・確認項目）：`docs/HANDOFF.md`
-
 ## 技術構成
 
 | 項目 | 選択 |
 |---|---|
 | 拡張機能 | Manifest V3（`public/manifest.json` を手書き。crxjs 等のプラグインは使わない） |
 | 言語・ビルド | TypeScript + Vite（`index.html` と `src/background.ts` の 2 エントリ） |
-| 描画 | three.js（`MapControls` を回転無効で使い、移動と拡大縮小のみ） |
+| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜65 度、地図の方角は回さない） |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
 | 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
-| 権限 | `bookmarks`, `storage`（必要なら `unlimitedStorage`） |
+| 権限 | `bookmarks`, `storage`, `unlimitedStorage`（重みの取得に `huggingface.co` / `*.hf.co` の host_permissions） |
 
 CSP は `manifest.json` の `content_security_policy.extension_pages` に
 `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'` を指定している。**外してはいけない。**
@@ -38,12 +32,12 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 
 ```
 .
-├── CLAUDE.md
+├── CLAUDE.md / AGENTS.md    # 同じ内容（エージェント向けの作業規則）
 ├── docs/
 │   ├── SPEC.md              # 仕様書（正典）
 │   ├── PLAN.md              # 実装計画・完了条件
 │   ├── HANDOFF.md           # 引き継ぎ資料
-│   └── screens/             # check:ext が保存する遠・中・近の画面
+│   └── screens/             # check:ext が保存する画面と結果（遠・中・近・検索・星座）
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
 ├── public/
 │   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる）
@@ -54,15 +48,17 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── copy-ort.mjs         # ONNX Runtime の補助ファイルを public/ort/ に同梱
 │   └── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
 ├── src/
-│   ├── main.ts              # 画面の入口
+│   ├── main.ts              # 画面の入口（読み込み → 埋め込み → 配置 → 検索・星座）
 │   ├── background.ts        # service worker（アイコン → 専用タブ）
-│   ├── bookmarks/           # ブックマークの取得（Chrome / サンプルの 2 系統）
-│   ├── embed/               # 埋め込み（Worker、入力文の組み立て、ドメイン辞書、ORT 設定）
-│   ├── store/               # IndexedDB
-│   ├── layout/              # 配置（平均引き → k-means → PCA → 押し広げ → 螺旋）
-│   ├── render/              # three.js の描画（Points 1 つで数千件）
+│   ├── bookmarks/           # ブックマークの取得（Chrome / サンプルの 2 系統。読み取りのみ）
+│   ├── embed/               # 埋め込み（Worker、入力文の組み立て、ドメイン辞書、大分類、ORT 設定）
+│   ├── store/               # IndexedDB（データ源ごとの DB）
+│   ├── layout/              # 配置（平均引き → k-means → 粒度そろえ → PCA → 押し広げ → 螺旋）、星団名
+│   ├── search/              # 文字一致＋意味検索（平均引き、汎用度の補正、z 値での正規化）
+│   ├── constellation/       # 星座の保存形式、メンバーの集合、決定的な最小全域木
+│   ├── render/              # three.js の描画（星・星雲・ブラックホール・星座の線）
 │   ├── ui/                  # HUD とラベルの重ね表示
-│   └── data/sample-bookmarks.json   # 開発・デモ用の 150 件
+│   └── data/sample-bookmarks.json   # 開発・デモ用の 156 件
 └── dist/                    # ビルド成果物（拡張機能として読み込む）
 ```
 
@@ -73,14 +69,15 @@ npm install
 npm run dev        # http://localhost:5173 で画面を確認（サンプルデータ）
 npm run build      # dist/ を生成
 npm run typecheck  # tsc --noEmit
-npm run check:ext  # dist/ を実際の Chrome に読み込み、専用ページが動くか自動で確認
+npm run check:ext  # dist/ を実際の Chrome に読み込み、通しで自動確認（数分かかる）
 ```
 
 拡張機能としての確認：`npm run build` → `chrome://extensions` → デベロッパーモード ON →
 「パッケージ化されていない拡張機能を読み込む」で `dist/` を選択 → ツールバーのアイコンを押す。
 
-データ源は自動判定する（`chrome.bookmarks` があれば Chrome、なければサンプル）。
-URL に `?sample=1` を付けると拡張機能内でも強制的にサンプルデータになる。
+データ源は自動判定する（`chrome.bookmarks` に http(s) のブックマークがあれば Chrome、なければサンプル）。
+URL に `?sample=1` を付けると拡張機能内でも強制的にサンプルデータになる。`?demo=1` で左上のパネルを隠す。
+使っている途中でデータ源が変わったら（サンプル⇄実ブックマーク）、ページを読み込み直す。
 
 ## 守るべきルール
 
@@ -92,8 +89,9 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
      読み込もうとし、MV3 の CSP（`script-src 'self'`）に弾かれる。
 2. **ブックマークの内容をブラウザの外に送らない。** 分析・ログ送信・外部 API 呼び出しを書かない。
 3. **ブックマークを削除・変更する処理を書かない。** `chrome.bookmarks` は読み取り系
-   （`getTree` / `search` / `onCreated` / `onChanged` / `onRemoved`）のみ使う。
-   `remove` / `removeTree` / `update` / `create` / `move` は使わない。
+   （`getTree` / `search` と、`onCreated` / `onChanged` / `onRemoved` / `onMoved` の購読）のみ使う。
+   `remove` / `removeTree` / `update` / `create` / `move` は使わない
+   （`check:ext` が使い捨てのプロファイルで使うのは確認スクリプトの側だけ）。
 4. **各段階の終わりに `npm run build` と `npm run check:ext` が通ることを確認してからコミットする。**
 5. コミットメッセージは `feat(scope): ...` のように prefix 付き・英語・簡潔に 1 行。
 6. **完成ライン（SPEC 4 章）を最優先し、範囲を広げない。** 仕様書にない判断が必要なら実装前に確認する。
