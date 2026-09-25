@@ -247,6 +247,12 @@ try {
 
   // --- 遠・中・近のスクリーンショット ---
   mkdirSync("docs/screens", { recursive: true });
+  {
+    // 何もしていないときの初期位置（地図全体が画面の約 80%）
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    writeFileSync("docs/screens/initial.png", Buffer.from(shot.data, "base64"));
+    console.log("  画面: docs/screens/initial.png");
+  }
   for (const tier of ["far", "mid", "near"]) {
     await evalIn(`globalThis.__bukusupe.setZoomTier(${JSON.stringify(tier)})`);
     await sleep(900);

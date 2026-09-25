@@ -7,6 +7,8 @@ export type RenderStar = {
   /** 0..1。最終利用日時から決める */
   brightness: number;
   cluster: number;
+  /** 星団の中での並び。0 が最も星団らしい星 */
+  rank: number;
 };
 
 const VERT = /* glsl */ `
@@ -18,7 +20,7 @@ varying float vAlpha;
 varying vec3 vColor;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = clamp(aSize * uScale / max(-mv.z, 0.001), 1.0, 96.0);
+  gl_PointSize = clamp(aSize * uScale / max(-mv.z, 0.001), 2.0, 12.0);
   gl_Position = projectionMatrix * mv;
   vAlpha = aAlpha;
   vColor = aColor;
@@ -52,6 +54,10 @@ export function createStarMaterial(): THREE.ShaderMaterial {
 
 /** 星団ごとの色み。意味は持たせず、まとまりが見える程度の差にとどめる。 */
 const HUES = [0.58, 0.52, 0.09, 0.75, 0.13, 0.46, 0.86, 0.62, 0.02, 0.33];
+
+export function clusterColor(cluster: number, lightness = 0.72): THREE.Color {
+  return new THREE.Color().setHSL(HUES[cluster % HUES.length], 0.35, lightness);
+}
 
 const MOVE_SECONDS = 0.9;
 const BORN_SECONDS = 0.5;
@@ -120,13 +126,15 @@ export class StarField {
       pos[i * 3 + 1] = 0;
       pos[i * 3 + 2] = -fy;
 
-      size[i] = 0.95 + s.brightness * 1.25;
-      c.setHSL(HUES[s.cluster % HUES.length], 0.35, 0.72 + s.brightness * 0.2);
+      // 螺旋の内側（その星団らしい星）ほど少し大きく、少し明るく
+      const lead = 1 / (1 + s.rank * 0.5);
+      size[i] = (0.95 + s.brightness * 1.25) * (1 + lead * 0.45);
+      c.copy(clusterColor(s.cluster, 0.72 + s.brightness * 0.2));
       color[i * 3] = c.r;
       color[i * 3 + 1] = c.g;
       color[i * 3 + 2] = c.b;
 
-      this.targetAlpha[i] = 0.45 + s.brightness * 0.55;
+      this.targetAlpha[i] = Math.min(1, (0.45 + s.brightness * 0.55) * (1 + lead * 0.25));
       // 初回は内側の星から順に生まれる演出。以降は新しい星だけ光らせる
       const born = staggered ? (i / Math.max(1, n)) * 1.6 : 0;
       this.bornAt[i] = old ? -1 : born;

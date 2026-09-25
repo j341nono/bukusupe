@@ -1,6 +1,8 @@
 import type { BookmarkItem } from "../bookmarks/types";
+import { jitterOf } from "./jitter";
 import { clusterCount, kmeans } from "./kmeans";
-import { clusterName } from "./names";
+import { clusterNames } from "./names";
+import { refineClusters } from "./refine";
 import { packCircles, } from "./pack";
 import { pca2 } from "./pca";
 import { LAYOUT_SEED } from "./rng";
@@ -8,10 +10,13 @@ import { spiralPoint, spiralRadius } from "./spiral";
 import { centerAndNormalize, dot, meanVector } from "./vector";
 
 /** 配置の形が変わったら上げる。古い保存は捨てて計算し直す。 */
-export const LAYOUT_VERSION = 1;
+export const LAYOUT_VERSION = 2;
 
 /** 星の間隔。星団の円の大きさもこれを基準にする。 */
 export const SPACING = 2.0;
+
+/** 星団の円どうしの空き。星雲のもやが重ならない程度に広く取る。 */
+export const CLUSTER_GAP = SPACING * 3.2;
 
 export type StarRecord = {
   id: string;
@@ -59,7 +64,7 @@ export function computeLayout(
 
   // 1. 星団に分ける
   const k = clusterCount(n);
-  const { assignments, centroids } = kmeans(centered, k, LAYOUT_SEED);
+  const { assignments, centroids } = refineClusters(centered, kmeans(centered, k, LAYOUT_SEED), LAYOUT_SEED);
 
   const groups: number[][] = centroids.map(() => []);
   assignments.forEach((c, i) => groups[c].push(i));
@@ -70,11 +75,12 @@ export function computeLayout(
   const maxAbs = Math.max(1e-6, ...projected.map((p) => Math.hypot(p.x, p.y)));
   const spread = 1.6 * Math.sqrt(radii.reduce((s, r) => s + r * r, 0));
   const scaled = projected.map((p) => ({ x: (p.x / maxAbs) * spread, y: (p.y / maxAbs) * spread }));
-  const packed = packCircles(scaled, radii, SPACING * 1.2);
+  const packed = packCircles(scaled, radii, CLUSTER_GAP);
 
   // 3. 星団の中の星を螺旋に置く
   const stars: StarRecord[] = [];
   const clusters: ClusterRecord[] = [];
+  const names = clusterNames(groups.map((g) => g.map((i) => usable[i])));
 
   groups.forEach((memberIdx, c) => {
     // 星団らしい順（平均ベクトルとの類似度が高い順）。同点は id で決める
@@ -86,10 +92,11 @@ export function computeLayout(
 
     ordered.forEach((idx, rank) => {
       const p = spiralPoint(rank, SPACING);
+      const j = jitterOf(usable[idx].id, SPACING);
       stars.push({
         id: usable[idx].id,
-        x: packed[c].x + p.x,
-        y: packed[c].y + p.y,
+        x: packed[c].x + p.x + j.dx,
+        y: packed[c].y + p.y + j.dy,
         cluster: c,
         rank,
       });
@@ -97,7 +104,7 @@ export function computeLayout(
 
     clusters.push({
       index: c,
-      name: clusterName(ordered.map((i) => usable[i]), c),
+      name: names[c],
       x: packed[c].x,
       y: packed[c].y,
       radius: Math.max(radii[c], spiralRadius(ordered.length, SPACING) + SPACING * 0.5),
@@ -129,7 +136,8 @@ export function addStar(layout: Layout, id: string, vector: Float32Array, mean: 
   const cluster = layout.clusters[best];
   const rank = cluster.nextIndex;
   const p = spiralPoint(rank, layout.spacing);
-  const star: StarRecord = { id, x: cluster.x + p.x, y: cluster.y + p.y, cluster: best, rank };
+  const j = jitterOf(id, layout.spacing);
+  const star: StarRecord = { id, x: cluster.x + p.x + j.dx, y: cluster.y + p.y + j.dy, cluster: best, rank };
 
   return {
     ...layout,

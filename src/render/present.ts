@@ -10,7 +10,7 @@ export function toRenderStars(layout: Layout, byId: Map<string, BookmarkItem>): 
   for (const s of layout.stars) {
     const item = byId.get(s.id);
     if (!item) continue;
-    stars.push({ id: s.id, x: s.x, y: s.y, brightness: brightnessOf(item), cluster: s.cluster });
+    stars.push({ id: s.id, x: s.x, y: s.y, brightness: brightnessOf(item), cluster: s.cluster, rank: s.rank });
   }
   return stars;
 }
@@ -22,6 +22,7 @@ export function toLabelSource(layout: Layout, byId: Map<string, BookmarkItem>): 
       name: c.name,
       x: c.x,
       y: c.y,
+      radius: c.radius,
       count: c.count,
     })),
     stars: layout.stars.flatMap((s) => {

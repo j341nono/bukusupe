@@ -3,15 +3,26 @@ import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
 import { LabelLayer, type LabelItem, type ZoomTier } from "../ui/labels";
-import { StarField, createBackdrop, type RenderStar } from "./stars";
+import { Nebulae } from "./nebula";
+import { StarField, clusterColor, createBackdrop, type RenderStar } from "./stars";
 
 /** 静止時のカメラの傾き（真上から 40 度。SPEC 7 章） */
 const TILT = THREE.MathUtils.degToRad(40);
 /** 傾き⇄真上の切り替えにかける時間（SPEC 7 章） */
 const TURN_SECONDS = 0.6;
 
+function boundsOf(stars: { x: number; y: number }[], fallback: number) {
+  if (stars.length === 0) return { minX: -fallback, maxX: fallback, minY: -fallback, maxY: fallback };
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of stars) {
+    minX = Math.min(minX, s.x); maxX = Math.max(maxX, s.x);
+    minY = Math.min(minY, s.y); maxY = Math.max(maxY, s.y);
+  }
+  return { minX, maxX, minY, maxY };
+}
+
 export type LabelSource = {
-  clusters: { index: number; name: string; x: number; y: number; count: number }[];
+  clusters: { index: number; name: string; x: number; y: number; radius: number; count: number }[];
   stars: { id: string; title: string; x: number; y: number; rank: number }[];
 };
 
@@ -23,10 +34,14 @@ export class SpaceView {
   private readonly clock = new THREE.Clock();
   private readonly backdrop: THREE.Points;
   private readonly field = new StarField();
+  private readonly nebulae = new Nebulae();
   private readonly labels: LabelLayer;
 
   private running = false;
   private extent = 60;
+  private bounds = { minX: -30, maxX: 30, minY: -30, maxY: 30 };
+  /** 地図全体が画面の約 80% に収まる距離。拡大率の段階はこれを基準にする。 */
+  private fitDistance = 90;
   private labelSource: LabelSource = { clusters: [], stars: [] };
   private labelTimer = 0;
   private tilt = TILT;
@@ -55,6 +70,7 @@ export class SpaceView {
 
     this.backdrop = createBackdrop();
     this.scene.add(this.backdrop);
+    this.scene.add(this.nebulae.object);
     this.scene.add(this.field.object);
 
     this.labels = new LabelLayer(labelContainer);
@@ -65,8 +81,14 @@ export class SpaceView {
 
   setLayout(layout: Layout, stars: RenderStar[], source: LabelSource, frame = true): void {
     this.field.setStars(stars);
+    this.nebulae.set(
+      source.clusters
+        .filter((c) => c.count > 0)
+        .map((c) => ({ x: c.x, y: c.y, radius: c.radius, color: clusterColor(c.index, 0.45) })),
+    );
     this.labelSource = source;
     this.extent = layoutExtent(layout);
+    this.bounds = boundsOf(stars, this.extent);
     if (frame) this.frameAll();
     this.resize();
     this.labelTimer = 0;
@@ -80,15 +102,15 @@ export class SpaceView {
   /** いまの拡大率の段階。ラベルの出し方を決める。 */
   get zoomTier(): ZoomTier {
     const d = this.camera.position.distanceTo(this.controls.target);
-    if (d > this.extent * 2.0) return "far";
-    if (d > this.extent * 0.9) return "mid";
+    if (d > this.fitDistance * 1.4) return "far";
+    if (d > this.fitDistance * 0.55) return "mid";
     return "near";
   }
 
   /** 確認用：段階ごとの決まった拡大率に合わせる。 */
   setZoomTier(tier: ZoomTier): void {
-    const factor = tier === "far" ? 2.6 : tier === "mid" ? 1.3 : 0.5;
-    this.setDistance(this.extent * factor);
+    const factor = tier === "far" ? 1.9 : tier === "mid" ? 0.85 : 0.3;
+    this.setDistance(this.fitDistance * factor);
   }
 
   start(): void {
@@ -97,12 +119,41 @@ export class SpaceView {
     this.renderer.setAnimationLoop(this.tick);
   }
 
-  /** 全体が画面に収まる距離へカメラを置く */
+  /** 地図全体が画面の約 80% に収まる位置へカメラを置く */
   private frameAll(): void {
-    this.controls.target.set(0, 0, 0);
+    const b = this.bounds;
+    const margin = 2;
+    this.controls.target.set((b.minX + b.maxX) / 2, 0, -(b.minY + b.maxY) / 2);
+
     const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const tanH = tanV * this.camera.aspect;
-    this.setDistance(Math.max(30, this.extent * Math.max(1 / tanV, 1 / tanH) * 1.05));
+    const halfW = (b.maxX - b.minX) / 2 + margin;
+    const halfH = ((b.maxY - b.minY) / 2 + margin) * Math.cos(this.tilt);
+    let dist = Math.max(25, Math.max(halfW / tanH, halfH / tanV) / 0.8);
+
+    // 傾けたぶん手前が広がるので、四隅を実際に投影して 80% に合わせ込む
+    const corners = [
+      [b.minX - margin, b.minY - margin],
+      [b.maxX + margin, b.minY - margin],
+      [b.minX - margin, b.maxY + margin],
+      [b.maxX + margin, b.maxY + margin],
+    ];
+    const probe = new THREE.Vector3();
+    for (let i = 0; i < 6; i++) {
+      this.setDistance(dist);
+      this.camera.updateMatrixWorld();
+      let worst = 0;
+      for (const [x, y] of corners) {
+        probe.set(x, 0, -y).project(this.camera);
+        worst = Math.max(worst, Math.abs(probe.x), Math.abs(probe.y));
+      }
+      if (worst <= 0) break;
+      const next = dist * (worst / 0.8);
+      if (Math.abs(next - dist) < dist * 0.005) break;
+      dist = next;
+    }
+    this.fitDistance = dist;
+    this.setDistance(dist);
   }
 
   private setDistance(dist: number): void {
@@ -154,7 +205,7 @@ export class SpaceView {
         key: `c${c.index}`,
         text: c.name,
         x: c.x,
-        y: c.y,
+        y: c.y + c.radius + 1.5,
         kind: "cluster",
         priority: -1000 + (1000 - c.count),   // 大きい星団ほど先に置く
       });
