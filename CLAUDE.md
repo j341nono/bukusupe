@@ -20,7 +20,7 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 |---|---|
 | 拡張機能 | Manifest V3（`public/manifest.json` を手書き。crxjs 等のプラグインは使わない） |
 | 言語・ビルド | TypeScript + Vite（`index.html` と `src/background.ts` の 2 エントリ） |
-| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜65 度、地図の方角は回さない） |
+| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄（入力中は無効、Ctrl は使わない） |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
 | 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
 | 権限 | `bookmarks`, `storage`, `unlimitedStorage`（重みの取得に `huggingface.co` / `*.hf.co` の host_permissions） |
