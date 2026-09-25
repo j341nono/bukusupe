@@ -93,6 +93,36 @@ try {
 
   const evalIn = async (expression) =>
     (await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result.value;
+  await send("Performance.enable", {}, sessionId);
+  const layoutCount = async () => (await send("Performance.getMetrics", {}, sessionId))
+    .metrics.find((metric) => metric.name === "LayoutCount")?.value ?? NaN;
+  const dragLabels = async (mode) => {
+    await sleep(250);
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 530, y: 600 }, sessionId);
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: 530, y: 600,
+      button: "left", buttons: 1, clickCount: 1 }, sessionId);
+    await evalIn("globalThis.__bukusupe.resetLabelTiming()");
+    const before = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.labelStats())")) ?? "null");
+    const beforeLayouts = await layoutCount();
+    for (let step = 1; step <= 45; step++) {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 530 + step * 4, y: 600 + step,
+        button: "left", buttons: 1 }, sessionId);
+      await sleep(16);
+    }
+    const afterLayouts = await layoutCount();
+    const after = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.labelStats())")) ?? "null");
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: 710, y: 645,
+      button: "left", buttons: 0, clickCount: 1 }, sessionId);
+    const frames = after.frames - before.frames;
+    const updates = after.positionUpdates - before.positionUpdates;
+    check(frames >= 30 && updates === frames, `${mode}のドラッグ中、描画とラベル位置更新が毎コマ一致`,
+      `${frames} コマ / ${updates} 回`);
+    check(after.maxPositionMs <= 2, `${mode}のラベル位置更新が毎回 2ms 以内`,
+      `最大 ${after.maxPositionMs.toFixed(2)}ms`);
+    check(afterLayouts === beforeLayouts && after.decisions === before.decisions,
+      `${mode}の移動中に再レイアウトとラベル再判定がない`,
+      `LayoutCount ${beforeLayouts}→${afterLayouts}、再判定 ${after.decisions - before.decisions} 回`);
+  };
   const hud = () => evalIn("document.getElementById('hud')?.innerText ?? ''");
   const phase = () => evalIn("document.body.dataset.phase ?? ''");
 
@@ -451,6 +481,7 @@ try {
     writeFileSync("docs/screens/search.png", Buffer.from(shot.data, "base64"));
     console.log("  画面: docs/screens/search.png");
   }
+  await dragLabels("検索中");
   const opened = JSON.parse((await evalIn(`(async () => {
     const before = (await chrome.tabs.query({})).map((tab) => tab.id);
     document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -473,6 +504,7 @@ try {
   check(returned.input === "" && returned.count === 0 && returned.tilt > 39 &&
     home && Math.hypot(returned.position.x - home.x, returned.position.y - home.y) < 0.5,
   "Esc で検索が消え、星とカメラが元へ戻る");
+  await dragLabels("通常画面");
 
   // --- 2 回目：再読み込みで計算し直さないこと ---
   events = [];

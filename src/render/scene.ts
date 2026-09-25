@@ -43,7 +43,14 @@ export class SpaceView {
   /** 地図全体が画面の約 80% に収まる距離。拡大率の段階はこれを基準にする。 */
   private fitDistance = 90;
   private labelSource: LabelSource = { clusters: [], stars: [] };
-  private labelTimer = 0;
+  private labelsDirty = true;
+  private lastLabelMotion = 0;
+  private lastLabelTier: ZoomTier | null = null;
+  private readonly lastLabelCamera = new THREE.Matrix4();
+  private labelCameraKnown = false;
+  private labelDecisions = 0;
+  private labelPositionUpdates = 0;
+  private maxLabelPositionMs = 0;
   private screenCircles: ScreenCircle[] = [];
   private tilt = TILT;
   private tiltTarget = TILT;
@@ -145,7 +152,7 @@ export class SpaceView {
     this.bounds = boundsOf(stars, this.extent);
     if (frame) this.frameAll();
     this.resize();
-    this.labelTimer = 0;
+    this.labelsDirty = true;
   }
 
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
@@ -171,7 +178,7 @@ export class SpaceView {
     this.trace.visible = this.searchIds.length > 0;
     this.tails.visible = this.searchIds.length > 0;
     this.hoveredId = null;
-    this.labelTimer = 0;
+    this.labelsDirty = true;
   }
 
   selectSearch(id: string | null): void {
@@ -259,6 +266,15 @@ export class SpaceView {
   /** check:ext が画面上のタイトルと星団の円を照合するための投影値。 */
   labelGeometry(): ScreenCircle[] {
     return this.screenCircles;
+  }
+
+  labelStats(): { frames: number; positionUpdates: number; decisions: number; maxPositionMs: number } {
+    return { frames: this.frames, positionUpdates: this.labelPositionUpdates,
+      decisions: this.labelDecisions, maxPositionMs: this.maxLabelPositionMs };
+  }
+
+  resetLabelTiming(): void {
+    this.maxLabelPositionMs = 0;
   }
 
   start(): void {
@@ -388,17 +404,47 @@ export class SpaceView {
       if (p) this.selectedHalo.position.set(p.x, 0.11, -p.y);
     }
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
-
-    // ラベルは毎コマ組み直さない（星の描画を邪魔しない）
-    this.labelTimer -= dt;
-    if (this.labelTimer <= 0) {
-      this.labelTimer = 0.12;
-      this.updateLabels();
+    this.camera.updateMatrixWorld();
+    const now = performance.now();
+    const matrix = this.camera.matrixWorld.elements;
+    const previous = this.lastLabelCamera.elements;
+    const moving = !this.labelCameraKnown || matrix.some((value, i) => Math.abs(value - previous[i]) > 1e-6);
+    if (moving) {
+      this.lastLabelMotion = now;
+      this.lastLabelCamera.copy(this.camera.matrixWorld);
+      this.labelCameraKnown = true;
     }
+    const tier = this.zoomTier;
+    if (this.lastLabelTier === null || tier !== this.lastLabelTier ||
+      (!moving && now - this.lastLabelMotion >= 150 && (this.labelsDirty || this.lastLabelMotion > 0))) {
+      this.decideLabels();
+      this.labelsDirty = false;
+      this.lastLabelTier = tier;
+      this.lastLabelMotion = 0;
+      this.labelDecisions++;
+    }
+    const labelStart = performance.now();
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const point = new THREE.Vector3();
+    this.labels.updatePositions((item) => {
+      const current = item.searchRank == null ? null : this.field.displayPosition(item.key);
+      point.set(current?.x ?? item.x, 0, -(current?.y ?? item.y)).project(this.camera);
+      if (point.z > 1) return null;
+      let sx = (point.x * 0.5 + 0.5) * size.x;
+      let sy = (-point.y * 0.5 + 0.5) * size.y;
+      if (item.searchRank != null) {
+        const outward = Math.hypot(sx - size.x / 2, sy - size.y / 2) || 1;
+        sx += (sx - size.x / 2) / outward * 10;
+        sy += (sy - size.y / 2) / outward * 10;
+      }
+      return { sx, sy };
+    });
+    this.labelPositionUpdates++;
+    this.maxLabelPositionMs = Math.max(this.maxLabelPositionMs, performance.now() - labelStart);
+    this.renderer.render(this.scene, this.camera);
   };
 
-  private updateLabels(): void {
+  private decideLabels(): void {
     const tier = this.zoomTier;
     const size = this.renderer.getSize(new THREE.Vector2());
     const v = new THREE.Vector3();
@@ -439,6 +485,8 @@ export class SpaceView {
       items.push({
         key: `c${c.index}`,
         text: c.name,
+        x: c.x, y: tier === "far" ? c.y : c.y + c.radius + 1.5,
+        centered: tier === "far",
         sx: at.sx,
         sy: at.sy,
         kind: "cluster",
@@ -459,6 +507,7 @@ export class SpaceView {
         const own = this.labelSource.clusters.find((c) => c.index === s.cluster);
         items.push({
           key: s.id, text: s.title,
+          x: s.x, y: s.y,
           sx: this.searchIds.length ? at.sx + (at.sx - size.x / 2) / outward * 10 : at.sx,
           sy: this.searchIds.length ? at.sy + (at.sy - size.y / 2) / outward * 10 : at.sy,
           kind: "star",
@@ -481,6 +530,7 @@ export class SpaceView {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.labelsDirty = true;
     // 世界の大きさ 1 が画面上で何ピクセルになるか（距離 1 のとき）
     const scale =
       this.renderer.getDrawingBufferSize(new THREE.Vector2()).y /

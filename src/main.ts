@@ -444,6 +444,8 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   starPosition: (id: string) => view?.starPosition(id),
   starVisual: (id: string) => view?.starVisual(id),
   traceGeometry: () => view?.traceGeometry(),
+  labelStats: () => view?.labelStats(),
+  resetLabelTiming: () => view?.resetLabelTiming(),
   cameraTilt: () => view?.cameraTilt(),
   measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
 };

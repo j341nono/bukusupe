@@ -13,6 +13,10 @@ export type PlacedLabel = {
   side?: "left" | "right";
   color?: string;
   searchRank?: number;
+  /** カメラ移動中も追跡する地図上の位置。検索中の星は表示位置を使う。 */
+  x: number;
+  y: number;
+  centered?: boolean;
 };
 
 export type Box = { l: number; t: number; r: number; b: number };
@@ -56,7 +60,8 @@ export function entersCircle(box: Box, circle: ScreenCircle): boolean {
  * 星団中心から外へ向けてタイトルを置き、他のタイトルと重なるものを間引く。
  */
 export class LabelLayer {
-  private readonly pool: HTMLDivElement[] = [];
+  private readonly elements = new Map<string, HTMLDivElement>();
+  private active: { item: PlacedLabel; width: number; height: number }[] = [];
   private readonly measure = document.createElement("canvas").getContext("2d");
   private readonly fullText = new Map<string, string>();
   private hovered: string | null = null;
@@ -110,15 +115,42 @@ export class LabelLayer {
     this.paint([]);
   }
 
-  private paint(shown: { item: PlacedLabel; text: string; box: Box }[]): void {
-    while (this.pool.length < shown.length) {
-      const el = document.createElement("div");
-      el.className = "label";
-      this.container.appendChild(el);
-      this.pool.push(el);
+  /** 表示判断は変えず、保存した大きさを使って位置だけを毎フレーム動かす。 */
+  updatePositions(project: (item: PlacedLabel) => { sx: number; sy: number } | null): void {
+    for (const { item, width, height } of this.active) {
+      const at = project(item);
+      if (!at) continue;
+      const x = item.centered
+        ? at.sx - width / 2
+        : item.kind === "star" && item.side === "left" ? at.sx - OFFSET_X - width : at.sx + OFFSET_X;
+      const y = at.sy - height / 2;
+      this.elements.get(item.key)!.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     }
-    shown.forEach(({ item, text, box }, i) => {
-      const el = this.pool[i];
+  }
+
+  private paint(shown: { item: PlacedLabel; text: string; box: Box }[]): void {
+    const next = new Set(shown.map(({ item }) => item.key));
+    for (const [key, el] of this.elements) {
+      if (next.has(key)) continue;
+      el.style.opacity = "0";
+      el.style.pointerEvents = "none";
+      setTimeout(() => {
+        if (this.active.some(({ item }) => item.key === key)) return;
+        el.remove();
+        this.elements.delete(key);
+      }, 220);
+    }
+    this.active = shown.map(({ item, box }) => ({ item, width: box.r - box.l, height: box.b - box.t }));
+    shown.forEach(({ item, text, box }) => {
+      let el = this.elements.get(item.key);
+      const fresh = !el;
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "label";
+        el.style.opacity = "0";
+        this.container.appendChild(el);
+        this.elements.set(item.key, el);
+      }
       el.textContent = text;
       const orbit = item.searchRank == null ? "" : item.searchRank < 3 ? " label-orbit-inner"
         : item.searchRank < 9 ? " label-orbit-middle" : " label-orbit-outer";
@@ -133,10 +165,10 @@ export class LabelLayer {
       el.style.setProperty("--cluster-color", item.color ?? "transparent");
       // 省略したものだけ、マウスを乗せたら全文を出す
       el.style.pointerEvents = item.searchRank != null || text !== this.fullText.get(item.key) ? "auto" : "none";
-      el.style.transform = `translate(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px)`;
-      el.style.display = "block";
+      el.style.transform = `translate3d(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px, 0)`;
+      if (fresh) requestAnimationFrame(() => { if (this.active.some(({ item: active }) => active.key === item.key)) el.style.opacity = "1"; });
+      else el.style.opacity = "1";
     });
-    for (let i = shown.length; i < this.pool.length; i++) this.pool[i].style.display = "none";
   }
 
   private readonly onOver = (e: Event) => {
