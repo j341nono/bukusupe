@@ -26,10 +26,13 @@ const tightness = (members: number[], vectors: Float32Array[], centroid: Float32
 /**
  * 星団の粒度をそろえる。
  * - 大きすぎて（件数が中央値の 2 倍超）かつ緩い（締まり具合が中央値未満）星団は 2 つに割る。
- * - 5 件未満の星団は、平均ベクトルが最も近い星団に統合する。
+ * - 5 件未満の星団は、平均ベクトルが最も近い星団に統合する。ただし星団の数が
+ *   SPEC の下限（12 件以上なら 3 個）を下回るところで止める。
  * 順番はすべて番号順で、乱数の種も固定しているので、同じ入力なら同じ結果になる。
  */
 export function refineClusters(vectors: Float32Array[], input: Grouping, seed: number): Grouping {
+  // 統合しても SPEC の下限（12 件以上なら 3 個）を割らない
+  const minClusters = vectors.length >= 12 ? 3 : 1;
   let assignments = [...input.assignments];
   let centroids: Float32Array[] = input.centroids.map((c) => new Float32Array(c));
 
@@ -60,7 +63,7 @@ export function refineClusters(vectors: Float32Array[], input: Grouping, seed: n
   for (let guard = 0; guard < 50; guard++) {
     const groups = groupsOf(assignments, centroids.length);
     const alive = groups.map((g, c) => ({ c, n: g.length })).filter((g) => g.n > 0);
-    if (alive.length <= 1) break;
+    if (alive.length <= Math.max(1, minClusters)) break;
     // 小さい星団から順に（同数なら番号順）
     const small = alive.filter((g) => g.n < MIN_MEMBERS).sort((a, b) => a.n - b.n || a.c - b.c)[0];
     if (!small) break;

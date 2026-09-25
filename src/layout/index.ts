@@ -10,7 +10,7 @@ import { spiralPoint, spiralRadius } from "./spiral";
 import { centerAndNormalize, dot, generalityScores, meanVector, standardize } from "./vector";
 
 /** 配置の形が変わったら上げる。古い保存は捨てて計算し直す。 */
-export const LAYOUT_VERSION = 2;
+export const LAYOUT_VERSION = 3;   // 3：統合で星団の下限を割らないようにした
 
 /** 星の間隔。星団の円の大きさもこれを基準にする。 */
 export const SPACING = 2.0;
