@@ -27,7 +27,7 @@ export function toLabelSource(layout: Layout, byId: Map<string, BookmarkItem>): 
     })),
     stars: layout.stars.flatMap((s) => {
       const item = byId.get(s.id);
-      return item ? [{ id: s.id, title: item.title, x: s.x, y: s.y, rank: s.rank }] : [];
+      return item ? [{ id: s.id, title: item.title, x: s.x, y: s.y, cluster: s.cluster, rank: s.rank }] : [];
     }),
   };
 }

@@ -1,11 +1,11 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import { domainOf } from "../bookmarks/types";
 import { DOMAIN_HINTS, hintsFor } from "../embed/domain-hints";
+import { BROAD_CATEGORIES, TOPIC_CATEGORY, broadCategory } from "../embed/topic-categories";
 
-/** 辞書に出てくる分野語の一覧。タイトルの中にこれが入っていれば数える。 */
-const HINT_VOCABULARY = [
-  ...new Set(Object.values(DOMAIN_HINTS).flatMap((v) => v.split(/\s+/).filter(Boolean))),
-].sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
+for (const word of new Set(Object.values(DOMAIN_HINTS).flatMap((v) => v.split(/\s+/).filter(Boolean)))) {
+  if (!TOPIC_CATEGORY.has(word)) throw new Error(`分野語に大分類がない: ${word}`);
+}
 
 /** 代表の数（螺旋の内側）。この中で分野語が揃えば、それを星団の名前にする。 */
 const LEADERS = 4;
@@ -33,29 +33,30 @@ function tally(values: string[]): Tally[] {
 }
 
 const folderTally = (members: BookmarkItem[]): Tally[] =>
-  tally(members.map((m) => m.folderPath.at(-1) ?? "").filter((f) => !IGNORED_FOLDERS.has(f)));
+  tally(members.map((m) => m.folderPath.at(-1) ?? "")
+    .filter((f) => !IGNORED_FOLDERS.has(f) && BROAD_CATEGORIES.includes(f)));
 
-/** そのブックマークが持つ分野語。ドメイン辞書と、タイトルに含まれる語の両方から。 */
+/** ドメインの分野語を大分類に直し、タイトルからは大分類の語だけを拾う。 */
 function hintsOf(item: BookmarkItem): string[] {
-  const fromDomain = hintsFor(domainOf(item.url)).split(/\s+/).filter(Boolean);
-  const fromTitle = HINT_VOCABULARY.filter((w) => w.length >= 2 && item.title.includes(w));
+  const fromDomain = hintsFor(domainOf(item.url)).split(/\s+/).map(broadCategory).filter((w): w is string => !!w);
+  const fromTitle = BROAD_CATEGORIES.filter((w) => item.title.includes(w));
   return [...new Set([...fromDomain, ...fromTitle])];
 }
 
-/** 分野の語の集計。フォルダで決まらないときに使う。 */
+/** 大分類の集計。フォルダで決まらないときに使う。 */
 const hintTally = (members: BookmarkItem[]): Tally[] => tally(members.flatMap(hintsOf));
 
 /**
  * 星団の名前（SPEC 7 章 ＋ 調整）。
  * 1 位のフォルダが半分以上ならそれ。半分未満で 2 位が 1 位の 6 割以上なら「1 位・2 位」。
- * フォルダで決まらないときは分野の語、それも無ければドメイン、最後は「無名の星団 N」。
- * 同じ名前が残ったら、2 番目に多い分野の語を足して区別する。
+ * フォルダで決まらないときは大分類、最後は「無名の星団 N」。
+ * 同じ名前が残ったら、別の大分類を足して区別する。
  */
 export function clusterNames(groups: BookmarkItem[][]): string[] {
   const names = groups.map((members, index) => {
     if (members.length === 0) return `無名の星団 ${index + 1}`;
 
-    // 代表 4 件のうち 2 件以上が同じ分野語を持つなら、フォルダの多数決より優先する
+    // 代表 4 件のうち 2 件以上が同じ大分類を持つなら、フォルダの多数決より優先する
     const leaders = members.slice(0, LEADERS);
     const shared = tally(leaders.flatMap(hintsOf)).filter((h) => h.n >= LEADER_AGREE);
     if (shared[0]) return shared[0].key;
@@ -72,9 +73,6 @@ export function clusterNames(groups: BookmarkItem[][]): string[] {
 
     const hint = hintTally(members)[0];
     if (hint) return hint.key;
-
-    const domain = tally(members.map((m) => domainOf(m.url)))[0];
-    if (domain) return domain.key;
 
     return `無名の星団 ${index + 1}`;
   });

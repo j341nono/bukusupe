@@ -9,9 +9,13 @@ export type PlacedLabel = {
   kind: "cluster" | "star";
   /** 小さいほど大事。重なったときはこの順に残す */
   priority: number;
+  cluster?: number;
+  side?: "left" | "right";
+  color?: string;
 };
 
 export type Box = { l: number; t: number; r: number; b: number };
+export type ScreenCircle = { cluster: number; sx: number; sy: number; rx: number; ry: number };
 
 /** 同時に出すラベルの上限（SPEC 7 章）。 */
 const MAX_LABELS = 60;
@@ -21,6 +25,7 @@ const FONT = { cluster: 13, star: 11 } as const;
 const OFFSET_X = 8;
 /** 下地の左右の余白（CSS の padding と合わせる）。 */
 const PADDING_X = 5;
+const DOT_WIDTH = 10;
 
 /** 中距離で省略する長さ（全角を 1、半角を 0.5 として数える）。 */
 const MID_WIDTH = 18;
@@ -38,9 +43,16 @@ export function truncate(text: string, limit: number): string {
 
 const overlaps = (a: Box, b: Box) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
 
+/** 長方形と画面に投影した星団の楕円が交わるか。 */
+export function entersCircle(box: Box, circle: ScreenCircle): boolean {
+  const x = Math.max(box.l, Math.min(circle.sx, box.r));
+  const y = Math.max(box.t, Math.min(circle.sy, box.b));
+  return ((x - circle.sx) / circle.rx) ** 2 + ((y - circle.sy) / circle.ry) ** 2 < 1;
+}
+
 /**
  * タイトルは HTML の重ね表示で描く（SPEC 7 章）。
- * 星の右横に左揃えで置き、他のラベルにも他の星にも重ならないものだけ残す。
+ * 星団中心から外へ向けてタイトルを置き、他のタイトルと重なるものを間引く。
  */
 export class LabelLayer {
   private readonly pool: HTMLDivElement[] = [];
@@ -53,7 +65,7 @@ export class LabelLayer {
     container.addEventListener("mouseout", this.onOut);
   }
 
-  render(items: PlacedLabel[], tier: ZoomTier): number {
+  render(items: PlacedLabel[], tier: ZoomTier, circles: ScreenCircle[] = []): number {
     const labelBoxes: Box[] = [];
     const shown: { item: PlacedLabel; text: string; box: Box }[] = [];
 
@@ -67,23 +79,20 @@ export class LabelLayer {
           : full;
 
       const size = FONT[item.kind];
-      const w = this.textWidth(shortened, size) + PADDING_X * 2;
+      const w = this.textWidth(shortened, size) + PADDING_X * 2 + (item.kind === "star" ? DOT_WIDTH : 0);
       const h = size + 6;
       const t = item.sy - h / 2;
 
       // 星団名は遠くでは星雲の中心に重ねる
-      const candidates: Box[] =
+      const box: Box =
         item.kind === "cluster" && tier === "far"
-          ? [{ l: item.sx - w / 2, t, r: item.sx + w / 2, b: t + h }]
-          : [
-              // 右横に置けなければ左横へ
-              { l: item.sx + OFFSET_X, t, r: item.sx + OFFSET_X + w, b: t + h },
-              { l: item.sx - OFFSET_X - w, t, r: item.sx - OFFSET_X, b: t + h },
-            ];
+          ? { l: item.sx - w / 2, t, r: item.sx + w / 2, b: t + h }
+          : item.kind === "star" && item.side === "left"
+            ? { l: item.sx - OFFSET_X - w, t, r: item.sx - OFFSET_X, b: t + h }
+            : { l: item.sx + OFFSET_X, t, r: item.sx + OFFSET_X + w, b: t + h };
 
-      // 重なりを禁じるのはタイトル同士だけ。星の上に重なるのは下地で読ませる
-      const box = candidates.find((c) => !labelBoxes.some((p) => overlaps(p, c)));
-      if (!box) continue;
+      if (labelBoxes.some((p) => overlaps(p, box))) continue;
+      if (item.kind === "star" && circles.some((c) => c.cluster !== item.cluster && entersCircle(box, c))) continue;
 
       labelBoxes.push(box);
       shown.push({ item, text: shortened, box });
@@ -109,6 +118,9 @@ export class LabelLayer {
       el.textContent = text;
       el.className = `label label-${item.kind}`;
       el.dataset.key = item.key;
+      el.dataset.cluster = item.cluster == null ? "" : String(item.cluster);
+      el.dataset.side = item.side ?? "";
+      el.style.setProperty("--cluster-color", item.color ?? "transparent");
       // 省略したものだけ、マウスを乗せたら全文を出す
       el.style.pointerEvents = text === this.fullText.get(item.key) ? "none" : "auto";
       el.style.transform = `translate(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px)`;

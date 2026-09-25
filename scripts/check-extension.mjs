@@ -212,6 +212,9 @@ try {
     return { ...c, folders };
   });
   console.log("  星団:", live.map((c) => `${c.name}(${c.count})`).join(" / "));
+  const musicCluster = detail.find((c) => c.folders.some((f) => f.startsWith("音楽:")));
+  check(musicCluster?.name === "音楽", "音楽の星団名が大分類になっている",
+    musicCluster ? `${musicCluster.name}（${musicCluster.count} 件）` : "音楽の星団がない");
   for (const c of detail) console.log(`    #${c.index} ${c.name}（${c.count}）`, c.folders.join(" "));
   const scattered = [...spread].filter(([, set]) => set.size >= 2);
   check(scattered.length > 0, "一つのフォルダの星が複数の星団に散っている",
@@ -264,6 +267,27 @@ try {
   }
   await evalIn("globalThis.__bukusupe.restore()");
   await sleep(1200);
+
+  // 初期画面でタイトルの帯が隣の星団の投影円に入り込まない。
+  const labelGeometry = JSON.parse((await evalIn(`JSON.stringify({
+    circles: globalThis.__bukusupe.labelGeometry(),
+    labels: [...document.querySelectorAll('.label-star')]
+      .filter((el) => getComputedStyle(el).display !== 'none')
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { cluster: Number(el.dataset.cluster), l: r.left, t: r.top, r: r.right, b: r.bottom };
+      })
+  })`)) ?? "null");
+  const intrusive = (labelGeometry?.labels ?? []).filter((box) =>
+    labelGeometry.circles.some((circle) => {
+      if (circle.cluster === box.cluster) return false;
+      const x = Math.max(box.l, Math.min(circle.sx, box.r));
+      const y = Math.max(box.t, Math.min(circle.sy, box.b));
+      return ((x - circle.sx) / circle.rx) ** 2 + ((y - circle.sy) / circle.ry) ** 2 < 1;
+    }));
+  check(labelGeometry?.labels?.length > 0 && intrusive.length === 0,
+    "初期画面でタイトルが隣の星団の円に入らない",
+    `${labelGeometry?.labels?.length ?? 0} 件表示、侵入 ${intrusive.length} 件`);
 
   // --- 遠・中・近のスクリーンショット ---
   mkdirSync("docs/screens", { recursive: true });

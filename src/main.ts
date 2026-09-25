@@ -12,6 +12,7 @@ import {
   type Layout,
 } from "./layout";
 import { provisionalLayout } from "./layout/provisional";
+import { clusterNames } from "./layout/names";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
 import { readMeta, writeMeta } from "./store/db";
@@ -105,7 +106,15 @@ async function placeStars(): Promise<void> {
     for (const item of added) {
       layout = addStar(layout, item.id, state.vectors.get(item.id) as Float32Array, state.mean);
     }
-    if (added.length > 0 || layout.stars.length !== stored.stars.length) {
+    // 命名規則が変わっても、保存済みの星の座標はそのまま使う。
+    const byId = new Map(state.items.map((item) => [item.id, item]));
+    const names = clusterNames(layout.clusters.map((c) => layout!.stars
+      .filter((s) => s.cluster === c.index)
+      .sort((a, b) => a.rank - b.rank)
+      .flatMap((s) => { const item = byId.get(s.id); return item ? [item] : []; })));
+    const namesChanged = layout.clusters.some((c, i) => c.name !== names[i]);
+    if (namesChanged) layout = { ...layout, clusters: layout.clusters.map((c, i) => ({ ...c, name: names[i] })) };
+    if (namesChanged || added.length > 0 || layout.stars.length !== stored.stars.length) {
       await writeMeta(META_LAYOUT, layout);
     }
   }
@@ -297,6 +306,7 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   },
 
   setZoomTier: (tier: ZoomTier) => view?.setZoomTier(tier),
+  labelGeometry: () => view?.labelGeometry() ?? [],
   setTopDown: (on: boolean) => view?.setTopDown(on),
   relayout,
 

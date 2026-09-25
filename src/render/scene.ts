@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
-import { LabelLayer, type PlacedLabel, type ZoomTier } from "../ui/labels";
+import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
 import { StarField, clusterColor, createBackdrop, type RenderStar } from "./stars";
 
@@ -23,7 +23,7 @@ function boundsOf(stars: { x: number; y: number }[], fallback: number) {
 
 export type LabelSource = {
   clusters: { index: number; name: string; x: number; y: number; radius: number; count: number }[];
-  stars: { id: string; title: string; x: number; y: number; rank: number }[];
+  stars: { id: string; title: string; x: number; y: number; cluster: number; rank: number }[];
 };
 
 export class SpaceView {
@@ -44,6 +44,7 @@ export class SpaceView {
   private fitDistance = 90;
   private labelSource: LabelSource = { clusters: [], stars: [] };
   private labelTimer = 0;
+  private screenCircles: ScreenCircle[] = [];
   private tilt = TILT;
   private tiltTarget = TILT;
 
@@ -111,6 +112,11 @@ export class SpaceView {
   setZoomTier(tier: ZoomTier): void {
     const factor = tier === "far" ? 1.9 : tier === "mid" ? 0.85 : 0.3;
     this.setDistance(this.fitDistance * factor);
+  }
+
+  /** check:ext が画面上のタイトルと星団の円を照合するための投影値。 */
+  labelGeometry(): ScreenCircle[] {
+    return this.screenCircles;
   }
 
   start(): void {
@@ -211,6 +217,23 @@ export class SpaceView {
     };
 
     const items: PlacedLabel[] = [];
+    const circles: ScreenCircle[] = [];
+    for (const c of this.labelSource.clusters) {
+      if (c.count === 0) continue;
+      const center = project(c.x, c.y);
+      if (!center) continue;
+      let rx = 0, ry = 0;
+      for (let i = 0; i < 32; i++) {
+        const angle = i * Math.PI / 16;
+        const edge = project(c.x + Math.cos(angle) * c.radius, c.y + Math.sin(angle) * c.radius);
+        if (edge) {
+          rx = Math.max(rx, Math.abs(edge.sx - center.sx));
+          ry = Math.max(ry, Math.abs(edge.sy - center.sy));
+        }
+      }
+      if (rx > 0 && ry > 0) circles.push({ cluster: c.index, ...center, rx, ry });
+    }
+    this.screenCircles = circles;
     for (const c of this.labelSource.clusters) {
       if (c.count === 0) continue;
       // 遠くでは星雲の中心に重ねる。寄ったら円の上端の少し上へ
@@ -232,11 +255,16 @@ export class SpaceView {
         if (s.rank >= limit) continue;
         const at = project(s.x, s.y);
         if (!at) continue;
-        items.push({ key: s.id, text: s.title, sx: at.sx, sy: at.sy, kind: "star", priority: s.rank });
+        const own = this.labelSource.clusters.find((c) => c.index === s.cluster);
+        items.push({
+          key: s.id, text: s.title, sx: at.sx, sy: at.sy, kind: "star", priority: s.rank,
+          cluster: s.cluster, side: !own || s.x >= own.x ? "right" : "left",
+          color: clusterColor(s.cluster).getStyle(),
+        });
       }
     }
 
-    this.labels.render(items, tier);
+    this.labels.render(items, tier, circles);
   }
 
   private readonly resize = (): void => {
