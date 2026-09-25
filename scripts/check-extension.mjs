@@ -607,6 +607,139 @@ try {
     "検索を消して再読み込みしても星の座標が変わらない");
   check(refetched.length === 0, "再読み込みで外部から取り直さない", `${refetched.length} 件`);
 
+  // --- M4：星座の編集、描画、保存と再検索 ---
+  await evalIn("globalThis.__bukusupe.searchNow('宇宙を感じたい')");
+  await sleep(900);
+  const initialConstellationSearch = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.searchState())")) ?? "null");
+  check(initialConstellationSearch.ids.length >= 3 &&
+    await evalIn("!document.getElementById('constellation-create').hidden"),
+  "検索中に星座にする操作が表示される");
+  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',ctrlKey:true,bubbles:true}))");
+  const editStart = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().editing)")) ?? "null");
+  check(editStart?.members.length === Math.min(12, initialConstellationSearch.ids.length),
+    "Ctrl+Enter で上位最大12件を編集状態へ入れる", `${editStart?.members.length ?? 0} 件`);
+  const removedId = editStart?.members[0];
+  const firstCluster = layout.stars.find((s) => s.id === removedId)?.cluster;
+  const addedId = layout.stars.find((s) => s.cluster === firstCluster &&
+    !initialConstellationSearch.ids.includes(s.id))?.id;
+  await evalIn(`globalThis.__bukusupe.toggleEditMember(${JSON.stringify(removedId)})`);
+  await evalIn(`globalThis.__bukusupe.toggleEditMember(${JSON.stringify(addedId)})`);
+  const editChanged = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().editing)")) ?? "null");
+  check(editChanged.excluded.includes(removedId) && editChanged.pinned.includes(addedId) &&
+    !editChanged.members.includes(removedId) && editChanged.members.includes(addedId),
+  "編集で星を外し、検索圏外の星を加えると excluded / pinned に残る");
+  await evalIn("document.getElementById('constellation-name-input').value='わたしの宇宙'");
+  {
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    writeFileSync("docs/screens/constellation-edit.png", Buffer.from(shot.data, "base64"));
+    console.log("  画面: docs/screens/constellation-edit.png");
+  }
+  await evalIn("document.getElementById('constellation-save').click()");
+  let constellationId = null;
+  for (let i = 0; i < 30; i++) {
+    await sleep(100);
+    constellationId = await evalIn("globalThis.__bukusupe.constellationState().rows[0]?.id ?? null");
+    if (constellationId) break;
+  }
+  check(!!constellationId, "名前を付けた星座が IndexedDB に保存される");
+  let drawingCaptured = false;
+  for (let i = 0; i < 65; i++) {
+    const animation = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().animation)")) ?? "null");
+    if (animation?.phase === "drawing" && animation.edgesDrawn >= Math.ceil(animation.edges / 2) &&
+      animation.edgesDrawn < animation.edges) {
+      const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+      writeFileSync("docs/screens/constellation-drawing.png", Buffer.from(shot.data, "base64"));
+      console.log("  画面: docs/screens/constellation-drawing.png");
+      drawingCaptured = true;
+      break;
+    }
+    await sleep(40);
+  }
+  check(drawingCaptured, "線を1本ずつ描く途中を確認できる");
+  const animationFramesBefore = await evalIn("globalThis.__bukusupe.frames()");
+  await sleep(1000);
+  const animationFramesAfter = await evalIn("globalThis.__bukusupe.frames()");
+  check(animationFramesAfter - animationFramesBefore >= 55, "保存演出中も60コマを保つ",
+    `${animationFramesAfter - animationFramesBefore} コマ/秒`);
+  let nameAppeared = false;
+  for (let i = 0; i < 30; i++) {
+    nameAppeared = await evalIn("document.getElementById('constellation-name').classList.contains('is-visible')");
+    if (nameAppeared) break;
+    await sleep(100);
+  }
+  check(nameAppeared, "線を描き終えた後に星座名が浮かぶ");
+  await sleep(1700);
+  const savedConstellation = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState())")) ?? "null");
+  const savedRow = savedConstellation.rows.find((row) => row.id === constellationId);
+  const savedLines = savedConstellation.geometry.find((row) => row.id === constellationId);
+  check(savedConstellation.active === null && savedRow?.name === "わたしの宇宙" &&
+    savedRow.queryVector?.length === 384 && savedLines?.opacity === 0.15 &&
+    savedLines?.members.length === savedRow.lastMembers.length,
+  "保存後は通常の夜空で星座の線が15%になる");
+  {
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    writeFileSync("docs/screens/constellation-saved.png", Buffer.from(shot.data, "base64"));
+    console.log("  画面: docs/screens/constellation-saved.png");
+  }
+  const ids = savedRow.lastMembers;
+  const mstA = JSON.parse((await evalIn(`JSON.stringify(globalThis.__bukusupe.mstFor(${JSON.stringify(ids)}))`)) ?? "[]");
+  const mstB = JSON.parse((await evalIn(`JSON.stringify(globalThis.__bukusupe.mstFor(${JSON.stringify([...ids].reverse())}))`)) ?? "[]");
+  const byId = new Map(layout.stars.map((s) => [s.id, s]));
+  const crosses = (e1, e2) => {
+    if ([e1.a, e1.b].some((id) => id === e2.a || id === e2.b)) return false;
+    const [a, b, c, d] = [e1.a, e1.b, e2.a, e2.b].map((id) => byId.get(id));
+    const side = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+  };
+  check(mstA.length === ids.length - 1 && mstA.every((e, i) => mstA.every((other, j) => i === j || !crosses(e, other))),
+    "最小全域木の辺は星の数−1で、交差しない", `${ids.length} 星 / ${mstA.length} 辺`);
+  check(JSON.stringify(mstA) === JSON.stringify(mstB) && JSON.stringify(mstA) === JSON.stringify(savedLines.edges),
+    "同じ星なら順序を変えても同じ辺になる");
+
+  await send("Page.reload", {}, sessionId);
+  for (let i = 0; i < 30 && (await phase()) !== "ready"; i++) await sleep(500);
+  const persisted = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState())")) ?? "null");
+  const persistedRow = persisted.rows.find((row) => row.id === constellationId);
+  const persistedLines = persisted.geometry.find((row) => row.id === constellationId);
+  check(persistedRow?.name === savedRow.name &&
+    JSON.stringify(persistedRow?.lastMembers) === JSON.stringify(savedRow.lastMembers) &&
+    JSON.stringify(persistedLines?.edges) === JSON.stringify(savedLines.edges),
+  "再読み込み後も名前・メンバー・線が残る");
+  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
+  await sleep(850);
+  const recalled = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState())")) ?? "null");
+  const cameraOnConstellation = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
+  const recalledPoints = recalled.rows[0].lastMembers.map((id) => byId.get(id)).filter(Boolean);
+  const centerX = (Math.min(...recalledPoints.map((p) => p.x)) + Math.max(...recalledPoints.map((p) => p.x))) / 2;
+  const centerY = (Math.min(...recalledPoints.map((p) => p.y)) + Math.max(...recalledPoints.map((p) => p.y))) / 2;
+  check(recalled.active === constellationId && recalled.geometry.find((row) => row.id === constellationId)?.opacity === 0.85 &&
+    !recalled.rows[0].lastMembers.includes(removedId) && recalled.rows[0].lastMembers.includes(addedId) &&
+    Math.hypot(cameraOnConstellation.x - centerX, cameraOnConstellation.y - centerY) < 1,
+  "呼び出しで明るくなり、excluded は除外・pinned は維持される");
+  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
+  check((await evalIn("globalThis.__bukusupe.constellationState().active")) === null,
+    "もう一度選ぶと星座の強調を解除する");
+  const addedLayout = JSON.parse((await evalIn("(async () => JSON.stringify(await globalThis.__bukusupe.simulateAdd('宇宙を感じたい', 'https://example.org/space-new', ['宇宙'])))()")) ?? "null");
+  const newId = addedLayout?.stars.find((star) => star.id.startsWith("sim-"))?.id;
+  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
+  const withNew = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().rows[0].lastMembers)")) ?? "[]");
+  check(!!newId && withNew.includes(newId), "検索に合うブックマークを追加して呼び出すとメンバーに入る",
+    `${newId} / ${withNew.includes(newId) ? "含まれる" : "含まれない"}`);
+  await evalIn("globalThis.__bukusupe.restore()");
+  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
+  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
+  const afterRemoval = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().geometry[0])")) ?? "null");
+  check(!afterRemoval.members.includes(newId) && afterRemoval.edges.length === Math.max(0, afterRemoval.members.length - 1),
+    "削除されたブックマークを除いて線を結び直す");
+  await evalIn("window.prompt=()=> '宇宙の記録'; document.getElementById('constellation-rename').click()");
+  await sleep(200);
+  check((await evalIn("globalThis.__bukusupe.constellationState().rows[0].name")) === "宇宙の記録",
+    "星座の名前を変更できる");
+  await evalIn("document.getElementById('constellation-delete').click()");
+  await sleep(200);
+  check((await evalIn("globalThis.__bukusupe.constellationState().rows.length")) === 0,
+    "星座だけを削除できる");
+
   if (SHOT) {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
     writeFileSync(SHOT, Buffer.from(shot.data, "base64"));

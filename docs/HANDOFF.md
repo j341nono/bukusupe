@@ -14,7 +14,7 @@
 | M1 | 完了 | 埋め込み Worker（transformers.js）、IndexedDB への保存、進み具合の表示 |
 | M2 | 完了 | 意味配置（平均引き → k-means → 粒度そろえ → PCA → 押し広げ → 螺旋）、星雲、ラベル、カメラ |
 | M3 | 完了 | 文字一致＋意味検索、ブラックホールへの引き寄せ、光の線、キーボード操作、クリックカード |
-| M4 | 未着手 | 星座（完成ラインはここ） |
+| M4 | 完了 | 星座の編集・保存・演出・再検索による呼び出し（完成ライン） |
 | M5 / M6 | 未着手 | フォルダの自動星座・新星・検索候補 / 配布物と README |
 
 ### M2 で残した課題（M3 に入る前に判断が要るもの）
@@ -98,6 +98,26 @@
   中・近距離の星団名にはこの操作を付けず、星のタイトルクリックは従来どおりカードを開く。
 - 手動の移動・拡大縮小・傾き変更を始めたら、カメラの自動移動を中断する。
   `check:ext` は遠距離の「AI」をクリックし、中心への移動、拡大、星タイトルの表示を確認する。
+
+### M4 星座
+
+- 検索中の「星座にする」または Ctrl+Enter で編集する。引き寄せた上位 12 件を初期メンバーとし、
+  星の本体・タイトルをクリックして加除する。明示的に加えた id は `pinned`、外した id は
+  `excluded` に保存する。選んだ星には小さな輪を付ける。
+- `Constellation` は SPEC 9 章の形のまま IndexedDB の `constellations` ストアに保存する。
+  保存時には検索語の埋め込みも `queryVector` に保存する。DB は v2 に上げた。
+- 線は保存済み地図座標を使ったプリム法の最小全域木。同距離なら id 順で割り、入力順序が
+  変わっても辺が同じになる。星が 1 個以下なら線は作らない。
+- 保存で星を元位置へ戻し、カメラを真上のままメンバー全体へ寄せる。約 0.95 秒後から辺を
+  1 本約 120ms で伸ばし、全辺の後に名前を表示する。通常時は線を 15% で表示し、
+  下の名前から呼び出すと 85% にして全体へ寄せる。再選択・Esc で解除する。
+- 呼び出すたびに現在のブックマークで検索し直す。メンバーは
+  `pinned ∪（引き寄せ対象の上位 12 件 − excluded）` とし、現存する id だけで線を作る。
+  `lastMembers` は呼び出し後に更新する。ブックマークの削除通知・再読み込み時にも
+  消えた id を `lastMembers` から取り除く。新星の判定は M5。
+- 呼び出し中に名前を変更したり星座だけを削除したりできる。
+- `docs/screens/constellation-edit.png`、`constellation-drawing.png`、
+  `constellation-saved.png` は「宇宙を感じたい」から「わたしの宇宙」を作った画面。
 
 ---
 
@@ -203,6 +223,8 @@
   9 検索中 8 回の上位 5 件に現れた。負値は 0 に止める。
 - M3 の確認で、`simulateAdd()` 後の benchmark が追加後の配置を保存し、
   `restore()` で 157 件へ戻っていた。追加前を保存するよう直した。
+- M4 の自動確認で `Runtime.evaluate` の式に直接 `await` を書いたため、追加ブックマークの
+  検証が実行されず `undefined` になった。非同期 IIFE に包んで直した。
 
 ---
 
@@ -264,6 +286,14 @@ npm run icons      # アイコン PNG を作り直す
 35. 通常画面と検索中の星タイトルをクリックすると、その星のカードが開く
 36. 右ドラッグで傾きが変わり、真上への切り替え後にその傾きへ戻る
 37. 遠距離の星団名をクリックすると星団中心へ拡大し、星のタイトルが表示される
+38. Ctrl+Enter で上位最大 12 件の編集に入り、星の加除が pinned / excluded に残る
+39. 保存演出で線を 1 本ずつ描き、後から星座名を表示し、60 コマ/秒を保つ
+40. 最小全域木が星の数−1 本、交差なし、入力順序に関わらず同じ辺になる
+41. 保存後の線は 15%、呼び出した線は 85%。再選択で解除できる
+42. 再読み込み後も名前・メンバー・辺が残る
+43. 呼び出しで excluded を除き pinned を残し、新たな検索一致ブックマークも加える
+44. 消えたブックマークを除いて線を結び直し、名前変更と星座だけの削除ができる
+45. `constellation-edit.png`、`constellation-drawing.png`、`constellation-saved.png` を保存する
 
 そのうえで `docs/screens/` に initial・far・mid・near のスクリーンショットと
 `clusters.json`（星団の名前・件数・フォルダ内訳）を書き出す。
@@ -286,7 +316,8 @@ npm run icons      # アイコン PNG を作り直す
 | `src/embed/text.ts` | 入力文の組み立てとハッシュ |
 | `src/embed/domain-hints.ts` | ドメイン → 分野語の辞書（星団の名前にも使う） |
 | `src/embed/topic-categories.ts` | 分野語から星団名に使う大分類への対応 |
-| `src/store/db.ts` | IndexedDB（`embeddings` と `meta`）。`meta` に `mean-vector` / `generality` / `layout` |
+| `src/store/db.ts` | IndexedDB（`embeddings` / `meta` / `constellations`）。`meta` に `mean-vector` / `generality` / `layout` |
+| `src/constellation/index.ts` | 星座の保存形式、メンバーの集合、決定的なプリム法 |
 | `src/layout/index.ts` | 配置の本体。`computeLayout` / `addStar` / `dropMissing` と各種の係数 |
 | `src/layout/kmeans.ts` `pca.ts` `pack.ts` `spiral.ts` `refine.ts` | 配置の部品。すべて決定的 |
 | `src/layout/vector.ts` | 平均引き・正規化・汎用度・標準化 |
@@ -294,6 +325,7 @@ npm run icons      # アイコン PNG を作り直す
 | `src/search/index.ts` | 文字一致、平均を引いた意味検索、汎用度補正、z 値での正規化と順位 |
 | `src/layout/provisional.ts` | 埋め込みが揃うまでの仮の配置（フォルダごとの螺旋） |
 | `src/render/scene.ts` | three.js のシーン、カメラ、拡大率の段階、ラベルの組み立て |
+| `src/render/constellations.ts` | 星座の線、選択した星の輪、保存時の線の演出 |
 | `src/render/stars.ts` | 星の描画（`Points` 1 つ）と位置の移り変わり |
 | `src/render/nebula.ts` | 星雲のもや |
 | `src/render/present.ts` | 配置 → 描画用の形への変換 |

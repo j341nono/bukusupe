@@ -5,6 +5,8 @@ import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
 import { StarField, clusterColor, createBackdrop, type RenderStar } from "./stars";
+import { ConstellationLayer, type DrawnConstellation } from "./constellations";
+import type { ConstellationPoint } from "../constellation";
 
 /** 静止時のカメラの傾き（真上から 40 度。SPEC 7 章） */
 const TILT = THREE.MathUtils.degToRad(40);
@@ -36,6 +38,7 @@ export class SpaceView {
   private readonly backdrop: THREE.Points;
   private readonly field = new StarField();
   private readonly nebulae = new Nebulae();
+  private readonly constellations = new ConstellationLayer();
   private readonly labels: LabelLayer;
 
   private running = false;
@@ -88,6 +91,9 @@ export class SpaceView {
   private hoveredId: string | null = null;
   private fullTraceCount = 0;
   private maxTailPixels = 0;
+  private constellationName: HTMLElement | null = null;
+  private constellationNameId: string | null = null;
+  private constellationNameWait = false;
 
   /** 描画できたコマ数。計算中も画面が動いていることの確認に使う。 */
   frames = 0;
@@ -123,6 +129,8 @@ export class SpaceView {
     this.scene.add(this.backdrop);
     this.scene.add(this.nebulae.object);
     this.scene.add(this.field.object);
+    this.scene.add(this.constellations.object);
+    this.constellationName = document.getElementById("constellation-name");
     const glow = new THREE.Mesh(
       new THREE.PlaneGeometry(2.5, 2.5).rotateX(-Math.PI / 2),
       new THREE.ShaderMaterial({
@@ -199,6 +207,57 @@ export class SpaceView {
     if (frame) this.frameAll();
     this.resize();
     this.labelsDirty = true;
+  }
+
+  setConstellations(rows: DrawnConstellation[]): void { this.constellations.set(rows); }
+
+  setEditMembers(points: ConstellationPoint[]): void { this.constellations.editMembers(points); }
+
+  selectConstellation(id: string | null, name = ""): void {
+    this.constellations.select(id);
+    this.constellationNameId = id;
+    this.constellationNameWait = false;
+    if (this.constellationName) {
+      this.constellationName.textContent = name;
+      this.constellationName.classList.toggle("is-visible", !!id);
+    }
+  }
+
+  saveConstellation(id: string, name: string, points: ConstellationPoint[]): void {
+    this.setTopDown(true);
+    this.setSearch([]);
+    this.selectSearch(null);
+    this.constellations.select(id);
+    this.constellations.startDrawing(id);
+    this.constellationNameId = id;
+    this.constellationNameWait = true;
+    if (this.constellationName) {
+      this.constellationName.textContent = name;
+      this.constellationName.classList.remove("is-visible");
+    }
+    this.focusPoints(points);
+  }
+
+  focusPoints(points: ConstellationPoint[]): void {
+    if (!points.length) return;
+    const b = boundsOf(points, this.extent);
+    const x = (b.minX + b.maxX) / 2, y = (b.minY + b.maxY) / 2;
+    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const tanH = tanV * this.camera.aspect;
+    const width = Math.max(4, b.maxX - b.minX + 4);
+    const height = Math.max(4, b.maxY - b.minY + 7);
+    const distance = Math.max(this.controls.minDistance,
+      width / (2 * tanH * 0.72), height / (2 * tanV * 0.72));
+    this.focus = { from: this.controls.target.clone(), to: new THREE.Vector3(x, 0, -y),
+      fromDistance: this.camera.position.distanceTo(this.controls.target), toDistance: distance, elapsed: 0 };
+  }
+
+  constellationAnimationState(): ReturnType<ConstellationLayer["animationState"]> {
+    return this.constellations.animationState();
+  }
+
+  constellationGeometry(): ReturnType<ConstellationLayer["geometry"]> {
+    return this.constellations.geometry();
   }
 
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
@@ -467,6 +526,12 @@ export class SpaceView {
     }
 
     this.field.update(dt);
+    this.constellations.moveEditMembers((id) => this.field.displayPosition(id));
+    this.constellations.update(dt);
+    if (this.constellationNameWait && this.constellations.animationState().phase === "done") {
+      this.constellationNameWait = false;
+      this.constellationName?.classList.add("is-visible");
+    }
     if (this.searchIds.length) {
       const tailPosition = this.tails.geometry.getAttribute("position") as THREE.BufferAttribute;
       const tailAlpha = this.tails.geometry.getAttribute("aAlpha") as THREE.BufferAttribute;
@@ -524,6 +589,21 @@ export class SpaceView {
     }
     this.controls.update();
     this.camera.updateMatrixWorld();
+    if (this.constellationNameId && this.constellationName) {
+      const members = this.constellations.points(this.constellationNameId);
+      if (members.length) {
+        const canvasSize = this.renderer.getSize(new THREE.Vector2());
+        let left = Infinity, right = -Infinity, top = Infinity;
+        const p = new THREE.Vector3();
+        for (const member of members) {
+          p.set(member.x, 0, -member.y).project(this.camera);
+          left = Math.min(left, (p.x * 0.5 + 0.5) * canvasSize.x);
+          right = Math.max(right, (p.x * 0.5 + 0.5) * canvasSize.x);
+          top = Math.min(top, (-p.y * 0.5 + 0.5) * canvasSize.y);
+        }
+        this.constellationName.style.transform = `translate3d(${(left + right) / 2}px, ${Math.max(95, top - 12)}px, 0) translate(-50%, -100%)`;
+      }
+    }
     const now = performance.now();
     const matrix = this.camera.matrixWorld.elements;
     const previous = this.lastLabelCamera.elements;

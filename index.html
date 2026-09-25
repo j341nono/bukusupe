@@ -175,6 +175,7 @@
         color: var(--dim);
         pointer-events: none;
       }
+      body.has-constellations #hint { display: none; }
       #search-box {
         position: fixed;
         z-index: 4;
@@ -196,6 +197,53 @@
       }
       #search-input:focus { border-color: rgba(163, 190, 255, 0.82); }
       #search-input::placeholder { color: var(--dim); }
+      #constellation-create, #constellation-save, #constellation-cancel,
+      #constellation-rename, #constellation-delete {
+        padding: 7px 14px;
+        border: 1px solid rgba(232, 215, 175, 0.5);
+        border-radius: 999px;
+        background: rgba(24, 26, 48, 0.92);
+        color: #f7e9c9;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      #constellation-create { display: block; margin: 9px auto 0; }
+      #constellation-editor {
+        margin-top: 9px;
+        padding: 11px;
+        border: 1px solid rgba(232, 215, 175, 0.35);
+        border-radius: 12px;
+        background: rgba(8, 10, 26, 0.95);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+      }
+      #constellation-editor p { margin: 0 0 9px; font-size: 11px; color: var(--dim); }
+      #constellation-name-input {
+        width: 100%; padding: 8px 10px; margin-bottom: 9px;
+        border: 1px solid rgba(153, 178, 255, 0.38); border-radius: 8px;
+        outline: none; background: #0b1025; color: var(--ink); font: inherit;
+      }
+      .constellation-actions { display: flex; gap: 8px; }
+      #constellation-list {
+        position: fixed; z-index: 4; bottom: 15px; left: 50%;
+        transform: translateX(-50%); display: flex; gap: 7px; align-items: center;
+        max-width: calc(100vw - 200px); overflow-x: auto; white-space: nowrap;
+      }
+      #constellation-list button {
+        padding: 7px 12px; border: 1px solid rgba(255, 237, 195, 0.27);
+        border-radius: 999px; color: rgba(255, 240, 204, 0.75);
+        background: rgba(8, 10, 26, 0.76); cursor: pointer; font: inherit; font-size: 12px;
+      }
+      #constellation-list button.is-active { border-color: #f1dcab; color: #fff4d5; }
+      #constellation-manage { position: fixed; z-index: 4; bottom: 57px; left: 50%; transform: translateX(-50%); display: flex; gap: 7px; }
+      #constellation-name {
+        position: fixed; z-index: 3; left: 0; top: 0; pointer-events: none;
+        color: #fff0ca; font-size: 16px; letter-spacing: 0.1em;
+        white-space: nowrap; text-shadow: 0 0 12px #eecb84;
+        opacity: 0; transition: opacity 600ms ease; will-change: transform, opacity;
+      }
+      #constellation-name.is-visible { opacity: 1; }
+      [hidden] { display: none !important; }
       #star-card {
         position: fixed;
         z-index: 5;
@@ -232,7 +280,18 @@
   <body>
     <canvas id="space"></canvas>
     <div id="labels"></div>
-    <div id="search-box"><input id="search-input" type="search" autocomplete="off" placeholder="星を探す" aria-label="ブックマークを検索" /></div>
+    <div id="search-box">
+      <input id="search-input" type="search" autocomplete="off" placeholder="星を探す" aria-label="ブックマークを検索" />
+      <button id="constellation-create" hidden>星座にする</button>
+      <div id="constellation-editor" hidden>
+        <p>星をクリックして加える・外す</p>
+        <input id="constellation-name-input" aria-label="星座の名前" maxlength="80" />
+        <div class="constellation-actions"><button id="constellation-save">保存</button><button id="constellation-cancel">やめる</button></div>
+      </div>
+    </div>
+    <div id="constellation-name"></div>
+    <div id="constellation-manage" hidden><button id="constellation-rename">名前を変える</button><button id="constellation-delete">星座を削除</button></div>
+    <nav id="constellation-list" aria-label="保存した星座"></nav>
     <aside id="star-card" hidden>
       <div id="star-card-title"></div>
       <div id="star-card-url"></div>

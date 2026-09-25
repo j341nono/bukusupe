@@ -13,10 +13,11 @@ import {
 } from "./layout";
 import { provisionalLayout } from "./layout/provisional";
 import { clusterNames } from "./layout/names";
+import { membersFor, minimumSpanningTree, pointsFor, type Constellation } from "./constellation";
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
-import { readMeta, writeMeta } from "./store/db";
+import { deleteConstellation, readConstellations, readMeta, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
 
@@ -44,6 +45,10 @@ let selectedIndex = 0;
 let searchTimer: number | undefined;
 let searchGeneration = 0;
 let cardId: string | null = null;
+let constellations: Constellation[] = [];
+let activeConstellationId: string | null = null;
+let editing: { query: string; automatic: string[]; pinned: Set<string>; excluded: Set<string> } | null = null;
+let savingAnimation = false;
 
 async function main(): Promise<void> {
   const canvas = document.getElementById("space") as HTMLCanvasElement | null;
@@ -52,7 +57,7 @@ async function main(): Promise<void> {
 
   setupHudControls();
   view = new SpaceView(canvas, labels);
-  view.onStarLabelClick = showCard;
+  view.onStarLabelClick = handleStarClick;
   view.start();
 
   renderHudMessage("ブックマークを読み込んでいる…");
@@ -68,7 +73,11 @@ async function main(): Promise<void> {
   embedder = new WorkerEmbedder();
   await computeEmbeddings();
   await placeStars();
+  constellations = await readConstellations<Constellation>();
+  await reconcileConstellations();
+  refreshConstellations();
   setupSearch(canvas);
+  setupConstellations();
 
   watchBookmarks();
   document.getElementById("relayout")?.addEventListener("click", () => void relayout());
@@ -190,10 +199,185 @@ function show(layout: Layout, frame = true): void {
   state.layout = layout;
   const byId = new Map(state.items.map((i) => [i.id, i]));
   view?.setLayout(layout, toRenderStars(layout, byId), toLabelSource(layout, byId), frame);
+  refreshConstellations();
   if (hits.length) {
     view?.setSearch(hits.map((hit) => hit.id));
     view?.selectSearch(hits[selectedIndex]?.id ?? null);
   }
+}
+
+function refreshConstellations(): void {
+  view?.setConstellations(constellations.map((row) => ({ id: row.id, name: row.name,
+    points: pointsFor(state.layout, row.lastMembers) })));
+  if (editing) view?.setEditMembers(pointsFor(state.layout, currentEditMembers()));
+  renderConstellationList();
+}
+
+async function reconcileConstellations(): Promise<void> {
+  const alive = new Set(state.items.map((item) => item.id));
+  for (const row of constellations) {
+    const members = row.lastMembers.filter((id) => alive.has(id));
+    if (members.length === row.lastMembers.length) continue;
+    row.lastMembers = members;
+    await writeConstellation(row);
+  }
+  refreshConstellations();
+}
+
+function currentEditMembers(): string[] {
+  return editing ? membersFor(editing.automatic, [...editing.pinned], [...editing.excluded]) : [];
+}
+
+function handleStarClick(id: string): void {
+  if (editing) {
+    if (currentEditMembers().includes(id)) {
+      editing.pinned.delete(id);
+      editing.excluded.add(id);
+    } else {
+      editing.excluded.delete(id);
+      editing.pinned.add(id);
+    }
+    view?.setEditMembers(pointsFor(state.layout, currentEditMembers()));
+  } else showCard(id);
+}
+
+function beginConstellation(): void {
+  const input = document.getElementById("search-input") as HTMLInputElement;
+  const query = input.value.trim();
+  if (!query || !hits.length || editing) return;
+  editing = { query, automatic: hits.slice(0, 12).map((hit) => hit.id),
+    pinned: new Set(), excluded: new Set() };
+  (document.getElementById("constellation-create") as HTMLElement).hidden = true;
+  (document.getElementById("constellation-editor") as HTMLElement).hidden = false;
+  const nameInput = document.getElementById("constellation-name-input") as HTMLInputElement;
+  nameInput.value = query;
+  nameInput.focus();
+  view?.setEditMembers(pointsFor(state.layout, currentEditMembers()));
+}
+
+function cancelConstellation(): void {
+  editing = null;
+  view?.setEditMembers([]);
+  (document.getElementById("constellation-editor") as HTMLElement).hidden = true;
+  const input = document.getElementById("search-input") as HTMLInputElement;
+  (document.getElementById("constellation-create") as HTMLElement).hidden = !input.value.trim() || !hits.length;
+}
+
+async function saveConstellation(): Promise<void> {
+  if (!editing) return;
+  const name = (document.getElementById("constellation-name-input") as HTMLInputElement).value.trim() || editing.query;
+  const members = currentEditMembers().filter((id) => state.items.some((item) => item.id === id));
+  const queryVector = embedder ? Array.from((await embedder.embed([queryText(editing.query)]))[0]) : undefined;
+  const row: Constellation = {
+    id: crypto.randomUUID(), name, source: "search", query: editing.query, queryVector,
+    pinned: [...editing.pinned], excluded: [...editing.excluded], lastMembers: members, createdAt: Date.now(),
+  };
+  await writeConstellation(row);
+  constellations.push(row);
+  cancelConstellation();
+  ++searchGeneration;
+  clearTimeout(searchTimer);
+  const input = document.getElementById("search-input") as HTMLInputElement;
+  input.value = "";
+  input.blur();
+  (document.getElementById("constellation-create") as HTMLElement).hidden = true;
+  hits = [];
+  activeConstellationId = row.id;
+  savingAnimation = true;
+  refreshConstellations();
+  view?.saveConstellation(row.id, row.name, pointsFor(state.layout, members));
+  renderConstellationList();
+  // 保存後は夜空へ戻る。線と名前は描画ループの経過時間で進む。
+  const finish = () => {
+    if (view?.constellationAnimationState().phase === "done") {
+      window.setTimeout(() => {
+        savingAnimation = false;
+        activeConstellationId = null;
+        view?.selectConstellation(null);
+        view?.setTopDown(false);
+        renderConstellationList();
+      }, 1200);
+    } else requestAnimationFrame(finish);
+  };
+  requestAnimationFrame(finish);
+}
+
+async function toggleConstellation(id: string): Promise<void> {
+  if (savingAnimation) return;
+  if (activeConstellationId === id) {
+    activeConstellationId = null;
+    view?.selectConstellation(null);
+    renderConstellationList();
+    return;
+  }
+  const row = constellations.find((item) => item.id === id);
+  if (!row) return;
+  const ranked = row.query ? await searchResults(row.query) : [];
+  const threshold = (ranked[0]?.score ?? 0) * ATTRACT_RATIO;
+  const automatic = ranked.filter((hit) => hit.score >= threshold).slice(0, 12).map((hit) => hit.id);
+  const alive = new Set(state.items.map((item) => item.id));
+  row.lastMembers = membersFor(automatic, row.pinned, row.excluded).filter((itemId) => alive.has(itemId));
+  await writeConstellation(row);
+  activeConstellationId = id;
+  refreshConstellations();
+  view?.selectConstellation(id, row.name);
+  view?.focusPoints(pointsFor(state.layout, row.lastMembers));
+}
+
+function renderConstellationList(): void {
+  const list = document.getElementById("constellation-list");
+  if (!list) return;
+  document.body.classList.toggle("has-constellations", constellations.length > 0);
+  list.replaceChildren();
+  for (const row of constellations) {
+    const button = document.createElement("button");
+    button.textContent = row.name;
+    button.classList.toggle("is-active", row.id === activeConstellationId);
+    button.addEventListener("click", () => void toggleConstellation(row.id));
+    list.append(button);
+  }
+  const manage = document.getElementById("constellation-manage");
+  if (manage) manage.hidden = !activeConstellationId || savingAnimation;
+}
+
+function setupConstellations(): void {
+  document.getElementById("constellation-create")?.addEventListener("click", beginConstellation);
+  document.getElementById("constellation-save")?.addEventListener("click", () => void saveConstellation());
+  document.getElementById("constellation-cancel")?.addEventListener("click", cancelConstellation);
+  document.getElementById("constellation-name-input")?.addEventListener("keydown", (event) => {
+    if ((event as KeyboardEvent).key === "Enter") { event.preventDefault(); void saveConstellation(); }
+    if ((event as KeyboardEvent).key === "Escape") { event.preventDefault(); cancelConstellation(); }
+  });
+  document.getElementById("constellation-rename")?.addEventListener("click", async () => {
+    const row = constellations.find((item) => item.id === activeConstellationId);
+    if (!row) return;
+    const name = window.prompt("星座の名前", row.name)?.trim();
+    if (!name) return;
+    row.name = name;
+    await writeConstellation(row);
+    view?.selectConstellation(row.id, name);
+    renderConstellationList();
+  });
+  document.getElementById("constellation-delete")?.addEventListener("click", async () => {
+    if (!activeConstellationId) return;
+    const id = activeConstellationId;
+    await deleteConstellation(id);
+    constellations = constellations.filter((item) => item.id !== id);
+    activeConstellationId = null;
+    view?.selectConstellation(null);
+    refreshConstellations();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.target === document.getElementById("search-input") ||
+      event.target === document.getElementById("constellation-name-input")) return;
+    if (editing) cancelConstellation();
+    else if (activeConstellationId) {
+      activeConstellationId = null;
+      view?.selectConstellation(null);
+      renderConstellationList();
+    }
+  });
+  renderConstellationList();
 }
 
 async function searchResults(text: string, coefficient = GENERALITY_PENALTY,
@@ -229,6 +413,8 @@ function applySearch(next: SearchHit[]): void {
   selectedIndex = 0;
   view?.setSearch(hits.map((hit) => hit.id));
   view?.selectSearch(hits[0]?.id ?? null);
+  const create = document.getElementById("constellation-create") as HTMLElement | null;
+  if (create) create.hidden = !hits.length || !(document.getElementById("search-input") as HTMLInputElement).value.trim() || !!editing;
 }
 
 function setupSearch(canvas: HTMLCanvasElement): void {
@@ -257,7 +443,18 @@ function setupSearch(canvas: HTMLCanvasElement): void {
     }, 300);
   });
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
+    if (event.key === "Enter" && event.ctrlKey) {
+      beginConstellation();
+      event.preventDefault();
+    } else if (event.key === "Escape") {
+      if (editing) { cancelConstellation(); event.preventDefault(); return; }
+      if (activeConstellationId && !input.value.trim()) {
+        activeConstellationId = null;
+        view?.selectConstellation(null);
+        renderConstellationList();
+        event.preventDefault();
+        return;
+      }
       input.value = "";
       input.dispatchEvent(new Event("input"));
       input.blur();
@@ -274,12 +471,13 @@ function setupSearch(canvas: HTMLCanvasElement): void {
   });
   canvas.addEventListener("click", (event) => {
     const id = view?.pickStar(event.clientX, event.clientY);
-    if (id) showCard(id);
+    if (id) handleStarClick(id);
     else card.hidden = true;
   });
   canvas.addEventListener("mousemove", (event) => view?.hoverStar(view.pickStar(event.clientX, event.clientY)));
   canvas.addEventListener("mouseleave", () => view?.hoverStar(null));
   canvas.addEventListener("dblclick", (event) => {
+    if (editing) return;
     const id = view?.pickStar(event.clientX, event.clientY);
     if (id) openBookmark(id);
   });
@@ -301,6 +499,7 @@ function watchBookmarks(): void {
       state.items = snapshot.items;
       await computeEmbeddings();   // 変わった分だけ計算される
       await placeStars();          // 増えた星だけ足される
+      await reconcileConstellations();
     }, 500) as unknown as number;
   };
   chrome.bookmarks.onCreated.addListener(refresh);
@@ -451,6 +650,13 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   resetLabelTiming: () => view?.resetLabelTiming(),
   cameraTilt: () => view?.cameraTilt(),
   measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
+  constellationState: () => ({ rows: constellations, active: activeConstellationId,
+    editing: editing ? { query: editing.query, automatic: editing.automatic,
+      pinned: [...editing.pinned], excluded: [...editing.excluded], members: currentEditMembers() } : null,
+    geometry: view?.constellationGeometry(), animation: view?.constellationAnimationState() }),
+  toggleEditMember: handleStarClick,
+  recallConstellation: toggleConstellation,
+  mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
 };
 
 main().catch((err) => {
