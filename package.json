@@ -10,9 +10,12 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/gen-icons.mjs",
-    "check:ext": "node scripts/check-extension.mjs"
+    "check:ext": "node scripts/check-extension.mjs",
+    "prebuild": "node scripts/copy-ort.mjs",
+    "predev": "node scripts/copy-ort.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "three": "^0.180.0"
   },
   "devDependencies": {

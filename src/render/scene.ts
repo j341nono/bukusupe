@@ -15,6 +15,8 @@ export class SpaceView {
   private field: StarField | null = null;
   private readonly backdrop: THREE.Points;
   private running = false;
+  /** 描画できたコマ数。計算中も画面が動いていることの確認に使う。 */
+  frames = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -74,6 +76,7 @@ export class SpaceView {
   }
 
   private readonly tick = (): void => {
+    this.frames++;
     const t = this.clock.getElapsedTime();
     this.field?.update(t);
     this.controls.update();

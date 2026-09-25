@@ -12,8 +12,8 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 | 拡張機能 | Manifest V3（`public/manifest.json` を手書き。crxjs 等のプラグインは使わない） |
 | 言語・ビルド | TypeScript + Vite（`index.html` と `src/background.ts` の 2 エントリ） |
 | 描画 | three.js（`MapControls` を回転無効で使い、移動と拡大縮小のみ） |
-| 埋め込み（M1 以降） | transformers.js + `Xenova/multilingual-e5-small`（int8 量子化）、WASM バックエンド、Web Worker |
-| 保存（M1 以降） | IndexedDB（埋め込みベクトル・配置・星座） |
+| 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
+| 保存 | IndexedDB（`embeddings` / `meta`。M2 以降で配置・星座を足す） |
 | 権限 | `bookmarks`, `storage`（必要なら `unlimitedStorage`） |
 
 CSP は `manifest.json` の `content_security_policy.extension_pages` に
@@ -30,14 +30,18 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
 ├── public/
 │   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる）
-│   └── icons/               # 16 / 48 / 128 px
+│   ├── icons/               # 16 / 48 / 128 px
+│   └── ort/                 # ONNX Runtime の .mjs / .wasm（生成物。git には入れない）
 ├── scripts/
 │   ├── gen-icons.mjs        # アイコン PNG の生成（依存なし）
+│   ├── copy-ort.mjs         # ONNX Runtime の補助ファイルを public/ort/ に同梱
 │   └── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
 ├── src/
 │   ├── main.ts              # 画面の入口
 │   ├── background.ts        # service worker（アイコン → 専用タブ）
 │   ├── bookmarks/           # ブックマークの取得（Chrome / サンプルの 2 系統）
+│   ├── embed/               # 埋め込み（Worker、入力文の組み立て、ドメイン辞書、ORT 設定）
+│   ├── store/               # IndexedDB
 │   ├── layout/              # 配置（M0 は仮配置、M2 で本実装）
 │   ├── render/              # three.js の描画
 │   └── data/sample-bookmarks.json   # 開発・デモ用の 150 件
@@ -64,6 +68,10 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
 
 1. **プログラムを外部から読み込まない。** 外部から取得してよいのはモデルの重み（データ）だけ。
    スクリプト・WASM は必ず同梱する（CDN 参照を書かない）。
+   - transformers.js は**既定で ONNX Runtime の `.mjs` / `.wasm` を jsDelivr から読む**。
+     埋め込みを使う入口では必ず `configureOrt()`（`src/embed/ort-env.ts`）を先に呼ぶ。
+   - `env.useWasmCache` は false のままにする。true にすると `.mjs` を `blob:` URL にして
+     読み込もうとし、MV3 の CSP（`script-src 'self'`）に弾かれる。
 2. **ブックマークの内容をブラウザの外に送らない。** 分析・ログ送信・外部 API 呼び出しを書かない。
 3. **ブックマークを削除・変更する処理を書かない。** `chrome.bookmarks` は読み取り系
    （`getTree` / `search` / `onCreated` / `onChanged` / `onRemoved`）のみ使う。
