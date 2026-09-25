@@ -8,6 +8,7 @@ import { StarField, clusterColor, createBackdrop, type RenderStar } from "./star
 
 /** 静止時のカメラの傾き（真上から 40 度。SPEC 7 章） */
 const TILT = THREE.MathUtils.degToRad(40);
+const MAX_TILT = THREE.MathUtils.degToRad(65);
 /** 傾き⇄真上の切り替えにかける時間（SPEC 7 章） */
 const TURN_SECONDS = 0.6;
 
@@ -54,6 +55,11 @@ export class SpaceView {
   private screenCircles: ScreenCircle[] = [];
   private tilt = TILT;
   private tiltTarget = TILT;
+  private tiltSpeed = TILT / TURN_SECONDS;
+  private preferredTilt = TILT;
+  private tiltPointer: number | null = null;
+  private tiltPointerY = 0;
+  private tiltCapture: HTMLElement | null = null;
   private searchIds: string[] = [];
   private searchCenter = { x: 0, y: 0 };
   private searchUnit = 1;
@@ -83,6 +89,7 @@ export class SpaceView {
 
   /** 描画できたコマ数。計算中も画面が動いていることの確認に使う。 */
   frames = 0;
+  onStarLabelClick: ((id: string) => void) | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement, labelContainer: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -101,16 +108,50 @@ export class SpaceView {
     this.controls.screenSpacePanning = false;
     this.controls.minDistance = 6;
     this.controls.maxDistance = 2000;
+    for (const surface of [canvas, labelContainer]) {
+      surface.addEventListener("pointerdown", this.onTiltStart, true);
+      surface.addEventListener("pointermove", this.onTiltMove, true);
+      surface.addEventListener("pointerup", this.onTiltEnd, true);
+      surface.addEventListener("pointercancel", this.onTiltEnd, true);
+      surface.addEventListener("contextmenu", (event) => event.preventDefault());
+    }
 
     this.backdrop = createBackdrop();
     this.scene.add(this.backdrop);
     this.scene.add(this.nebulae.object);
     this.scene.add(this.field.object);
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.5, 2.5).rotateX(-Math.PI / 2),
+      new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, depthTest: false,
+        blending: THREE.AdditiveBlending,
+        vertexShader: `varying vec2 vUv;
+          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `varying vec2 vUv;
+          void main() {
+            float r = length((vUv - 0.5) * 2.5);
+            float ring = exp(-pow((r - 0.42) / 0.09, 2.0));
+            float halo = exp(-pow((r - 0.55) / 0.31, 2.0));
+            gl_FragColor = vec4(0.48, 0.65, 1.0, ring * 0.68 + halo * 0.28);
+          }`,
+      }),
+    );
+    glow.position.y = 0.05;
+    glow.renderOrder = 2;
+    this.blackHole.add(glow);
     const core = new THREE.Mesh(new THREE.CircleGeometry(0.36, 48),
-      new THREE.MeshBasicMaterial({ color: 0x010108, side: THREE.DoubleSide }));
+      new THREE.MeshBasicMaterial({ color: 0x000004, side: THREE.DoubleSide, depthTest: false }));
     core.rotation.x = -Math.PI / 2;
     core.position.y = 0.08;
+    core.renderOrder = 3;
     this.blackHole.add(core);
+    const rim = new THREE.Mesh(new THREE.RingGeometry(0.355, 0.395, 64),
+      new THREE.MeshBasicMaterial({ color: 0xa8c5ff, transparent: true, opacity: 0.95,
+        side: THREE.DoubleSide, depthWrite: false, depthTest: false }));
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.y = 0.09;
+    rim.renderOrder = 4;
+    this.blackHole.add(rim);
     for (const radius of [1, 1.75, 2.55]) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(radius - 0.012, radius + 0.012, 96),
         new THREE.MeshBasicMaterial({ color: 0x7897df, transparent: true, opacity: 0.23, side: THREE.DoubleSide }));
@@ -135,6 +176,7 @@ export class SpaceView {
 
     this.labels = new LabelLayer(labelContainer);
     this.labels.onHover = (key) => this.hoverStar(key);
+    this.labels.onClick = (key) => this.onStarLabelClick?.(key);
 
     addEventListener("resize", this.resize);
     this.resize();
@@ -157,8 +199,39 @@ export class SpaceView {
 
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
   setTopDown(topDown: boolean): void {
-    this.tiltTarget = topDown ? 0 : TILT;
+    this.tiltTarget = topDown ? 0 : this.preferredTilt;
+    this.tiltSpeed = Math.abs(this.tiltTarget - this.tilt) / TURN_SECONDS;
   }
+
+  private readonly onTiltStart = (event: PointerEvent): void => {
+    if (event.button !== 2) return;
+    this.tiltPointer = event.pointerId;
+    this.tiltPointerY = event.clientY;
+    this.tiltCapture = event.currentTarget as HTMLElement;
+    this.tiltCapture.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  private readonly onTiltMove = (event: PointerEvent): void => {
+    if (event.pointerId !== this.tiltPointer) return;
+    const delta = event.clientY - this.tiltPointerY;
+    this.tiltPointerY = event.clientY;
+    this.tilt = THREE.MathUtils.clamp(this.tilt + delta * 0.004, 0, MAX_TILT);
+    this.preferredTilt = this.tiltTarget = this.tilt;
+    this.setDistance(this.camera.position.distanceTo(this.controls.target));
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  private readonly onTiltEnd = (event: PointerEvent): void => {
+    if (event.pointerId !== this.tiltPointer) return;
+    this.tiltPointer = null;
+    if (this.tiltCapture?.hasPointerCapture(event.pointerId)) this.tiltCapture.releasePointerCapture(event.pointerId);
+    this.tiltCapture = null;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
 
   /** 画面中央の地図上の点を中心に、検索結果を軌道へ移す。 */
   setSearch(ids: string[]): void {
@@ -335,7 +408,7 @@ export class SpaceView {
     const dt = Math.min(0.05, this.clock.getDelta());
 
     if (Math.abs(this.tilt - this.tiltTarget) > 1e-4) {
-      const step = (TILT / TURN_SECONDS) * dt;
+      const step = this.tiltSpeed * dt;
       const diff = this.tiltTarget - this.tilt;
       this.tilt += Math.sign(diff) * Math.min(Math.abs(diff), step);
       const t = this.controls.target;

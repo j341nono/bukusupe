@@ -66,10 +66,12 @@ export class LabelLayer {
   private readonly fullText = new Map<string, string>();
   private hovered: string | null = null;
   onHover: ((key: string | null) => void) | null = null;
+  onClick: ((key: string) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     container.addEventListener("mouseover", this.onOver);
     container.addEventListener("mouseout", this.onOut);
+    container.addEventListener("click", this.onLabelClick);
   }
 
   render(items: PlacedLabel[], tier: ZoomTier, circles: ScreenCircle[] = []): number {
@@ -159,12 +161,13 @@ export class LabelLayer {
       el.dataset.searchRank = item.searchRank == null ? "" : String(item.searchRank);
       el.dataset.cluster = item.cluster == null ? "" : String(item.cluster);
       el.dataset.side = item.side ?? "";
+      el.dataset.kind = item.kind;
       el.style.textAlign = item.side === "left" ? "right" : "left";
       el.style.width = item.searchRank == null ? "" : `${(box.r - box.l).toFixed(1)}px`;
       el.style.boxSizing = item.searchRank == null ? "" : "border-box";
       el.style.setProperty("--cluster-color", item.color ?? "transparent");
       // 省略したものだけ、マウスを乗せたら全文を出す
-      el.style.pointerEvents = item.searchRank != null || text !== this.fullText.get(item.key) ? "auto" : "none";
+      el.style.pointerEvents = item.kind === "star" ? "auto" : "none";
       el.style.transform = `translate3d(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px, 0)`;
       if (fresh) requestAnimationFrame(() => { if (this.active.some(({ item: active }) => active.key === item.key)) el.style.opacity = "1"; });
       else el.style.opacity = "1";
@@ -185,6 +188,12 @@ export class LabelLayer {
     (e.target as HTMLElement).classList.remove("is-hovered");
     this.hovered = null;
     this.onHover?.(null);
+  };
+
+  private readonly onLabelClick = (e: MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el?.dataset?.kind !== "star" || !el.dataset.key) return;
+    this.onClick?.(el.dataset.key);
   };
 
   private textWidth(text: string, size: number): number {

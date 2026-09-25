@@ -318,6 +318,20 @@ try {
   check(labelGeometry?.labels?.length > 0 && intrusive.length === 0,
     "初期画面でタイトルが隣の星団の円に入らない",
     `${labelGeometry?.labels?.length ?? 0} 件表示、侵入 ${intrusive.length} 件`);
+  const labelCard = JSON.parse((await evalIn(`(() => {
+    const el = [...document.querySelectorAll('.label-star')]
+      .find((label) => Number(getComputedStyle(label).opacity) > 0.9);
+    if (!el) return JSON.stringify({ found: false });
+    el.click();
+    const card = document.getElementById('star-card');
+    return JSON.stringify({ found: true, clickable: getComputedStyle(el).pointerEvents === 'auto',
+      visible: !card.hidden, title: document.getElementById('star-card-title').textContent,
+      label: el.textContent });
+  })()`)) ?? "null");
+  check(labelCard?.found && labelCard.clickable && labelCard.visible &&
+    labelCard.title.startsWith(labelCard.label.replace(/…$/, "")),
+    "星のタイトルをクリックすると同じ星のカードが開く", labelCard?.title ?? "ラベルなし");
+  await evalIn("document.getElementById('star-card').hidden = true");
 
   // --- 遠・中・近のスクリーンショット ---
   mkdirSync("docs/screens", { recursive: true });
@@ -471,6 +485,16 @@ try {
   })()`)) ?? "null");
   check(!clicked.hidden && !!clicked.title, "星のクリックでカードが開く", clicked.title);
   await evalIn("document.getElementById('star-card').hidden = true");
+  const searchLabelCard = JSON.parse((await evalIn(`(() => {
+    const el = document.querySelector('.label-orbit-inner');
+    if (!el) return JSON.stringify({ found: false });
+    el.click();
+    return JSON.stringify({ found: true, visible: !document.getElementById('star-card').hidden,
+      title: document.getElementById('star-card-title').textContent, label: el.textContent });
+  })()`)) ?? "null");
+  check(searchLabelCard?.found && searchLabelCard.visible && searchLabelCard.title === searchLabelCard.label,
+    "検索中のタイトルもクリックでカードが開く", searchLabelCard?.title ?? "ラベルなし");
+  await evalIn("document.getElementById('star-card').hidden = true");
   const beforeSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
   await sleep(1000);
   const afterSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
@@ -505,6 +529,29 @@ try {
     home && Math.hypot(returned.position.x - home.x, returned.position.y - home.y) < 0.5,
   "Esc で検索が消え、星とカメラが元へ戻る");
   await dragLabels("通常画面");
+  const tiltBefore = await evalIn("globalThis.__bukusupe.cameraTilt()");
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 790, y: 460 }, sessionId);
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: 790, y: 460,
+    button: "right", buttons: 2, clickCount: 1 }, sessionId);
+  for (let step = 1; step <= 12; step++) {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 790, y: 460 + step * 10,
+      button: "right", buttons: 2 }, sessionId);
+  }
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: 790, y: 580,
+    button: "right", buttons: 0, clickCount: 1 }, sessionId);
+  await sleep(180);
+  const tiltAfter = await evalIn("globalThis.__bukusupe.cameraTilt()");
+  check(tiltAfter > tiltBefore + 10 && tiltAfter <= 65.1,
+    "右ドラッグで地図の傾きだけが変わる", `${tiltBefore.toFixed(1)}°→${tiltAfter.toFixed(1)}°`);
+  await evalIn("globalThis.__bukusupe.setTopDown(true)");
+  await sleep(900);
+  const topDownTilt = await evalIn("globalThis.__bukusupe.cameraTilt()");
+  await evalIn("globalThis.__bukusupe.setTopDown(false)");
+  await sleep(900);
+  const restoredTilt = await evalIn("globalThis.__bukusupe.cameraTilt()");
+  check(topDownTilt < 1 && Math.abs(restoredTilt - tiltAfter) < 1,
+    "検索の真上表示を抜けると右ドラッグで決めた傾きへ戻る",
+    `${topDownTilt.toFixed(1)}°→${restoredTilt.toFixed(1)}°`);
 
   // --- 2 回目：再読み込みで計算し直さないこと ---
   events = [];

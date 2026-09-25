@@ -52,6 +52,7 @@ async function main(): Promise<void> {
 
   setupHudControls();
   view = new SpaceView(canvas, labels);
+  view.onStarLabelClick = showCard;
   view.start();
 
   renderHudMessage("ブックマークを読み込んでいる…");
