@@ -14,7 +14,7 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 | 言語・ビルド | TypeScript + Vite（`index.html` と `src/background.ts` の 2 エントリ） |
 | 描画 | three.js（`MapControls` を回転無効で使い、移動と拡大縮小のみ） |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
-| 保存 | IndexedDB（`embeddings` / `meta`。M2 以降で配置・星座を足す） |
+| 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
 | 権限 | `bookmarks`, `storage`（必要なら `unlimitedStorage`） |
 
 CSP は `manifest.json` の `content_security_policy.extension_pages` に
