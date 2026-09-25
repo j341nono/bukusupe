@@ -140,8 +140,12 @@ export class StarField {
       this.from[i * 2 + 1] = fy;
       this.to[i * 2] = s.x;
       this.to[i * 2 + 1] = s.y;
-      this.springX[i] = this.searchX[i] = fx;
-      this.springY[i] = this.searchY[i] = fy;
+      // ばねは移動前の位置から始め、目標は新しい配置の位置に置く。
+      // （目標まで移動前の位置にすると、ばねが毎コマ古い位置へ引き戻してしまう）
+      this.springX[i] = fx;
+      this.springY[i] = fy;
+      this.searchX[i] = s.x;
+      this.searchY[i] = s.y;
 
       // 地図の (x, y) を three の床面 (x, 0, -y) に置く。奥行きに意味は無い。
       pos[i * 3] = fx;
@@ -184,6 +188,8 @@ export class StarField {
 
   /** 上位 21 件を内側から 3 / 6 / 12 の軌道に並べる。 */
   setSearch(ids: string[], center: { x: number; y: number }, unit: number): void {
+    // 配置の移動の途中なら、いまの位置（spring に同期済み）からばねで続ける
+    this.moveT = 1;
     this.searching = ids.length > 0;
     const rank = new Map(ids.slice(0, 21).map((id, i) => [id, i]));
     this.stars.forEach((star, i) => {
@@ -230,8 +236,15 @@ export class StarField {
       const e = easeInOut(this.moveT);
       const pos = this.position.array as Float32Array;
       for (let i = 0; i < this.stars.length; i++) {
-        pos[i * 3] = this.from[i * 2] + (this.to[i * 2] - this.from[i * 2]) * e;
-        pos[i * 3 + 2] = -(this.from[i * 2 + 1] + (this.to[i * 2 + 1] - this.from[i * 2 + 1]) * e);
+        const x = this.from[i * 2] + (this.to[i * 2] - this.from[i * 2]) * e;
+        const y = this.from[i * 2 + 1] + (this.to[i * 2 + 1] - this.from[i * 2 + 1]) * e;
+        pos[i * 3] = x;
+        pos[i * 3 + 2] = -y;
+        // 表示位置（displayPosition）とラベルが、移動中の星を追えるように合わせておく
+        this.springX[i] = x;
+        this.springY[i] = y;
+        this.velocityX[i] = 0;
+        this.velocityY[i] = 0;
       }
       this.position.needsUpdate = true;
     }
@@ -260,7 +273,8 @@ export class StarField {
 
     const pos = this.position.array as Float32Array;
     let moving = false;
-    for (let i = 0; i < this.stars.length; i++) {
+    // 配置の移動中（moveT < 1）はばねを動かさない。動かし手は常に一つ
+    for (let i = 0; this.moveT >= 1 && i < this.stars.length; i++) {
       if (!this.searching && Math.abs(this.springX[i] - this.stars[i].x) < 0.001 &&
         Math.abs(this.springY[i] - this.stars[i].y) < 0.001 &&
         Math.abs(this.velocityX[i]) + Math.abs(this.velocityY[i]) < 0.001) continue;
