@@ -16,11 +16,17 @@
  * 11. ブックマークが 1 件増えても、既存の星の座標が変わらない
  * 12. 20 / 150 / 2000 件で配置が終わり、2000 件でも 60 コマ/秒を保つ
  * 13. 遠・中・近の 3 段階のスクリーンショットを docs/screens/ に保存する
+ * 14. 準備完了直後・再配置後・検索中・再読み込み後に、星の表示位置が配置座標と一致する
+ * 15. ドラッグ中、ラベルが星と同じだけ動く（毎コマ追従している）
+ * 16. Chrome のデータ源：サンプル⇄実ブックマークの切り替えで星座・平均ベクトルが混ざらない、
+ *     本物の削除通知で星座の線が結び直される、続けて変わっても配置に重複・欠落がない
  *
- * 新しいプロファイルで動かすのでブックマークは空。表示はサンプル 150 件になる。
+ * 新しいプロファイルで動かすのでブックマークは空。表示はサンプル 156 件になる。
+ * 実ブックマークの経路は、この確認スクリプトが使い捨てのプロファイルに chrome.bookmarks.create /
+ * remove でブックマークを作って通す。拡張機能のコード自体は読み取り専用のまま。
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -62,6 +68,41 @@ const send = (method, params = {}, sessionId) =>
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const IGNORE = /GPU stall|GL Driver Message|software WebGL/;
+
+/** 拡張機能とは別の方法（クラスカル法）で最小全域木を求める。描いた線の検算に使う。 */
+function kruskal(points) {
+  const pairs = [];
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      pairs.push({ i, j, d: (points[i].x - points[j].x) ** 2 + (points[i].y - points[j].y) ** 2 });
+    }
+  }
+  pairs.sort((a, b) => a.d - b.d);
+  const parent = points.map((_, i) => i);
+  const root = (i) => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+  const edges = [];
+  for (const { i, j } of pairs) {
+    const a = root(i), b = root(j);
+    if (a === b) continue;
+    parent[a] = b;
+    edges.push([points[i].id, points[j].id]);
+  }
+  return edges;
+}
+const edgeKeys = (edges) => edges.map((e) => [e.a ?? e[0], e.b ?? e[1]].sort().join("|")).sort();
+const sameEdges = (a, b) => JSON.stringify(edgeKeys(a)) === JSON.stringify(edgeKeys(b));
+
+/** dist/ の JS に、ブックマークを書き換える呼び出しがないか（読み取り専用の確認）。 */
+function bookmarkWrites(dir) {
+  const found = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".js")) continue;
+    const path = join(entry.parentPath ?? entry.path, entry.name);
+    const hits = readFileSync(path, "utf8").match(/bookmarks\.(create|update|remove|removeTree|move)\b/g);
+    if (hits) found.push(`${entry.name}: ${[...new Set(hits)].join(", ")}`);
+  }
+  return found;
+}
 const problems = [];
 const check = (ok, label, detail = "") => {
   console.log(`${ok ? "  OK " : "  NG "} ${label}${detail ? " … " + detail : ""}`);
@@ -96,6 +137,24 @@ try {
   await send("Performance.enable", {}, sessionId);
   const layoutCount = async () => (await send("Performance.getMetrics", {}, sessionId))
     .metrics.find((metric) => metric.name === "LayoutCount")?.value ?? NaN;
+  const sampleLabels = `JSON.stringify((() => {
+    const cx = innerWidth / 2, cy = innerHeight / 2;
+    const out = {};
+    for (const el of document.querySelectorAll('.label-star')) {
+      if (el.style.opacity !== '1') continue;
+      const m = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px/.exec(el.style.transform);
+      const p = m && globalThis.__bukusupe.starScreen(el.dataset.key);
+      if (!p) continue;
+      let sx = p.x, sy = p.y;
+      if (el.dataset.searchRank !== '') {
+        const o = Math.hypot(sx - cx, sy - cy) || 1;
+        sx += (sx - cx) / o * 10;
+        sy += (sy - cy) / o * 10;
+      }
+      out[el.dataset.key] = { dx: Number(m[1]) - sx, dy: Number(m[2]) - sy, sx: p.x, sy: p.y };
+    }
+    return out;
+  })())`;
   const dragLabels = async (mode) => {
     await sleep(250);
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 530, y: 600 }, sessionId);
@@ -104,19 +163,34 @@ try {
     await evalIn("globalThis.__bukusupe.resetLabelTiming()");
     const before = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.labelStats())")) ?? "null");
     const beforeLayouts = await layoutCount();
+    // ドラッグの途中で、ラベルの位置（style.transform）と星の画面位置を同じ瞬間に読む。
+    // どちらもレイアウトを起こさない読み方にしている（LayoutCount の確認を汚さない）。
+    const samples = [];
     for (let step = 1; step <= 45; step++) {
       await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 530 + step * 4, y: 600 + step,
         button: "left", buttons: 1 }, sessionId);
       await sleep(16);
+      if (step % 9 === 0) samples.push(JSON.parse((await evalIn(sampleLabels)) ?? "{}"));
     }
     const afterLayouts = await layoutCount();
     const after = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.labelStats())")) ?? "null");
     await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: 710, y: 645,
       button: "left", buttons: 0, clickCount: 1 }, sessionId);
     const frames = after.frames - before.frames;
-    const updates = after.positionUpdates - before.positionUpdates;
-    check(frames >= 30 && updates === frames, `${mode}のドラッグ中、描画とラベル位置更新が毎コマ一致`,
-      `${frames} コマ / ${updates} 回`);
+    // 星からラベルまでのずれ（右横 8px など）は、ドラッグ中ずっと同じでなければならない。
+    const keys = Object.keys(samples[0] ?? {}).filter((key) => samples.every((sample) => sample[key]));
+    let worst = 0, travel = 0;
+    for (const key of keys) {
+      const first = samples[0][key];
+      const last = samples.at(-1)[key];
+      travel = Math.max(travel, Math.hypot(last.sx - first.sx, last.sy - first.sy));
+      for (const sample of samples) {
+        worst = Math.max(worst, Math.hypot(sample[key].dx - first.dx, sample[key].dy - first.dy));
+      }
+    }
+    check(frames >= 30 && keys.length >= 3 && travel > 20 && worst <= 0.5,
+      `${mode}のドラッグ中、ラベルが星と同じだけ動く`,
+      `${keys.length} 件を ${samples.length} 回測定、星の移動 ${travel.toFixed(0)}px、ずれの変化 最大 ${worst.toFixed(2)}px、${frames} コマ`);
     check(after.maxPositionMs <= 2, `${mode}のラベル位置更新が毎回 2ms 以内`,
       `最大 ${after.maxPositionMs.toFixed(2)}ms`);
     check(afterLayouts === beforeLayouts && after.decisions === before.decisions,
@@ -125,6 +199,21 @@ try {
   };
   const hud = () => evalIn("document.getElementById('hud')?.innerText ?? ''");
   const phase = () => evalIn("document.body.dataset.phase ?? ''");
+  /** 全星の表示位置（ばね・移動の結果）と、配置の座標の差。H1 の検出に使う。 */
+  const positionDrift = async () => JSON.parse((await evalIn(`JSON.stringify((() => {
+    const layout = globalThis.__bukusupe.layout();
+    let off = 0, missing = 0, max = 0;
+    for (const s of layout?.stars ?? []) {
+      const p = globalThis.__bukusupe.starPosition(s.id);
+      if (!p) { missing++; continue; }
+      const d = Math.hypot(p.x - s.x, p.y - s.y);
+      max = Math.max(max, d);
+      if (d >= 0.01) off++;
+    }
+    return { stars: layout?.stars.length ?? 0, off, missing, max };
+  })())`)) ?? "null");
+  const driftText = (d) => d ? `${d.off}/${d.stars} 件ずれ、最大 ${d.max.toFixed(3)}` : "測れない";
+  const driftOk = (d) => d != null && d.stars > 0 && d.off === 0 && d.missing === 0;
 
   // --- 1 回目：モデル取得と全件の埋め込み ---
   let text = "";
@@ -164,7 +253,7 @@ try {
   check(finished, "埋め込みが全件終わって星が並ぶ");
   check(/星\s*156/.test(text.replace(/\s+/g, " ")), "サンプル 156 件が読めている");
   check(await evalIn("typeof chrome !== 'undefined' && !!chrome.bookmarks"), "bookmarks 権限がある");
-  check(liveFrames != null && liveFrames > 10, "計算中も画面が動いている",
+  check(liveFrames != null && liveFrames >= 30, "計算中も画面が動いている",
     liveFrames == null ? "測れなかった" : `1 秒あたり ${liveFrames} コマ`);
 
   const urls = events.filter((e) => e.method === "Network.requestWillBeSent").map((e) => e.params.request.url);
@@ -180,6 +269,19 @@ try {
     "外部への通信はモデルの重みだけ",
     [...new Set(external.map((u) => new URL(u).host))].join(", ") || "(なし)",
   );
+
+  const writes = bookmarkWrites(DIST);
+  check(writes.length === 0, "拡張機能のコードにブックマークを書き換える呼び出しがない",
+    writes.join(" / ") || "なし");
+
+  // 仮配置から意味配置への移動（0.9 秒）が終わるのを待ってから、表示位置を配置と比べる。
+  await sleep(1800);
+  const readyDrift = await positionDrift();
+  check(driftOk(readyDrift), "準備完了直後、全星の表示位置が配置座標と一致する", driftText(readyDrift));
+  await evalIn("(async () => { await globalThis.__bukusupe.relayout(); })()");
+  await sleep(1800);
+  const relayoutDrift = await positionDrift();
+  check(driftOk(relayoutDrift), "再配置の後も、全星の表示位置が配置座標と一致する", driftText(relayoutDrift));
 
   const searchExpr = (q) =>
     `(async () => JSON.stringify(await globalThis.__bukusupe.search(${JSON.stringify(q)}, 3)))()`;
@@ -496,8 +598,23 @@ try {
   await sleep(180);
   check((await evalIn("globalThis.__bukusupe.cameraTilt()")) < 1,
     "入力欄のフォーカスでカメラが真上になる");
-  check(JSON.stringify(layout.stars) === JSON.stringify(JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.layout())")) ?? "null").stars),
-    "検索中も保存座標が変わらない");
+  const searchPositions = JSON.parse((await evalIn(`JSON.stringify((() => {
+    const layout = globalThis.__bukusupe.layout();
+    const hits = new Set(globalThis.__bukusupe.searchState().ids);
+    let still = 0, stillOff = 0, moved = 0;
+    for (const s of layout.stars) {
+      const p = globalThis.__bukusupe.starPosition(s.id);
+      if (!p) continue;
+      const d = Math.hypot(p.x - s.x, p.y - s.y);
+      if (hits.has(s.id)) { if (d > 0.5) moved++; }
+      else { still++; if (d >= 0.01) stillOff++; }
+    }
+    return { hits: hits.size, still, stillOff, moved, stored: JSON.stringify(layout.stars) };
+  })())`)) ?? "null");
+  check(searchPositions && searchPositions.stored === JSON.stringify(layout.stars) &&
+    searchPositions.hits > 0 && searchPositions.moved === searchPositions.hits && searchPositions.stillOff === 0,
+  "検索中、引き寄せた星だけが動き、他の星は配置座標のまま",
+  searchPositions ? `引き寄せ ${searchPositions.moved}/${searchPositions.hits}、動かない星のずれ ${searchPositions.stillOff}/${searchPositions.still}` : "測れない");
   const controls = JSON.parse((await evalIn(`(() => {
     const input = document.getElementById('search-input');
     const before = globalThis.__bukusupe.searchState();
@@ -603,8 +720,10 @@ try {
     .filter((u) => !u.startsWith("chrome-extension://"));
   check(reloadedOk, "再読み込み後も埋め込みが揃っている", `${(elapsed / 1000).toFixed(1)} 秒`);
   const reloadedLayout = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.layout())")) ?? "null");
-  check(reloadedLayout && JSON.stringify(reloadedLayout.stars) === JSON.stringify(layout.stars),
-    "検索を消して再読み込みしても星の座標が変わらない");
+  await sleep(1800);
+  const reloadDrift = await positionDrift();
+  check(reloadedLayout && JSON.stringify(reloadedLayout.stars) === JSON.stringify(layout.stars) && driftOk(reloadDrift),
+    "再読み込み後も、保存座標が同じで、全星がその位置に表示される", driftText(reloadDrift));
   check(refetched.length === 0, "再読み込みで外部から取り直さない", `${refetched.length} 件`);
 
   // --- M4：星座の編集、描画、保存と再検索 ---
@@ -683,7 +802,6 @@ try {
   }
   const ids = savedRow.lastMembers;
   const mstA = JSON.parse((await evalIn(`JSON.stringify(globalThis.__bukusupe.mstFor(${JSON.stringify(ids)}))`)) ?? "[]");
-  const mstB = JSON.parse((await evalIn(`JSON.stringify(globalThis.__bukusupe.mstFor(${JSON.stringify([...ids].reverse())}))`)) ?? "[]");
   const byId = new Map(layout.stars.map((s) => [s.id, s]));
   const crosses = (e1, e2) => {
     if ([e1.a, e1.b].some((id) => id === e2.a || id === e2.b)) return false;
@@ -693,8 +811,9 @@ try {
   };
   check(mstA.length === ids.length - 1 && mstA.every((e, i) => mstA.every((other, j) => i === j || !crosses(e, other))),
     "最小全域木の辺は星の数−1で、交差しない", `${ids.length} 星 / ${mstA.length} 辺`);
-  check(JSON.stringify(mstA) === JSON.stringify(mstB) && JSON.stringify(mstA) === JSON.stringify(savedLines.edges),
-    "同じ星なら順序を変えても同じ辺になる");
+  const independent = kruskal(ids.map((id) => byId.get(id)).filter(Boolean));
+  check(independent.length === ids.length - 1 && sameEdges(savedLines.edges, independent) && sameEdges(mstA, independent),
+    "描いた線が、別の方法（クラスカル法）で求めた最小全域木と一致する", `${independent.length} 辺`);
 
   await send("Page.reload", {}, sessionId);
   for (let i = 0; i < 30 && (await phase()) !== "ready"; i++) await sleep(500);
@@ -726,11 +845,6 @@ try {
   check(!!newId && withNew.includes(newId), "検索に合うブックマークを追加して呼び出すとメンバーに入る",
     `${newId} / ${withNew.includes(newId) ? "含まれる" : "含まれない"}`);
   await evalIn("globalThis.__bukusupe.restore()");
-  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
-  await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
-  const afterRemoval = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().geometry[0])")) ?? "null");
-  check(!afterRemoval.members.includes(newId) && afterRemoval.edges.length === Math.max(0, afterRemoval.members.length - 1),
-    "削除されたブックマークを除いて線を結び直す");
   await evalIn("window.prompt=()=> '宇宙の記録'; document.getElementById('constellation-rename').click()");
   await sleep(200);
   check((await evalIn("globalThis.__bukusupe.constellationState().rows[0].name")) === "宇宙の記録",
@@ -739,6 +853,134 @@ try {
   await sleep(200);
   check((await evalIn("globalThis.__bukusupe.constellationState().rows.length")) === 0,
     "星座だけを削除できる");
+
+  // --- Chrome のデータ源（H2）---
+  // ブックマークは確認スクリプトが使い捨てのプロファイルに作る。拡張機能は読むだけ。
+  // ページが読み込み直されている最中は evaluate が失敗するので、失敗は「まだ」と扱う。
+  const tryEval = async (expression) => { try { return await evalIn(expression); } catch { return undefined; } };
+  const waitUntil = async (expression, limitMs) => {
+    const end = Date.now() + limitMs;
+    while (Date.now() < end) {
+      if (await tryEval(expression)) return true;
+      await sleep(300);
+    }
+    return false;
+  };
+  const meanGap = `(() => {
+    const s = globalThis.__bukusupe.state;
+    const vectors = [...s.vectors.values()];
+    if (!vectors.length || !s.mean) return null;
+    const mean = new Float64Array(vectors[0].length);
+    for (const v of vectors) for (let d = 0; d < mean.length; d++) mean[d] += v[d] / vectors.length;
+    let gap = 0;
+    for (let d = 0; d < mean.length; d++) gap = Math.max(gap, Math.abs(mean[d] - s.mean[d]));
+    return gap;
+  })()`;
+  const saveConstellationNamed = async (query, name, pinTitles = []) => {
+    await evalIn(`(async () => { await globalThis.__bukusupe.searchNow(${JSON.stringify(query)}); })()`);
+    await sleep(600);
+    await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true}))");
+    // 線の照合が意味を持つよう、編集中に星を加えて星座を大きくする（加えた星は pinned に入る）
+    await evalIn(`(() => {
+      const want = new Set(${JSON.stringify(pinTitles)});
+      const members = new Set(globalThis.__bukusupe.constellationState().editing?.members ?? []);
+      for (const item of globalThis.__bukusupe.state.items) {
+        if (want.has(item.title) && !members.has(item.id)) globalThis.__bukusupe.toggleEditMember(item.id);
+      }
+    })()`);
+    await evalIn(`document.getElementById('constellation-name-input').value = ${JSON.stringify(name)}`);
+    await evalIn("document.getElementById('constellation-save').click()");
+    await waitUntil(`globalThis.__bukusupe.constellationState().rows.some((row) => row.name === ${JSON.stringify(name)})`, 5000);
+    // 保存の演出（戻る 0.95 秒＋線＋名前＋1.2 秒）が終わるまで待つ
+    await waitUntil("globalThis.__bukusupe.constellationState().animation.phase === 'done'", 8000);
+    await sleep(1600);
+    return JSON.parse((await evalIn(`JSON.stringify(globalThis.__bukusupe.constellationState().rows
+      .find((row) => row.name === ${JSON.stringify(name)}) ?? null)`)) ?? "null");
+  };
+
+  // 1. サンプルのまま星座を保存し、その時点の平均ベクトルを控える
+  const sampleRow = await saveConstellationNamed("宇宙を感じたい", "サンプルの星座");
+  const sampleMean = JSON.parse((await evalIn("JSON.stringify(Array.from(globalThis.__bukusupe.state.mean))")) ?? "[]");
+  console.log(`  サンプルの星座：メンバー ${sampleRow?.lastMembers.length ?? 0} 件`);
+
+  // 2. 実ブックマークを 20 件作る → データ源が Chrome に変わる
+  await evalIn("window.__beforeSwitch = true");
+  const SPACE = ["ロケット打ち上げの記録", "今夜見える星座の探し方", "天体写真の撮り方入門", "国際宇宙ステーションを見る",
+    "プラネタリウムの上映案内", "月面探査の最新ニュース", "望遠鏡の選び方", "流れ星の観測ガイド",
+    "銀河と星雲の写真集", "火星探査機の記録"];
+  const FOOD = ["親子丼の作り方", "カレーのスパイス配合", "パスタのゆで方", "お味噌汁の基本",
+    "パン作りの発酵", "唐揚げを柔らかくするコツ", "作りおきおかず", "だしの取り方", "ケーキの焼き方", "餃子の包み方"];
+  await evalIn(`(async () => {
+    const titles = ${JSON.stringify([...SPACE, ...FOOD])};
+    for (let i = 0; i < titles.length; i++) {
+      await chrome.bookmarks.create({ parentId: "1", title: titles[i],
+        url: "https://example.com/" + (i < 10 ? "space/" : "food/") + i });
+    }
+  })()`);
+  const switched = await waitUntil(
+    "globalThis.__bukusupe?.state.kind === 'chrome' && document.body.dataset.phase === 'ready' && globalThis.__bukusupe.state.vectors.size === 20",
+    120000);
+  const reloaded = switched && (await tryEval("window.__beforeSwitch === true")) !== true;
+  check(switched && reloaded, "実ブックマークへ切り替わると、差し替えずにページを読み込み直す",
+    switched ? (reloaded ? "読み込み直した" : "同じページのまま差し替えた") : "切り替わらない");
+  const chromeGap = await tryEval(meanGap);
+  check(chromeGap != null && chromeGap < 1e-5, "平均ベクトルが実ブックマークから作り直される",
+    chromeGap == null ? "測れない" : `実ブックマークの平均との差 最大 ${chromeGap.toFixed(4)}`);
+  const chromeRows = await tryEval("globalThis.__bukusupe.constellationState().rows.length");
+  check(chromeRows === 0, "サンプルの星座が実ブックマークの画面に混ざらない", `${chromeRows} 件`);
+
+  // 3. 実ブックマークで星座を作り、本物の削除通知で線が結び直されるか
+  const chromeRow = await saveConstellationNamed("宇宙の写真や星空", "実ブックマークの星座", SPACE);
+  const removedMember = chromeRow?.lastMembers[0];
+  if (removedMember) await evalIn(`(async () => { await chrome.bookmarks.remove(${JSON.stringify(removedMember)}); })()`);
+  const relinked = await waitUntil(`(() => {
+    const row = globalThis.__bukusupe.constellationState().rows.find((r) => r.name === "実ブックマークの星座");
+    return row && !row.lastMembers.includes(${JSON.stringify(removedMember)}) &&
+      !globalThis.__bukusupe.state.items.some((item) => item.id === ${JSON.stringify(removedMember)});
+  })()`, 15000);
+  await sleep(300);
+  const chromeState = JSON.parse((await tryEval(`JSON.stringify({
+    c: globalThis.__bukusupe.constellationState(), layout: globalThis.__bukusupe.layout() })`)) ?? "null");
+  const chromeLines = chromeState?.c.geometry.find((row) => row.id === chromeRow?.id);
+  const chromeById = new Map((chromeState?.layout?.stars ?? []).map((star) => [star.id, star]));
+  const remaining = (chromeRow?.lastMembers ?? []).filter((id) => id !== removedMember);
+  const expectedLines = kruskal(remaining.map((id) => chromeById.get(id)).filter(Boolean));
+  check(relinked && (chromeRow?.lastMembers.length ?? 0) >= 6 && chromeLines &&
+    !chromeLines.members.includes(removedMember) && chromeLines.members.length === remaining.length &&
+    sameEdges(chromeLines.edges, expectedLines),
+  "本物の削除通知で、星座のメンバーと線が結び直される",
+  `${chromeRow?.lastMembers.length ?? 0} → ${chromeLines?.members.length ?? 0} 星 / ${chromeLines?.edges.length ?? 0} 辺`);
+
+  // 4. 続けてブックマークが変わっても、更新が重ならず、配置に重複・欠落がない（M3）
+  await evalIn(`(async () => {
+    for (let i = 0; i < 3; i++) await chrome.bookmarks.create({ parentId: "1", title: "星空の撮影地 " + i, url: "https://example.com/burst-a/" + i });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    for (let i = 0; i < 3; i++) await chrome.bookmarks.create({ parentId: "1", title: "おにぎりの具 " + i, url: "https://example.com/burst-b/" + i });
+  })()`);
+  const consistent = await waitUntil(`(() => {
+    const b = globalThis.__bukusupe;
+    const items = b.state.items.map((item) => item.id).sort();
+    const stars = (b.layout()?.stars ?? []).map((star) => star.id).sort();
+    return document.body.dataset.phase === 'ready' && items.length === 25 &&
+      new Set(stars).size === stars.length && JSON.stringify(items) === JSON.stringify(stars);
+  })()`, 30000);
+  check(consistent, "続けてブックマークが変わっても、配置に重複・欠落がない",
+    `${await tryEval("globalThis.__bukusupe.state.items.length")} 件 / 星 ${await tryEval("globalThis.__bukusupe.layout()?.stars.length")} 個`);
+
+  // 5. サンプルに戻すと、サンプルの星座と平均ベクトルがそのまま残っている
+  await send("Page.navigate", { url: `chrome-extension://${extId}/index.html?sample=1` }, sessionId);
+  await waitUntil("globalThis.__bukusupe?.state.kind === 'sample' && document.body.dataset.phase === 'ready'", 60000);
+  const backRow = JSON.parse((await tryEval(`JSON.stringify(globalThis.__bukusupe.constellationState().rows
+    .find((row) => row.id === ${JSON.stringify(sampleRow?.id)}) ?? null)`)) ?? "null");
+  check(backRow && (sampleRow?.lastMembers.length ?? 0) > 0 &&
+    JSON.stringify(backRow.lastMembers) === JSON.stringify(sampleRow.lastMembers),
+  "サンプルに戻すと、サンプルの星座のメンバーがそのまま残る",
+  `${sampleRow?.lastMembers.length ?? 0} → ${backRow?.lastMembers.length ?? "なし"} 件`);
+  const backMean = JSON.parse((await tryEval("JSON.stringify(Array.from(globalThis.__bukusupe.state.mean ?? []))")) ?? "[]");
+  const backGap = backMean.length === sampleMean.length && sampleMean.length > 0
+    ? Math.max(...sampleMean.map((v, i) => Math.abs(v - backMean[i]))) : Infinity;
+  check(backGap < 1e-6, "サンプルの平均ベクトルが実ブックマークのもので上書きされない",
+    Number.isFinite(backGap) ? `差 最大 ${backGap.toExponential(1)}` : "測れない");
 
   if (SHOT) {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
