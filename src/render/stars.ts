@@ -91,6 +91,12 @@ export class StarField {
   private searchY = new Float32Array(0);
   private searchAlpha = new Float32Array(0);
   private searching = false;
+  private settling = false;
+
+  /** 星が動いている最中か（配置の移動、または検索の引き寄せ・戻りのばね）。 */
+  get isSettling(): boolean {
+    return this.settling;
+  }
 
   constructor() {
     this.object = new THREE.Points(this.geom, createStarMaterial());
@@ -250,29 +256,10 @@ export class StarField {
     }
 
     const alpha = this.alphaAttr.array as Float32Array;
-    let changed = false;
-    for (let i = 0; i < this.stars.length; i++) {
-      if (this.bornAt[i] < 0) continue;              // もう点いている
-      const t = (this.elapsed - this.bornAt[i]) / BORN_SECONDS;
-      if (t >= 1) {
-        alpha[i] = this.targetAlpha[i];
-        this.bornAt[i] = -1;
-        changed = true;
-        continue;
-      }
-      changed = true;
-      if (t <= 0) {
-        alpha[i] = 0;
-      } else {
-        // 生まれた瞬間だけ少し強く光ってから落ち着く
-        const flash = 1 + 0.9 * Math.sin(Math.PI * t) * (1 - t);
-        alpha[i] = this.targetAlpha[i] * t * flash;
-      }
-    }
-    if (changed) this.alphaAttr.needsUpdate = true;
 
     const pos = this.position.array as Float32Array;
     let moving = false;
+    let travelling = false;   // 目標にまだ着いていない星があるか（ラベルの判断を待つため）
     // 配置の移動中（moveT < 1）はばねを動かさない。動かし手は常に一つ
     for (let i = 0; this.moveT >= 1 && i < this.stars.length; i++) {
       if (!this.searching && Math.abs(this.springX[i] - this.stars[i].x) < 0.001 &&
@@ -283,17 +270,42 @@ export class StarField {
       this.velocityY[i] = (this.velocityY[i] + (this.searchY[i] - this.springY[i]) * 90 * dt) * damping;
       this.springX[i] += this.velocityX[i] * dt;
       this.springY[i] += this.velocityY[i] * dt;
+      // 0.3（星の間隔の 15%）以内まで来れば、左右と重なりの判断には十分。位置は毎コマ追うので
+      // 残りの差でラベルがずれることはない。0.02 まで待つと判断が約 1.4 秒遅れる
+      if (Math.abs(this.searchX[i] - this.springX[i]) + Math.abs(this.searchY[i] - this.springY[i]) > 0.3 ||
+        Math.abs(this.velocityX[i]) + Math.abs(this.velocityY[i]) > 1) travelling = true;
       pos[i * 3] = this.springX[i];
       pos[i * 3 + 2] = -this.springY[i];
       moving = true;
     }
     if (moving) this.position.needsUpdate = true;
+    this.settling = travelling || this.moveT < 1;
     if (this.searching || moving || this.stars.some((_, i) => Math.abs(alpha[i] - this.searchAlpha[i]) > 0.001)) {
       for (let i = 0; i < this.stars.length; i++) {
         alpha[i] += (this.searchAlpha[i] - alpha[i]) * Math.min(1, dt * 12);
       }
       this.alphaAttr.needsUpdate = true;
     }
+
+    // 誕生の演出は、なめらかにする処理より後に置く。先に置くと、まだ生まれていない星（0）が
+    // なめらかにする処理で目標の約 2 割まで引き上げられ、最初から薄く見えてしまう。
+    let born = false;
+    for (let i = 0; i < this.stars.length; i++) {
+      if (this.bornAt[i] < 0) continue;              // もう点いている
+      born = true;
+      const t = (this.elapsed - this.bornAt[i]) / BORN_SECONDS;
+      if (t >= 1) {
+        alpha[i] = this.targetAlpha[i];
+        this.bornAt[i] = -1;
+      } else if (t <= 0) {
+        alpha[i] = 0;
+      } else {
+        // 生まれた瞬間だけ少し強く光ってから落ち着く
+        const flash = 1 + 0.9 * Math.sin(Math.PI * t) * (1 - t);
+        alpha[i] = this.targetAlpha[i] * t * flash;
+      }
+    }
+    if (born) this.alphaAttr.needsUpdate = true;
     const sizes = this.sizeAttr.array as Float32Array;
     if (this.stars.some((_, i) => Math.abs(sizes[i] - this.searchSize[i]) > 0.001)) {
       for (let i = 0; i < this.stars.length; i++) {

@@ -607,10 +607,13 @@ export class SpaceView {
     const now = performance.now();
     const matrix = this.camera.matrixWorld.elements;
     const previous = this.lastLabelCamera.elements;
-    const moving = !this.labelCameraKnown || matrix.some((value, i) => Math.abs(value - previous[i]) > 1e-6);
+    const cameraMoving = !this.labelCameraKnown || matrix.some((value, i) => Math.abs(value - previous[i]) > 1e-6);
+    // 星がばねで軌道へ向かっている間も、カメラの移動中と同じく表示の判断を待つ。
+    // 動き出す前の位置で左右や重なりを決めると、軌道に着いたときに内側に出たり重なったりする。
+    const moving = cameraMoving || this.field.isSettling;
     if (moving) {
       this.lastLabelMotion = now;
-      this.lastLabelCamera.copy(this.camera.matrixWorld);
+      if (cameraMoving) this.lastLabelCamera.copy(this.camera.matrixWorld);
       this.labelCameraKnown = true;
     }
     const tier = this.zoomTier;
