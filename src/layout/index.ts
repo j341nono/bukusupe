@@ -7,7 +7,7 @@ import { packCircles, } from "./pack";
 import { pca2 } from "./pca";
 import { LAYOUT_SEED } from "./rng";
 import { spiralPoint, spiralRadius } from "./spiral";
-import { centerAndNormalize, dot, meanVector } from "./vector";
+import { centerAndNormalize, dot, generalityScores, meanVector, standardize } from "./vector";
 
 /** 配置の形が変わったら上げる。古い保存は捨てて計算し直す。 */
 export const LAYOUT_VERSION = 2;
@@ -17,6 +17,14 @@ export const SPACING = 2.0;
 
 /** 星団の円どうしの空き。星雲のもやが重ならない程度に広く取る。 */
 export const CLUSTER_GAP = SPACING * 3.2;
+
+/**
+ * 代表の選び方の係数。
+ * 「自分の星団らしさ − 2 番目の星団との近さ − 係数 × 誰とでも似ている度合い」で並べる。
+ * 大きくするほど、GitHub や Google のような汎用的なブックマークが内側に来なくなる。
+ * 汎用度は標準化してあるので、類似度の差（0.05〜0.2 程度）と同じ物差しで効く。
+ */
+export const GENERALITY_PENALTY = 0.3;
 
 export type StarRecord = {
   id: string;
@@ -61,6 +69,8 @@ export function computeLayout(
   if (n === 0) return { version: LAYOUT_VERSION, spacing: SPACING, stars: [], clusters: [] };
 
   const centered = usable.map((item) => centerAndNormalize(vectors.get(item.id) as Float32Array, mean));
+  // 汎用度は中心化する前のベクトルで測り、類似度の差と同じ物差しに直す
+  const generality = standardize(generalityScores(usable.map((i) => vectors.get(i.id) as Float32Array)));
 
   // 1. 星団に分ける
   const k = clusterCount(n);
@@ -83,11 +93,22 @@ export function computeLayout(
   const names = clusterNames(groups.map((g) => g.map((i) => usable[i])));
 
   groups.forEach((memberIdx, c) => {
-    // 星団らしい順（平均ベクトルとの類似度が高い順）。同点は id で決める
+    // 代表らしい順。誰とでも似ているものは内側に来ないようにする
+    const score = (i: number) => {
+      const own = dot(centered[i], centroids[c]);
+      let second = -Infinity;
+      for (let o = 0; o < centroids.length; o++) {
+        if (o === c) continue;
+        second = Math.max(second, dot(centered[i], centroids[o]));
+      }
+      if (second === -Infinity) second = 0;
+      return own - second - GENERALITY_PENALTY * generality[i];
+    };
+    const scores = new Map(memberIdx.map((i) => [i, score(i)]));
     const ordered = [...memberIdx].sort((a, b) => {
-      const d = dot(centered[b], centroids[c]) - dot(centered[a], centroids[c]);
+      const d = (scores.get(b) as number) - (scores.get(a) as number);
       if (Math.abs(d) > 1e-9) return d;
-      return usable[a].id < usable[b].id ? -1 : 1;
+      return usable[a].id < usable[b].id ? -1 : 1;   // 同点は id で決める
     });
 
     ordered.forEach((idx, rank) => {

@@ -132,7 +132,7 @@ try {
   console.log("HUD:", JSON.stringify(text));
 
   check(finished, "埋め込みが全件終わって星が並ぶ");
-  check(/星\s*150/.test(text.replace(/\s+/g, " ")), "サンプル 150 件が読めている");
+  check(/星\s*156/.test(text.replace(/\s+/g, " ")), "サンプル 156 件が読めている");
   check(await evalIn("typeof chrome !== 'undefined' && !!chrome.bookmarks"), "bookmarks 権限がある");
   check(liveFrames != null && liveFrames > 10, "計算中も画面が動いている",
     liveFrames == null ? "測れなかった" : `1 秒あたり ${liveFrames} コマ`);
@@ -217,6 +217,26 @@ try {
   check(scattered.length > 0, "一つのフォルダの星が複数の星団に散っている",
     scattered.map(([f, set]) => `${f}→${set.size}`).join(" "));
   writeFileSync("docs/screens/clusters.json", JSON.stringify(detail, null, 1) + "\n");
+
+  // 代表（螺旋の内側 4 件）と、汎用的なブックマークが代表に来ていないか
+  const GENERIC = ["GitHub", "Google", "Gmail", "YouTube", "X", "Amazon.co.jp", "Notion"];
+  const leads = live.map((c) => ({
+    name: c.name,
+    titles: (byCluster.get(c.index) ?? []).filter((s) => s.rank < 4)
+      .sort((a, b) => a.rank - b.rank).map((s) => s.title),
+  }));
+  for (const c of leads) console.log(`    代表 ${c.name}:`, c.titles.join(" / "));
+  const badLeads = leads.flatMap((c) => c.titles.filter((t) => GENERIC.includes(t)));
+  check(badLeads.length === 0, "汎用的なブックマークが代表に来ていない",
+    badLeads.length ? badLeads.join(", ") : "なし");
+
+  const space = JSON.parse((await evalIn(
+    `(async () => JSON.stringify(await globalThis.__bukusupe.search("宇宙を感じたい", 10)))()`,
+  )) ?? "[]");
+  console.log("  「宇宙を感じたい」上位 10 件:");
+  for (const r of space) console.log(`    ${r.score.toFixed(3)} [${r.cluster}] ${r.title}`);
+  check(new Set(space.map((r) => r.cluster)).size >= 2,
+    "検索の上位が複数の星団にまたがる", `${new Set(space.map((r) => r.cluster)).size} つの星団`);
 
   const added = JSON.parse((await evalIn(
     `(async () => JSON.stringify(await globalThis.__bukusupe.simulateAdd(

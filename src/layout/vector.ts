@@ -44,3 +44,29 @@ export function normalizedMean(vectors: Float32Array[]): Float32Array {
   if (norm > 1e-8) for (let i = 0; i < mean.length; i++) mean[i] /= norm;
   return mean;
 }
+
+/**
+ * 「誰とでも似ている度合い」。他の全ブックマークとの類似度の平均。
+ *
+ * Σ_j dot(v_i, v_j) / N = dot(v_i, (Σ_j v_j)/N) と書けるので、
+ * 全部の組を回さずに済む（2000 件でも一瞬）。
+ *
+ * **中心化する前**のベクトルで測る。平均を引いて正規化し直したベクトルは、
+ * 定義上その平均がほぼ 0 になるため、この指標がほとんど 0 に潰れて使い物にならない
+ * （係数を変えても並びが 1 件も動かないことを実測して確かめた）。
+ */
+export function generalityScores(vectors: Float32Array[]): number[] {
+  if (vectors.length === 0) return [];
+  const avg = meanVector(vectors);
+  return vectors.map((v) => dot(v, avg));
+}
+
+/** 平均 0・分散 1 に直す。類似度の差と同じ物差しで足し引きするため。 */
+export function standardize(values: number[]): number[] {
+  if (values.length === 0) return [];
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  const sd = Math.sqrt(variance);
+  if (sd < 1e-9) return values.map(() => 0);
+  return values.map((v) => (v - mean) / sd);
+}

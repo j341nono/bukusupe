@@ -116,6 +116,11 @@ export const DOMAIN_HINTS: Record<string, string> = {
   "nao.ac.jp": "天文 宇宙 研究",
   "subarutelescope.org": "天文 宇宙 望遠鏡",
   "natureasia.com": "科学 論文 研究",
+  "nextspaceflight.com": "宇宙 ロケット 打ち上げ",
+  "hubblesite.org": "宇宙 天体 写真 望遠鏡",
+  "spotthestation.nasa.gov": "宇宙 宇宙ステーション 観測",
+  "astroarts.co.jp": "天文 星空 星座",
+  "miraikan.jst.go.jp": "科学館 展示 宇宙",
 
   // 料理・暮らし
   "cookpad.com": "料理 レシピ",

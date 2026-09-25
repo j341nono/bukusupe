@@ -1462,5 +1462,59 @@
    "あとで読む"
   ],
   "dateAdded": 1750000000000
+ },
+ {
+  "id": "s151",
+  "title": "ロケット打ち上げ予定 - Next Spaceflight",
+  "url": "https://nextspaceflight.com/launches/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1747000000000,
+  "dateLastUsed": 1772000000000
+ },
+ {
+  "id": "s152",
+  "title": "今夜の星空 - 国立天文台 ほしぞら情報",
+  "url": "https://www.nao.ac.jp/astro/sky/2026/",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1751000000000
+ },
+ {
+  "id": "s153",
+  "title": "プラネタリウム 日本科学未来館",
+  "url": "https://www.miraikan.jst.go.jp/exhibitions/dome/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1755000000000,
+  "dateLastUsed": 1768000000000
+ },
+ {
+  "id": "s154",
+  "title": "星座の見つけ方 - 北斗七星からたどる",
+  "url": "https://www.astroarts.co.jp/alacarte/beginner/",
+  "folderPath": [],
+  "dateAdded": 1758000000000
+ },
+ {
+  "id": "s155",
+  "title": "ハッブル宇宙望遠鏡の天体写真ギャラリー",
+  "url": "https://hubblesite.org/images/gallery",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1760000000000,
+  "dateLastUsed": 1774000000000
+ },
+ {
+  "id": "s156",
+  "title": "国際宇宙ステーションの現在位置",
+  "url": "https://spotthestation.nasa.gov/",
+  "folderPath": [],
+  "dateAdded": 1762000000000,
+  "dateLastUsed": 1773000000000
  }
 ]

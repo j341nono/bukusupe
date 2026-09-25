@@ -2,6 +2,7 @@ import { loadBookmarks, type BookmarkItem, type BookmarkSourceKind } from "./boo
 import { WorkerEmbedder, type Embedder } from "./embed/embedder";
 import { ensureEmbeddings, similarity } from "./embed/ensure";
 import { passageText, queryText } from "./embed/text";
+import { generalityScores } from "./layout/vector";
 import {
   addStar,
   computeLayout,
@@ -14,21 +15,26 @@ import { provisionalLayout } from "./layout/provisional";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
 import { readMeta, writeMeta } from "./store/db";
-import { renderHud, renderHudMessage } from "./ui/hud";
+import { renderHud, renderHudMessage, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
 
 const META_MEAN = "mean-vector";
 const META_LAYOUT = "layout";
+const META_GENERALITY = "generality";
 
 type AppState = {
   kind: BookmarkSourceKind;
   items: BookmarkItem[];
   vectors: Map<string, Float32Array>;
   mean: Float32Array | null;
+  /** 誰とでも似ている度合い。M3 の検索の補正にも使う */
+  generality: Map<string, number>;
   layout: Layout | null;
 };
 
-const state: AppState = { kind: "sample", items: [], vectors: new Map(), mean: null, layout: null };
+const state: AppState = {
+  kind: "sample", items: [], vectors: new Map(), mean: null, generality: new Map(), layout: null,
+};
 let embedder: Embedder | null = null;
 let view: SpaceView | null = null;
 
@@ -37,6 +43,7 @@ async function main(): Promise<void> {
   const labels = document.getElementById("labels");
   if (!canvas || !labels) throw new Error("画面の土台が見つからない");
 
+  setupHudControls();
   view = new SpaceView(canvas, labels);
   view.start();
 
@@ -85,6 +92,7 @@ async function computeEmbeddings(): Promise<void> {
 async function placeStars(): Promise<void> {
   if (state.vectors.size === 0) return;
   state.mean = await loadOrComputeMean();
+  await updateGenerality();
 
   const stored = await readMeta<Layout>(META_LAYOUT);
   let layout: Layout | null = null;
@@ -134,6 +142,25 @@ async function relayout(): Promise<void> {
   });
 }
 
+/**
+ * 「誰とでも似ている度合い」を計算して保存する（M3 の検索の補正でも使う）。
+ * ブックマークが増減・変更されるたびに取り直す（O(N) なので軽い）。
+ */
+async function updateGenerality(): Promise<void> {
+  if (!state.mean) return;
+  const ids: string[] = [];
+  const raw: Float32Array[] = [];
+  for (const item of state.items) {
+    const v = state.vectors.get(item.id);
+    if (!v) continue;
+    ids.push(item.id);
+    raw.push(v);
+  }
+  const scores = generalityScores(raw);
+  state.generality = new Map(ids.map((id, i) => [id, scores[i]]));
+  await writeMeta(META_GENERALITY, Object.fromEntries(state.generality));
+}
+
 async function loadOrComputeMean(): Promise<Float32Array> {
   const stored = await readMeta<Float32Array>(META_MEAN);
   if (stored && stored.length > 0) return stored;
@@ -181,6 +208,7 @@ const plain = (layout: Layout) => ({
     y: s.y,
     cluster: s.cluster,
     rank: s.rank,
+    title: state.items.find((i) => i.id === s.id)?.title ?? "",
     folder: state.items.find((i) => i.id === s.id)?.folderPath.join("/") ?? "",
   })),
   clusters: layout.clusters.map((c) => ({
@@ -276,8 +304,14 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
     if (!embedder) throw new Error("埋め込みがまだ動いていない");
     const [vec] = await embedder.embed([queryText(text)]);
     const byId = new Map(state.items.map((i) => [i.id, i]));
+    const clusterOf = new Map((state.layout?.stars ?? []).map((s) => [s.id, s.cluster]));
+    const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, c.name]));
     return [...state.vectors]
-      .map(([id, v]) => ({ title: byId.get(id)?.title ?? id, score: similarity(vec, v) }))
+      .map(([id, v]) => ({
+        title: byId.get(id)?.title ?? id,
+        score: similarity(vec, v),
+        cluster: names.get(clusterOf.get(id) ?? -1) ?? "(未配置)",
+      }))
       .sort((a, b) => b.score - a.score)
       .slice(0, topK);
   },

@@ -30,9 +30,28 @@
       }
       #space:active { cursor: grabbing; }
 
-      #hud {
+      #hud-toggle {
         position: fixed;
         top: 20px;
+        left: 22px;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        font: inherit;
+        font-size: 13px;
+        line-height: 1;
+        color: var(--dim);
+        background: rgba(8, 10, 26, 0.55);
+        border: 1px solid rgba(150, 170, 255, 0.16);
+        border-radius: 50%;
+        backdrop-filter: blur(8px);
+        cursor: pointer;
+      }
+      #hud-toggle:hover { color: var(--ink); border-color: rgba(150, 170, 255, 0.35); }
+
+      #hud {
+        position: fixed;
+        top: 56px;
         left: 22px;
         padding: 14px 18px;
         border: 1px solid rgba(150, 170, 255, 0.16);
@@ -86,6 +105,7 @@
         position: absolute;
         top: 0;
         left: 0;
+        padding: 3px 0;
         white-space: nowrap;
         pointer-events: none;
         text-shadow:
@@ -134,6 +154,10 @@
         pointer-events: none;
       }
 
+      #hud.is-collapsed { display: none; }
+      body.is-demo #hud,
+      body.is-demo #hud-toggle { display: none; }
+
       #loading {
         position: fixed;
         inset: 0;
@@ -149,6 +173,7 @@
   <body>
     <canvas id="space"></canvas>
     <div id="labels"></div>
+    <button id="hud-toggle" title="情報を開閉する" aria-label="情報">ⓘ</button>
     <div id="hud"></div>
     <button id="relayout" title="星団から並べ直す">再配置</button>
     <div id="loading">星を数えている…</div>

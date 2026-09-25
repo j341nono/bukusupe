@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MapControls } from "three/examples/jsm/controls/MapControls.js";
 import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
-import { LabelLayer, type LabelItem, type ZoomTier } from "../ui/labels";
+import { LabelLayer, type PlacedLabel, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
 import { StarField, clusterColor, createBackdrop, type RenderStar } from "./stars";
 
@@ -197,30 +197,47 @@ export class SpaceView {
 
   private updateLabels(): void {
     const tier = this.zoomTier;
-    const items: LabelItem[] = [];
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const v = new THREE.Vector3();
+    this.camera.updateMatrixWorld();
 
+    const project = (x: number, y: number): { sx: number; sy: number } | null => {
+      v.set(x, 0, -y).project(this.camera);
+      if (v.z > 1) return null;
+      const sx = (v.x * 0.5 + 0.5) * size.x;
+      const sy = (-v.y * 0.5 + 0.5) * size.y;
+      if (sx < -120 || sx > size.x + 120 || sy < -40 || sy > size.y + 40) return null;
+      return { sx, sy };
+    };
+
+    const items: PlacedLabel[] = [];
     for (const c of this.labelSource.clusters) {
       if (c.count === 0) continue;
+      // 遠くでは星雲の中心に重ねる。寄ったら円の上端の少し上へ
+      const at = tier === "far" ? project(c.x, c.y) : project(c.x, c.y + c.radius + 1.5);
+      if (!at) continue;
       items.push({
         key: `c${c.index}`,
         text: c.name,
-        x: c.x,
-        y: c.y + c.radius + 1.5,
+        sx: at.sx,
+        sy: at.sy,
         kind: "cluster",
         priority: -1000 + (1000 - c.count),   // 大きい星団ほど先に置く
       });
     }
 
-    if (tier !== "far") {
-      const limit = tier === "mid" ? 4 : Infinity;
-      for (const s of this.labelSource.stars) {
-        if (s.rank >= limit) continue;
-        items.push({ key: s.id, text: s.title, x: s.x, y: s.y, kind: "star", priority: s.rank });
-      }
+    // 星の位置は、ラベルが星の上に重ならないようにするためにも使う
+    const starPoints: { sx: number; sy: number }[] = [];
+    const limit = tier === "mid" ? 4 : Infinity;
+    for (const s of this.labelSource.stars) {
+      const at = project(s.x, s.y);
+      if (!at) continue;
+      starPoints.push(at);
+      if (tier === "far" || s.rank >= limit) continue;
+      items.push({ key: s.id, text: s.title, sx: at.sx, sy: at.sy, kind: "star", priority: s.rank });
     }
 
-    const size = this.renderer.getSize(new THREE.Vector2());
-    this.labels.render(items, this.camera, size.x, size.y);
+    this.labels.render(items, starPoints, tier);
   }
 
   private readonly resize = (): void => {

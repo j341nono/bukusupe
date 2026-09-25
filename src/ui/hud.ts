@@ -43,3 +43,14 @@ export function renderHudMessage(message: string, phase: HudPhase = "loading"): 
   document.body.dataset.phase = phase;
   el.innerHTML = `<div class="hud-title">ブクスペ</div><div class="hud-status">${escape(message)}</div>`;
 }
+
+/** 左上のパネルの開閉。?demo=1 のときは丸ごと隠す。 */
+export function setupHudControls(): void {
+  if (new URLSearchParams(location.search).get("demo") === "1") {
+    document.body.classList.add("is-demo");
+    return;
+  }
+  document.getElementById("hud-toggle")?.addEventListener("click", () => {
+    document.getElementById("hud")?.classList.toggle("is-collapsed");
+  });
+}
