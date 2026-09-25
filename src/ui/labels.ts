@@ -25,6 +25,8 @@ export type ScreenCircle = { cluster: number; sx: number; sy: number; rx: number
 /** 同時に出すラベルの上限（SPEC 7 章）。 */
 const MAX_LABELS = 60;
 const FONT = { cluster: 13, star: 11 } as const;
+/** CSS の letter-spacing（em）。canvas の measureText には入らないので足す。 */
+const LETTER_SPACING = { cluster: 0.12, star: 0.02 } as const;
 
 /** 星から右へどれだけ離すか。 */
 const OFFSET_X = 8;
@@ -61,7 +63,9 @@ export function entersCircle(box: Box, circle: ScreenCircle): boolean {
  */
 export class LabelLayer {
   private readonly elements = new Map<string, HTMLDivElement>();
-  private active: { item: PlacedLabel; width: number; height: number }[] = [];
+  /** 表示中のラベル。width は位置合わせに使う幅（ホバーで全文にしたときは広がる）。 */
+  private active: { item: PlacedLabel; text: string; baseWidth: number; width: number; height: number }[] = [];
+  private fontFamily: string | null = null;
   private readonly measure = document.createElement("canvas").getContext("2d");
   private readonly fullText = new Map<string, string>();
   private hovered: string | null = null;
@@ -90,8 +94,7 @@ export class LabelLayer {
 
       const size = item.searchRank == null ? FONT[item.kind]
         : item.searchRank < 3 ? 14 : item.searchRank < 9 ? 12 : 10;
-      const w = this.textWidth(shortened, size) + PADDING_X * 2 + (item.kind === "star" ? DOT_WIDTH : 0)
-        + (item.searchRank == null ? 0 : 16);
+      const w = this.labelWidth(item, shortened, size);
       const h = size + 6;
       const t = item.sy - h / 2;
 
@@ -143,7 +146,8 @@ export class LabelLayer {
         this.elements.delete(key);
       }, 220);
     }
-    this.active = shown.map(({ item, box }) => ({ item, width: box.r - box.l, height: box.b - box.t }));
+    this.active = shown.map(({ item, text, box }) => ({ item, text,
+      baseWidth: box.r - box.l, width: box.r - box.l, height: box.b - box.t }));
     shown.forEach(({ item, text, box }) => {
       let el = this.elements.get(item.key);
       const fresh = !el;
@@ -182,14 +186,34 @@ export class LabelLayer {
     this.hovered = key;
     this.onHover?.(key);
     el.classList.add("is-hovered");
-    el.textContent = this.fullText.get(key) ?? "";
+    const full = this.fullText.get(key) ?? "";
+    el.textContent = full;
+    // 左側のタイトルは右端（星の側）を固定して、全文を左へ伸ばす。星の上にかぶらないように
+    const entry = this.active.find(({ item }) => item.key === key);
+    if (entry && entry.text !== full) {
+      const size = entry.item.searchRank == null ? FONT[entry.item.kind]
+        : entry.item.searchRank < 3 ? 14 : entry.item.searchRank < 9 ? 12 : 10;
+      entry.width = this.labelWidth(entry.item, full, size);
+    }
   };
 
   private readonly onOut = (e: Event) => {
-    (e.target as HTMLElement).classList.remove("is-hovered");
+    const el = e.target as HTMLElement;
+    el.classList.remove("is-hovered");
+    const entry = this.active.find(({ item }) => item.key === el.dataset?.key);
+    if (entry) {
+      el.textContent = entry.text;
+      entry.width = entry.baseWidth;
+    }
     this.hovered = null;
     this.onHover?.(null);
   };
+
+  /** 下地・色の点・検索中の余白まで含めたラベルの幅。 */
+  private labelWidth(item: PlacedLabel, text: string, size: number): number {
+    return this.textWidth(text, size, item.kind) + PADDING_X * 2 + (item.kind === "star" ? DOT_WIDTH : 0)
+      + (item.searchRank == null ? 0 : 16);
+  }
 
   private readonly onLabelClick = (e: MouseEvent) => {
     const el = e.target as HTMLElement;
@@ -199,9 +223,12 @@ export class LabelLayer {
     }
   };
 
-  private textWidth(text: string, size: number): number {
-    if (!this.measure) return text.length * size * 0.9;
-    this.measure.font = `${size}px sans-serif`;
-    return this.measure.measureText(text).width;
+  /** 実際に表示しているフォント（ページの font-family）と字間で測る。 */
+  private textWidth(text: string, size: number, kind: PlacedLabel["kind"]): number {
+    const spacing = text.length * size * LETTER_SPACING[kind];
+    if (!this.measure) return text.length * size * 0.9 + spacing;
+    this.fontFamily ??= getComputedStyle(this.container).fontFamily || "sans-serif";
+    this.measure.font = `${size}px ${this.fontFamily}`;
+    return this.measure.measureText(text).width + spacing;
   }
 }
