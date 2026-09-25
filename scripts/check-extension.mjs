@@ -307,6 +307,123 @@ try {
   }
   await evalIn("globalThis.__bukusupe.setZoomTier('mid')");
 
+  // --- M3: 検索の精度・時間・見た目 ---
+  const cases = [
+    ["宇宙を感じたい", (r) => r.cluster === "宇宙" || /宇宙|星空|天文|NASA|JAXA|プラネタリウム/.test(r.title)],
+    ["パスタ", (r) => r.folder.startsWith("料理")],
+    ["recipe", (r) => r.folder.startsWith("料理")],
+    ["週末に行ける温泉", (r) => r.folder.startsWith("旅行")],
+    ["React の状態管理", (r) => r.folder.startsWith("開発/フロントエンド")],
+    ["データベース 設計", (r) => r.folder.startsWith("開発/バックエンド")],
+    ["生成AI", (r) => r.folder.startsWith("AI")],
+    ["節約", (r) => r.folder.startsWith("お金")],
+    ["睡眠を改善したい", (r) => r.folder.startsWith("健康")],
+  ];
+  const repeated = new Map();
+  const report = [];
+  console.log("  M3 検索（上位 5 件 / 期待件数）:");
+  for (const [query, expected] of cases) {
+    const result = JSON.parse((await evalIn(`(async () => {
+      const start = performance.now();
+      const hits = await globalThis.__bukusupe.search(${JSON.stringify(query)}, 10);
+      return JSON.stringify({ hits, ms: performance.now() - start });
+    })()`)) ?? "null");
+    const top5 = result?.hits?.slice(0, 5) ?? [];
+    const count = top5.filter(expected).length;
+    for (const hit of top5) repeated.set(hit.id, { title: hit.title, n: (repeated.get(hit.id)?.n ?? 0) + 1 });
+    report.push({ query, expected: count, ms: result?.ms ?? Infinity, titles: top5.map((r) => r.title) });
+    console.log(`    ${query}: ${count}/5, ${result?.ms?.toFixed(0)}ms — ${top5.map((r) => r.title).join(" / ")}`);
+  }
+  const frequent = [...repeated.values()].filter((r) => r.n >= 4);
+  console.log("  4 回以上出る星:", frequent.length ? frequent.map((r) => `${r.title}(${r.n})`).join(" / ") : "なし");
+  writeFileSync("docs/screens/search-results.json", JSON.stringify({
+    generalityCoefficient: await evalIn("globalThis.__bukusupe.searchCoefficient"),
+    queries: report.map(({ query, expected, titles }) => ({ query, expected, top5: titles })),
+    repeatedAtLeastFour: frequent,
+  }, null, 2) + "\n");
+  check(report.every((r) => r.expected >= 1), "全検索語で期待分野の星が上位 5 件に入る");
+  check(frequent.length === 0, "上位 5 件に 4 回以上出る汎用的な星がない");
+  const universe10 = JSON.parse((await evalIn(`(async () => JSON.stringify(await globalThis.__bukusupe.search('宇宙を感じたい', 10)))()`)) ?? "[]");
+  const genericSpace = universe10.filter((r) => ["YouTube", "X", "Amazon.co.jp"].includes(r.title));
+  check(genericSpace.length === 0, "宇宙検索の上位 10 件に YouTube・X・Amazon がない",
+    genericSpace.map((r) => r.title).join(" / ") || "なし");
+  const exact = JSON.parse((await evalIn(`(async () => JSON.stringify(await globalThis.__bukusupe.search('YouTube', 1)))()`)) ?? "[]");
+  check(exact[0]?.title === "YouTube", "タイトル完全一致が必ず最上位になる");
+  check(report.every((r) => r.ms <= 300), "意味検索が埋め込み込みで 300ms 以内",
+    `最長 ${Math.max(...report.map((r) => r.ms)).toFixed(0)}ms`);
+  const lexicalMs = await evalIn(`(() => {
+    const input = document.getElementById('search-input');
+    const start = performance.now();
+    input.value = '宇'; input.dispatchEvent(new Event('input'));
+    return performance.now() - start;
+  })()`);
+  check(lexicalMs <= 16, "1 文字の文字一致が 16ms 以内", `${lexicalMs.toFixed(2)}ms`);
+  check((await evalIn("globalThis.__bukusupe.searchState().ids.length")) > 0,
+    "1 文字入力で文字一致の星がすぐ集まる");
+  await evalIn(`(async () => globalThis.__bukusupe.searchNow('宇宙を感じたい'))()`);
+  await sleep(1400);
+  const searchGeometry = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.searchGeometry())")) ?? "null");
+  const radii = searchGeometry.stars.map((s) => Math.hypot(s.x - searchGeometry.center.x, s.y - searchGeometry.center.y) / searchGeometry.unit);
+  check(searchGeometry.stars.length === 21 && radii.every((r, i) =>
+    Math.abs(r - (i < 3 ? 1 : i < 9 ? 1.75 : 2.55)) < 0.15),
+  "上位 21 件が 3 / 6 / 12 の軌道へ並ぶ", `${searchGeometry.stars.length} 件`);
+  check((await evalIn("globalThis.__bukusupe.cameraTilt()")) < 1,
+    "入力欄のフォーカスでカメラが真上になる");
+  check(JSON.stringify(layout.stars) === JSON.stringify(JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.layout())")) ?? "null").stars),
+    "検索中も保存座標が変わらない");
+  const controls = JSON.parse((await evalIn(`(() => {
+    const input = document.getElementById('search-input');
+    const before = globalThis.__bukusupe.searchState();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    const down = globalThis.__bukusupe.searchState();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    const up = globalThis.__bukusupe.searchState();
+    return JSON.stringify({ before, down, up });
+  })()`)) ?? "null");
+  check(controls.down.selected === controls.down.ids[1] && controls.up.selected === controls.before.selected,
+    "上下キーで候補の選択が移る");
+  const clicked = JSON.parse((await evalIn(`(() => {
+    const id = globalThis.__bukusupe.searchState().selected;
+    const point = globalThis.__bukusupe.starScreen(id);
+    document.getElementById('space').dispatchEvent(new MouseEvent('click', { clientX: point.x, clientY: point.y, bubbles: true }));
+    return JSON.stringify({ title: document.getElementById('star-card-title').textContent,
+      hidden: document.getElementById('star-card').hidden });
+  })()`)) ?? "null");
+  check(!clicked.hidden && !!clicked.title, "星のクリックでカードが開く", clicked.title);
+  await evalIn("document.getElementById('star-card').hidden = true");
+  const beforeSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
+  await sleep(1000);
+  const afterSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
+  check(afterSearchFrames - beforeSearchFrames >= 55, "検索中も 60 コマを保つ",
+    `${afterSearchFrames - beforeSearchFrames} コマ/秒`);
+  {
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    writeFileSync("docs/screens/search.png", Buffer.from(shot.data, "base64"));
+    console.log("  画面: docs/screens/search.png");
+  }
+  const opened = JSON.parse((await evalIn(`(async () => {
+    const before = (await chrome.tabs.query({})).map((tab) => tab.id);
+    document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const after = (await chrome.tabs.query({})).map((tab) => tab.id);
+    const added = after.filter((id) => !before.includes(id));
+    if (added.length) await chrome.tabs.remove(added);
+    return JSON.stringify({ before: before.length, after: after.length });
+  })()`)) ?? "null");
+  check(opened.after === opened.before + 1, "Enter で選択中のページを新しいタブで開く");
+  await evalIn(`(() => document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))()`);
+  await sleep(1200);
+  const returned = JSON.parse((await evalIn(`JSON.stringify({
+    input: document.getElementById('search-input').value,
+    count: globalThis.__bukusupe.searchState().ids.length,
+    tilt: globalThis.__bukusupe.cameraTilt(),
+    position: globalThis.__bukusupe.starPosition(${JSON.stringify(searchGeometry.stars[0]?.id)})
+  })`)) ?? "null");
+  const home = layout.stars.find((s) => s.id === searchGeometry.stars[0]?.id);
+  check(returned.input === "" && returned.count === 0 && returned.tilt > 39 &&
+    home && Math.hypot(returned.position.x - home.x, returned.position.y - home.y) < 0.5,
+  "Esc で検索が消え、星とカメラが元へ戻る");
+
   // --- 2 回目：再読み込みで計算し直さないこと ---
   events = [];
   const t0 = Date.now();
@@ -323,6 +440,9 @@ try {
     .map((e) => e.params.request.url)
     .filter((u) => !u.startsWith("chrome-extension://"));
   check(reloadedOk, "再読み込み後も埋め込みが揃っている", `${(elapsed / 1000).toFixed(1)} 秒`);
+  const reloadedLayout = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.layout())")) ?? "null");
+  check(reloadedLayout && JSON.stringify(reloadedLayout.stars) === JSON.stringify(layout.stars),
+    "検索を消して再読み込みしても星の座標が変わらない");
   check(refetched.length === 0, "再読み込みで外部から取り直さない", `${refetched.length} 件`);
 
   if (SHOT) {

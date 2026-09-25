@@ -1,8 +1,8 @@
 import { loadBookmarks, type BookmarkItem, type BookmarkSourceKind } from "./bookmarks";
 import { WorkerEmbedder, type Embedder } from "./embed/embedder";
-import { ensureEmbeddings, similarity } from "./embed/ensure";
+import { ensureEmbeddings } from "./embed/ensure";
 import { passageText, queryText } from "./embed/text";
-import { generalityScores } from "./layout/vector";
+import { generalityScores, standardize } from "./layout/vector";
 import {
   addStar,
   computeLayout,
@@ -13,6 +13,7 @@ import {
 } from "./layout";
 import { provisionalLayout } from "./layout/provisional";
 import { clusterNames } from "./layout/names";
+import { GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
 import { readMeta, writeMeta } from "./store/db";
@@ -38,6 +39,11 @@ const state: AppState = {
 };
 let embedder: Embedder | null = null;
 let view: SpaceView | null = null;
+let hits: SearchHit[] = [];
+let selectedIndex = 0;
+let searchTimer: number | undefined;
+let searchGeneration = 0;
+let cardId: string | null = null;
 
 async function main(): Promise<void> {
   const canvas = document.getElementById("space") as HTMLCanvasElement | null;
@@ -61,6 +67,7 @@ async function main(): Promise<void> {
   embedder = new WorkerEmbedder();
   await computeEmbeddings();
   await placeStars();
+  setupSearch(canvas);
 
   watchBookmarks();
   document.getElementById("relayout")?.addEventListener("click", () => void relayout());
@@ -165,7 +172,7 @@ async function updateGenerality(): Promise<void> {
     ids.push(item.id);
     raw.push(v);
   }
-  const scores = generalityScores(raw);
+  const scores = standardize(generalityScores(raw));
   state.generality = new Map(ids.map((id, i) => [id, scores[i]]));
   await writeMeta(META_GENERALITY, Object.fromEntries(state.generality));
 }
@@ -182,6 +189,95 @@ function show(layout: Layout, frame = true): void {
   state.layout = layout;
   const byId = new Map(state.items.map((i) => [i.id, i]));
   view?.setLayout(layout, toRenderStars(layout, byId), toLabelSource(layout, byId), frame);
+  if (hits.length) {
+    view?.setSearch(hits.map((hit) => hit.id));
+    view?.selectSearch(hits[selectedIndex]?.id ?? null);
+  }
+}
+
+async function searchResults(text: string, coefficient = GENERALITY_PENALTY): Promise<SearchHit[]> {
+  if (!embedder || !state.mean || text.trim().length < 2) return rankSearch(state.items, text);
+  const [query] = await embedder.embed([queryText(text)]);
+  const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality, coefficient);
+  return rankSearch(state.items, text, semantic);
+}
+
+function openBookmark(id: string): void {
+  const item = state.items.find((row) => row.id === id);
+  if (!item) return;
+  if (typeof chrome !== "undefined" && chrome.tabs?.create) void chrome.tabs.create({ url: item.url });
+  else window.open(item.url, "_blank", "noopener");
+}
+
+function showCard(id: string): void {
+  const item = state.items.find((row) => row.id === id);
+  const card = document.getElementById("star-card");
+  if (!item || !card) return;
+  cardId = id;
+  (document.getElementById("star-card-title") as HTMLElement).textContent = item.title;
+  (document.getElementById("star-card-url") as HTMLElement).textContent = item.url;
+  (document.getElementById("star-card-folder") as HTMLElement).textContent = item.folderPath.join(" / ") || "ルート";
+  card.hidden = false;
+}
+
+function applySearch(next: SearchHit[]): void {
+  hits = next.slice(0, 21);
+  selectedIndex = 0;
+  view?.setSearch(hits.map((hit) => hit.id));
+  view?.selectSearch(hits[0]?.id ?? null);
+}
+
+function setupSearch(canvas: HTMLCanvasElement): void {
+  const input = document.getElementById("search-input") as HTMLInputElement;
+  const card = document.getElementById("star-card") as HTMLElement;
+  input.addEventListener("focus", () => view?.setTopDown(true));
+  input.addEventListener("blur", () => { if (!input.value.trim()) view?.setTopDown(false); });
+  input.addEventListener("input", () => {
+    const text = input.value.trim();
+    const generation = ++searchGeneration;
+    clearTimeout(searchTimer);
+    card.hidden = true;
+    cardId = null;
+    if (!text) {
+      applySearch([]);
+      if (document.activeElement !== input) view?.setTopDown(false);
+      return;
+    }
+    applySearch(rankSearch(state.items, text));
+    if (text.length < 2) return;
+    searchTimer = window.setTimeout(async () => {
+      try {
+        const next = await searchResults(text);
+        if (generation === searchGeneration) applySearch(next);
+      } catch (error) { console.error("[ブクスペ] 検索に失敗", error); }
+    }, 300);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      input.value = "";
+      input.dispatchEvent(new Event("input"));
+      input.blur();
+      event.preventDefault();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!hits.length) return;
+      selectedIndex = (selectedIndex + (event.key === "ArrowDown" ? 1 : -1) + hits.length) % hits.length;
+      view?.selectSearch(hits[selectedIndex].id);
+      event.preventDefault();
+    } else if (event.key === "Enter" && hits[selectedIndex]) {
+      openBookmark(hits[selectedIndex].id);
+      event.preventDefault();
+    }
+  });
+  canvas.addEventListener("click", (event) => {
+    const id = view?.pickStar(event.clientX, event.clientY);
+    if (id) showCard(id);
+    else card.hidden = true;
+  });
+  canvas.addEventListener("dblclick", (event) => {
+    const id = view?.pickStar(event.clientX, event.clientY);
+    if (id) openBookmark(id);
+  });
+  document.getElementById("star-card-open")?.addEventListener("click", () => { if (cardId) openBookmark(cardId); });
 }
 
 /**
@@ -246,10 +342,11 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   /** ブックマークが 1 件増えたときの動きを、本物の経路で再現する。 */
   async simulateAdd(title: string, url: string, folder: string[] = []) {
     if (!embedder || !state.mean || !state.layout) return null;
+    saved ??= { items: state.items, vectors: state.vectors, layout: state.layout };
     const item: BookmarkItem = { id: `sim-${Date.now()}`, title, url, folderPath: folder };
     const [vec] = await embedder.embed([passageText(item)]);
     state.items = [...state.items, item];
-    state.vectors.set(item.id, vec);
+    state.vectors = new Map(state.vectors).set(item.id, vec);
     const next = addStar(state.layout, item.id, vec, state.mean);
     show(next, false);
     return plain(next);
@@ -310,21 +407,36 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   setTopDown: (on: boolean) => view?.setTopDown(on),
   relayout,
 
-  async search(text: string, topK = 5) {
-    if (!embedder) throw new Error("埋め込みがまだ動いていない");
-    const [vec] = await embedder.embed([queryText(text)]);
+  async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY) {
+    const ranked = await searchResults(text, coefficient);
     const byId = new Map(state.items.map((i) => [i.id, i]));
     const clusterOf = new Map((state.layout?.stars ?? []).map((s) => [s.id, s.cluster]));
     const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, c.name]));
-    return [...state.vectors]
-      .map(([id, v]) => ({
-        title: byId.get(id)?.title ?? id,
-        score: similarity(vec, v),
-        cluster: names.get(clusterOf.get(id) ?? -1) ?? "(未配置)",
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK);
+    return ranked.slice(0, topK).map((row) => ({ ...row,
+      folder: byId.get(row.id)?.folderPath.join("/") ?? "",
+      cluster: names.get(clusterOf.get(row.id) ?? -1) ?? "(未配置)",
+    }));
   },
+  searchNow: async (text: string) => {
+    const input = document.getElementById("search-input") as HTMLInputElement;
+    input.focus();
+    input.value = text;
+    input.dispatchEvent(new Event("input"));
+    if (text.length >= 2) {
+      const generation = ++searchGeneration;
+      clearTimeout(searchTimer);
+      const result = await searchResults(text);
+      if (generation === searchGeneration) applySearch(result);
+    }
+    return hits;
+  },
+  searchState: () => ({ ids: hits.map((hit) => hit.id), selected: hits[selectedIndex]?.id ?? null }),
+  searchCoefficient: GENERALITY_PENALTY,
+  searchGeometry: () => view?.searchGeometry(),
+  starScreen: (id: string) => view?.starScreen(id),
+  starPosition: (id: string) => view?.starPosition(id),
+  cameraTilt: () => view?.cameraTilt(),
+  measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
 };
 
 main().catch((err) => {

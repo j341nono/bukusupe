@@ -1,0 +1,105 @@
+{
+  "generalityCoefficient": 0.03,
+  "queries": [
+    {
+      "query": "宇宙を感じたい",
+      "expected": 5,
+      "top5": [
+        "NASA Astronomy Picture of the Day",
+        "星がきれいに見える場所 星空指数",
+        "ハッブル宇宙望遠鏡の天体写真ギャラリー",
+        "プラネタリウム 日本科学未来館",
+        "すばる望遠鏡 - 国立天文台ハワイ観測所"
+      ]
+    },
+    {
+      "query": "パスタ",
+      "expected": 2,
+      "top5": [
+        "料理がうまくなる人の共通点",
+        "FastAPI - 高速な Python Web フレームワーク",
+        "失敗しないカルボナーラの作り方",
+        "multilingual-e5-small モデルカード",
+        "包丁の研ぎ方"
+      ]
+    },
+    {
+      "query": "recipe",
+      "expected": 5,
+      "top5": [
+        "失敗しないカルボナーラの作り方",
+        "土鍋でごはんを炊く",
+        "スパイスから作るチキンカレー",
+        "週末に作りおきできるおかず 10 品",
+        "基本の肉じゃがレシピ"
+      ]
+    },
+    {
+      "query": "週末に行ける温泉",
+      "expected": 4,
+      "top5": [
+        "台北 3 泊 4 日のモデルコース",
+        "屋久島 縄文杉トレッキング",
+        "北海道 道東ドライブ",
+        "睡眠の質を上げる 12 の指針",
+        "プラネタリウム 日本科学未来館"
+      ]
+    },
+    {
+      "query": "React の状態管理",
+      "expected": 3,
+      "top5": [
+        "React – ユーザインターフェース構築のためのライブラリ",
+        "useEffect の完全ガイド",
+        "Next.js App Router の考え方",
+        "Homebrew — macOS 用パッケージマネージャー",
+        "レコードの手入れと保管"
+      ]
+    },
+    {
+      "query": "データベース 設計",
+      "expected": 3,
+      "top5": [
+        "PostgreSQL 16 ドキュメント",
+        "Redis のデータ型を理解する",
+        "Can I use... Support tables for HTML5, CSS3",
+        "React – ユーザインターフェース構築のためのライブラリ",
+        "Kubernetes の Pod とは"
+      ]
+    },
+    {
+      "query": "生成AI",
+      "expected": 5,
+      "top5": [
+        "Attention Is All You Need",
+        "RAG（検索拡張生成）の基本",
+        "multilingual-e5-small モデルカード",
+        "The Illustrated Transformer",
+        "scikit-learn: machine learning in Python"
+      ]
+    },
+    {
+      "query": "節約",
+      "expected": 4,
+      "top5": [
+        "家計簿アプリ マネーフォワード ME",
+        "確定申告の手引き（国税庁）",
+        "週末に作りおきできるおかず 10 品",
+        "年金の受け取り方を考える",
+        "住宅ローン 金利の比較"
+      ]
+    },
+    {
+      "query": "睡眠を改善したい",
+      "expected": 3,
+      "top5": [
+        "睡眠の質を上げる 12 の指針",
+        "目の疲れをとる方法",
+        "腰痛を防ぐストレッチ",
+        "料理がうまくなる人の共通点",
+        "Can I use... Support tables for HTML5, CSS3"
+      ]
+    }
+  ],
+  "repeatedAtLeastFour": []
+}

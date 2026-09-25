@@ -80,6 +80,14 @@ export class StarField {
   private targetAlpha = new Float32Array(0);
   private moveT = 1;
   private elapsed = 0;
+  private springX = new Float32Array(0);
+  private springY = new Float32Array(0);
+  private velocityX = new Float32Array(0);
+  private velocityY = new Float32Array(0);
+  private searchX = new Float32Array(0);
+  private searchY = new Float32Array(0);
+  private searchAlpha = new Float32Array(0);
+  private searching = false;
 
   constructor() {
     this.object = new THREE.Points(this.geom, createStarMaterial());
@@ -107,6 +115,13 @@ export class StarField {
     this.to = new Float32Array(n * 2);
     this.bornAt = new Float32Array(n);
     this.targetAlpha = new Float32Array(n);
+    this.springX = new Float32Array(n);
+    this.springY = new Float32Array(n);
+    this.velocityX = new Float32Array(n);
+    this.velocityY = new Float32Array(n);
+    this.searchX = new Float32Array(n);
+    this.searchY = new Float32Array(n);
+    this.searchAlpha = new Float32Array(n);
     this.index = new Map();
 
     const c = new THREE.Color();
@@ -120,6 +135,8 @@ export class StarField {
       this.from[i * 2 + 1] = fy;
       this.to[i * 2] = s.x;
       this.to[i * 2 + 1] = s.y;
+      this.springX[i] = this.searchX[i] = fx;
+      this.springY[i] = this.searchY[i] = fy;
 
       // 地図の (x, y) を three の床面 (x, 0, -y) に置く。奥行きに意味は無い。
       pos[i * 3] = fx;
@@ -135,6 +152,7 @@ export class StarField {
       color[i * 3 + 2] = c.b;
 
       this.targetAlpha[i] = Math.min(1, (0.45 + s.brightness * 0.55) * (1 + lead * 0.25));
+      this.searchAlpha[i] = this.targetAlpha[i];
       // 初回は内側の星から順に生まれる演出。以降は新しい星だけ光らせる
       const born = staggered ? (i / Math.max(1, n)) * 1.6 : 0;
       this.bornAt[i] = old ? -1 : born;
@@ -144,6 +162,7 @@ export class StarField {
     this.stars = next;
     this.elapsed = 0;
     this.moveT = animate && previous.size > 0 ? 0 : 1;
+    this.searching = false;
 
     this.geom.dispose();
     this.geom = new THREE.BufferGeometry();
@@ -154,6 +173,34 @@ export class StarField {
     this.geom.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
     this.geom.setAttribute("aAlpha", this.alphaAttr);
     this.object.geometry = this.geom;
+  }
+
+  /** 上位 21 件を内側から 3 / 6 / 12 の軌道に並べる。 */
+  setSearch(ids: string[], center: { x: number; y: number }, unit: number): void {
+    this.searching = ids.length > 0;
+    const rank = new Map(ids.slice(0, 21).map((id, i) => [id, i]));
+    this.stars.forEach((star, i) => {
+      const r = rank.get(star.id);
+      if (r == null) {
+        this.searchX[i] = star.x;
+        this.searchY[i] = star.y;
+        this.searchAlpha[i] = this.searching ? this.targetAlpha[i] * 0.25 : this.targetAlpha[i];
+        return;
+      }
+      const ring = r < 3 ? 0 : r < 9 ? 1 : 2;
+      const start = [0, 3, 9][ring];
+      const count = [3, 6, 12][ring];
+      const angle = -Math.PI / 2 + ((r - start) / count) * Math.PI * 2 + ring * 0.12;
+      const radius = [1, 1.75, 2.55][ring] * unit;
+      this.searchX[i] = center.x + Math.cos(angle) * radius;
+      this.searchY[i] = center.y + Math.sin(angle) * radius;
+      this.searchAlpha[i] = 1;
+    });
+  }
+
+  displayPosition(id: string): { x: number; y: number } | null {
+    const i = this.index.get(id);
+    return i == null ? null : { x: this.springX[i], y: this.springY[i] };
   }
 
   update(dt: number): void {
@@ -192,6 +239,29 @@ export class StarField {
       }
     }
     if (changed) this.alphaAttr.needsUpdate = true;
+
+    const pos = this.position.array as Float32Array;
+    let moving = false;
+    for (let i = 0; i < this.stars.length; i++) {
+      if (!this.searching && Math.abs(this.springX[i] - this.stars[i].x) < 0.001 &&
+        Math.abs(this.springY[i] - this.stars[i].y) < 0.001 &&
+        Math.abs(this.velocityX[i]) + Math.abs(this.velocityY[i]) < 0.001) continue;
+      const damping = Math.exp(-13 * dt);
+      this.velocityX[i] = (this.velocityX[i] + (this.searchX[i] - this.springX[i]) * 90 * dt) * damping;
+      this.velocityY[i] = (this.velocityY[i] + (this.searchY[i] - this.springY[i]) * 90 * dt) * damping;
+      this.springX[i] += this.velocityX[i] * dt;
+      this.springY[i] += this.velocityY[i] * dt;
+      pos[i * 3] = this.springX[i];
+      pos[i * 3 + 2] = -this.springY[i];
+      moving = true;
+    }
+    if (moving) this.position.needsUpdate = true;
+    if (this.searching || moving || this.stars.some((_, i) => Math.abs(alpha[i] - this.searchAlpha[i]) > 0.001)) {
+      for (let i = 0; i < this.stars.length; i++) {
+        alpha[i] += (this.searchAlpha[i] - alpha[i]) * Math.min(1, dt * 12);
+      }
+      this.alphaAttr.needsUpdate = true;
+    }
   }
 
   private positionsById(): Map<string, { x: number; y: number }> {
