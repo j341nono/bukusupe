@@ -1,8 +1,14 @@
+import type { BookmarkSourceKind } from "../bookmarks/types";
+
 /**
  * IndexedDB。埋め込みベクトル（384 次元の float32）と、配置・星座（M2 / M4）を置く。
  * 画面を開くたびに再計算しないための土台。依存なしの薄い包み。
+ *
+ * DB はデータ源ごとに分ける（bukusupe-chrome / bukusupe-sample）。
+ * 一つにすると、サンプルと実ブックマークを行き来したときに、相手の埋め込みを「消えた分」として
+ * 削除し、星座のメンバーを空にし、相手の平均ベクトルを使い回してしまう。
  */
-const DB_NAME = "bukusupe";
+let dbName: string | null = null;
 const DB_VERSION = 2;
 
 export const STORE_EMBEDDINGS = "embeddings";
@@ -17,10 +23,19 @@ export type StoredEmbedding = {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+/** どのデータ源の DB を使うか。最初に DB を開く前に一度だけ決める。 */
+export function useDataSource(kind: BookmarkSourceKind): void {
+  const next = `bukusupe-${kind}`;
+  if (dbPromise && next !== dbName) throw new Error("DB を開いた後にデータ源は変えられない");
+  dbName = next;
+}
+
 export function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
+  if (!dbName) throw new Error("useDataSource() より先に DB を開こうとした");
+  const name = dbName;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(name, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_EMBEDDINGS)) {

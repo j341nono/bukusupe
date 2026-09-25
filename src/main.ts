@@ -17,13 +17,16 @@ import { membersFor, minimumSpanningTree, pointsFor, type Constellation } from "
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
-import { deleteConstellation, readConstellations, readMeta, writeConstellation, writeMeta } from "./store/db";
+import { deleteConstellation, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
 
 const META_MEAN = "mean-vector";
 const META_LAYOUT = "layout";
 const META_GENERALITY = "generality";
+
+/** 平均ベクトルは、どのデータ源から作ったかと一緒に保存する。違えば取り直す。 */
+type StoredMean = { source: BookmarkSourceKind; vector: Float32Array };
 
 type AppState = {
   kind: BookmarkSourceKind;
@@ -64,6 +67,8 @@ async function main(): Promise<void> {
   const snapshot = await loadBookmarks();
   state.kind = snapshot.kind;
   state.items = snapshot.items;
+  // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）
+  useDataSource(state.kind);
 
   // 埋め込みが揃うまでは仮の配置で「星が生まれる」ところを見せる
   show(provisionalLayout(state.items), false);
@@ -80,7 +85,17 @@ async function main(): Promise<void> {
   setupConstellations();
 
   watchBookmarks();
-  document.getElementById("relayout")?.addEventListener("click", () => void relayout());
+  document.getElementById("relayout")?.addEventListener("click", () => void enqueue(relayout));
+}
+
+/**
+ * ブックマークの更新と「再配置」を 1 本の Promise の鎖に並べる（同時に走らせない）。
+ * 前の処理が終わる前に次を始めると、古い状態で作った配置が後から保存されることがある。
+ */
+let chain: Promise<void> = Promise.resolve();
+function enqueue(task: () => Promise<void>): Promise<void> {
+  chain = chain.then(task).catch((err) => console.error("[ブクスペ] 更新に失敗", err));
+  return chain;
 }
 
 /** 足りない分の埋め込みを計算し、進み具合を HUD に出す。 */
@@ -109,10 +124,12 @@ async function computeEmbeddings(): Promise<void> {
  */
 async function placeStars(): Promise<void> {
   if (state.vectors.size === 0) return;
-  state.mean = await loadOrComputeMean();
+  const { mean, recomputed } = await loadOrComputeMean();
+  state.mean = mean;
   await updateGenerality();
 
-  const stored = await readMeta<Layout>(META_LAYOUT);
+  // 平均ベクトルを取り直したときは、古い平均で作った配置を使わない
+  const stored = recomputed ? undefined : await readMeta<Layout>(META_LAYOUT);
   let layout: Layout | null = null;
 
   if (stored && stored.version === LAYOUT_VERSION && stored.stars.length > 0) {
@@ -156,7 +173,7 @@ async function relayout(): Promise<void> {
   renderHud({ count: state.items.length, kind: state.kind, status: "並べ直している…", phase: "layout" });
   const mean = meanVector([...state.vectors.values()]);
   state.mean = mean;
-  await writeMeta(META_MEAN, mean);
+  await writeMeta<StoredMean>(META_MEAN, { source: state.kind, vector: mean });
   const layout = computeLayout(state.items, state.vectors, mean);
   await writeMeta(META_LAYOUT, layout);
   show(layout);
@@ -187,12 +204,14 @@ async function updateGenerality(): Promise<void> {
   await writeMeta(META_GENERALITY, Object.fromEntries(state.generality));
 }
 
-async function loadOrComputeMean(): Promise<Float32Array> {
-  const stored = await readMeta<Float32Array>(META_MEAN);
-  if (stored && stored.length > 0) return stored;
+async function loadOrComputeMean(): Promise<{ mean: Float32Array; recomputed: boolean }> {
+  const stored = await readMeta<StoredMean>(META_MEAN);
+  if (stored?.source === state.kind && stored.vector?.length > 0) {
+    return { mean: stored.vector, recomputed: false };
+  }
   const mean = meanVector([...state.vectors.values()]);
-  await writeMeta(META_MEAN, mean);
-  return mean;
+  await writeMeta<StoredMean>(META_MEAN, { source: state.kind, vector: mean });
+  return { mean, recomputed: true };
 }
 
 function show(layout: Layout, frame = true): void {
@@ -491,15 +510,27 @@ function setupSearch(canvas: HTMLCanvasElement): void {
 function watchBookmarks(): void {
   if (typeof chrome === "undefined" || !chrome.bookmarks?.onCreated) return;
   let timer: number | undefined;
+  // まだ始まっていない更新が鎖にあれば、それが最新のブックマークを読むので足さない
+  let queued = false;
+  const sync = async () => {
+    queued = false;
+    const snapshot = await loadBookmarks();
+    if (snapshot.kind !== state.kind) {
+      // サンプル⇄実ブックマーク：DB も平均も別物なので、黙って差し替えず読み込み直す
+      location.reload();
+      return;
+    }
+    state.items = snapshot.items;
+    await computeEmbeddings();   // 変わった分だけ計算される
+    await placeStars();          // 増えた星だけ足される
+    await reconcileConstellations();
+  };
   const refresh = () => {
     clearTimeout(timer);
-    timer = setTimeout(async () => {
-      const snapshot = await loadBookmarks();
-      state.kind = snapshot.kind;
-      state.items = snapshot.items;
-      await computeEmbeddings();   // 変わった分だけ計算される
-      await placeStars();          // 増えた星だけ足される
-      await reconcileConstellations();
+    timer = setTimeout(() => {
+      if (queued) return;
+      queued = true;
+      void enqueue(sync);
     }, 500) as unknown as number;
   };
   chrome.bookmarks.onCreated.addListener(refresh);
