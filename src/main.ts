@@ -17,7 +17,7 @@ import { membersFor, minimumSpanningTree, pointsFor, type Constellation } from "
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
-import { deleteConstellation, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
+import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
 
@@ -69,6 +69,7 @@ async function main(): Promise<void> {
   state.items = snapshot.items;
   // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）
   useDataSource(state.kind);
+  onDbBlocked(() => renderHudMessage("ほかのブクスペのタブを閉じると続きを始める"));
 
   // 埋め込みが揃うまでは仮の配置で「星が生まれる」ところを見せる
   show(provisionalLayout(state.items), false);
@@ -313,7 +314,8 @@ async function saveConstellation(): Promise<void> {
         savingAnimation = false;
         activeConstellationId = null;
         view?.selectConstellation(null);
-        view?.setTopDown(false);
+        // 演出のあいだに入力欄へ戻っていたら、真上のまま（検索の見やすさを保つ）
+        if (document.activeElement !== document.getElementById("search-input")) view?.setTopDown(false);
         renderConstellationList();
       }, 1200);
     } else requestAnimationFrame(finish);
@@ -321,8 +323,12 @@ async function saveConstellation(): Promise<void> {
   requestAnimationFrame(finish);
 }
 
+/** 星座の選択の世代。検索し直している間に別の星座が選ばれたら、古い方の結果は捨てる。 */
+let recallGeneration = 0;
+
 async function toggleConstellation(id: string): Promise<void> {
   if (savingAnimation) return;
+  const generation = ++recallGeneration;
   if (activeConstellationId === id) {
     activeConstellationId = null;
     view?.selectConstellation(null);
@@ -332,11 +338,14 @@ async function toggleConstellation(id: string): Promise<void> {
   const row = constellations.find((item) => item.id === id);
   if (!row) return;
   const ranked = row.query ? await searchResults(row.query) : [];
+  // 素早く続けて選ばれたときは、最後に選ばれたものだけを有効にする
+  if (generation !== recallGeneration) return;
   const threshold = (ranked[0]?.score ?? 0) * ATTRACT_RATIO;
   const automatic = ranked.filter((hit) => hit.score >= threshold).slice(0, 12).map((hit) => hit.id);
   const alive = new Set(state.items.map((item) => item.id));
   row.lastMembers = membersFor(automatic, row.pinned, row.excluded).filter((itemId) => alive.has(itemId));
   await writeConstellation(row);
+  if (generation !== recallGeneration) return;
   activeConstellationId = id;
   refreshConstellations();
   view?.selectConstellation(id, row.name);
@@ -382,6 +391,7 @@ function setupConstellations(): void {
     const id = activeConstellationId;
     await deleteConstellation(id);
     constellations = constellations.filter((item) => item.id !== id);
+    ++recallGeneration;
     activeConstellationId = null;
     view?.selectConstellation(null);
     refreshConstellations();
@@ -391,6 +401,7 @@ function setupConstellations(): void {
       event.target === document.getElementById("constellation-name-input")) return;
     if (editing) cancelConstellation();
     else if (activeConstellationId) {
+      ++recallGeneration;
       activeConstellationId = null;
       view?.selectConstellation(null);
       renderConstellationList();
@@ -468,6 +479,7 @@ function setupSearch(canvas: HTMLCanvasElement): void {
     } else if (event.key === "Escape") {
       if (editing) { cancelConstellation(); event.preventDefault(); return; }
       if (activeConstellationId && !input.value.trim()) {
+        ++recallGeneration;
         activeConstellationId = null;
         view?.selectConstellation(null);
         renderConstellationList();

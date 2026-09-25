@@ -48,10 +48,32 @@ export function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_CONSTELLATIONS, { keyPath: "id" });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    // 古い版のページが DB を開いたままだと、版上げがそのページの終了を待って止まる。
+    // 相手には onversionchange で閉じてもらい、ここでは待っていることを知らせる。
+    req.onblocked = () => {
+      console.warn("[ブクスペ] 古いタブが DB を開いたままのため、閉じられるのを待っている");
+      onBlocked?.();
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      // 別のタブが新しい版で開こうとしたら、こちらは閉じて読み込み直す（相手を止めない）
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+        location.reload();
+      };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
+}
+
+let onBlocked: (() => void) | null = null;
+
+/** DB の版上げが古いタブに止められているときの知らせ先（画面に出すため）。 */
+export function onDbBlocked(handler: () => void): void {
+  onBlocked = handler;
 }
 
 const done = (tx: IDBTransaction): Promise<void> =>
