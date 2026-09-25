@@ -19,8 +19,8 @@ const FONT = { cluster: 13, star: 11 } as const;
 
 /** 星から右へどれだけ離すか。 */
 const OFFSET_X = 8;
-/** 星そのものを避けるための当たり判定の半径。 */
-const STAR_RADIUS = 4;
+/** 下地の左右の余白（CSS の padding と合わせる）。 */
+const PADDING_X = 5;
 
 /** 中距離で省略する長さ（全角を 1、半角を 0.5 として数える）。 */
 const MID_WIDTH = 18;
@@ -53,13 +53,7 @@ export class LabelLayer {
     container.addEventListener("mouseout", this.onOut);
   }
 
-  render(items: PlacedLabel[], starPoints: { sx: number; sy: number }[], tier: ZoomTier): number {
-    const taken: Box[] = starPoints.map((p) => ({
-      l: p.sx - STAR_RADIUS,
-      t: p.sy - STAR_RADIUS,
-      r: p.sx + STAR_RADIUS,
-      b: p.sy + STAR_RADIUS,
-    }));
+  render(items: PlacedLabel[], tier: ZoomTier): number {
     const labelBoxes: Box[] = [];
     const shown: { item: PlacedLabel; text: string; box: Box }[] = [];
 
@@ -73,16 +67,23 @@ export class LabelLayer {
           : full;
 
       const size = FONT[item.kind];
-      const w = this.textWidth(shortened, size);
+      const w = this.textWidth(shortened, size) + PADDING_X * 2;
       const h = size + 6;
-      const box =
-        item.kind === "cluster" && tier === "far"
-          ? { l: item.sx - w / 2, t: item.sy - h / 2, r: item.sx + w / 2, b: item.sy + h / 2 }
-          : { l: item.sx + OFFSET_X, t: item.sy - h / 2, r: item.sx + OFFSET_X + w, b: item.sy + h / 2 };
+      const t = item.sy - h / 2;
 
-      if (labelBoxes.some((p) => overlaps(p, box))) continue;
-      // 星団名は星の上を通ってよい（星雲の中心に置くため）
-      if (item.kind === "star" && taken.some((p) => overlaps(p, box))) continue;
+      // 星団名は遠くでは星雲の中心に重ねる
+      const candidates: Box[] =
+        item.kind === "cluster" && tier === "far"
+          ? [{ l: item.sx - w / 2, t, r: item.sx + w / 2, b: t + h }]
+          : [
+              // 右横に置けなければ左横へ
+              { l: item.sx + OFFSET_X, t, r: item.sx + OFFSET_X + w, b: t + h },
+              { l: item.sx - OFFSET_X - w, t, r: item.sx - OFFSET_X, b: t + h },
+            ];
+
+      // 重なりを禁じるのはタイトル同士だけ。星の上に重なるのは下地で読ませる
+      const box = candidates.find((c) => !labelBoxes.some((p) => overlaps(p, c)));
+      if (!box) continue;
 
       labelBoxes.push(box);
       shown.push({ item, text: shortened, box });

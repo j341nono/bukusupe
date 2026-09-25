@@ -26,6 +26,10 @@ export const CLUSTER_GAP = SPACING * 3.2;
  */
 export const GENERALITY_PENALTY = 0.3;
 
+/** 代表の候補から外す条件。短すぎるタイトルと、誰とでも似すぎているもの。 */
+export const LEAD_MIN_TITLE = 4;
+export const LEAD_MAX_GENERALITY = 1.5;
+
 export type StarRecord = {
   id: string;
   x: number;
@@ -90,9 +94,10 @@ export function computeLayout(
   // 3. 星団の中の星を螺旋に置く
   const stars: StarRecord[] = [];
   const clusters: ClusterRecord[] = [];
-  const names = clusterNames(groups.map((g) => g.map((i) => usable[i])));
+  const orderedByCluster = groups.map((memberIdx, c) => orderMembers(memberIdx, c));
+  const names = clusterNames(orderedByCluster.map((g) => g.map((i) => usable[i])));
 
-  groups.forEach((memberIdx, c) => {
+  function orderMembers(memberIdx: number[], c: number): number[] {
     // 代表らしい順。誰とでも似ているものは内側に来ないようにする
     const score = (i: number) => {
       const own = dot(centered[i], centroids[c]);
@@ -102,15 +107,20 @@ export function computeLayout(
         second = Math.max(second, dot(centered[i], centroids[o]));
       }
       if (second === -Infinity) second = 0;
-      return own - second - GENERALITY_PENALTY * generality[i];
+      // 「X」のような短いタイトルや、誰とでも似ているものは代表にしない
+      const excluded =
+        usable[i].title.trim().length < LEAD_MIN_TITLE || generality[i] > LEAD_MAX_GENERALITY;
+      return own - second - GENERALITY_PENALTY * generality[i] - (excluded ? 1000 : 0);
     };
     const scores = new Map(memberIdx.map((i) => [i, score(i)]));
-    const ordered = [...memberIdx].sort((a, b) => {
+    return [...memberIdx].sort((a, b) => {
       const d = (scores.get(b) as number) - (scores.get(a) as number);
       if (Math.abs(d) > 1e-9) return d;
       return usable[a].id < usable[b].id ? -1 : 1;   // 同点は id で決める
     });
+  }
 
+  orderedByCluster.forEach((ordered, c) => {
     ordered.forEach((idx, rank) => {
       const p = spiralPoint(rank, SPACING);
       const j = jitterOf(usable[idx].id, SPACING);

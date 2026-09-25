@@ -1,6 +1,15 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import { domainOf } from "../bookmarks/types";
-import { hintsFor } from "../embed/domain-hints";
+import { DOMAIN_HINTS, hintsFor } from "../embed/domain-hints";
+
+/** 辞書に出てくる分野語の一覧。タイトルの中にこれが入っていれば数える。 */
+const HINT_VOCABULARY = [
+  ...new Set(Object.values(DOMAIN_HINTS).flatMap((v) => v.split(/\s+/).filter(Boolean))),
+].sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
+
+/** 代表の数（螺旋の内側）。この中で分野語が揃えば、それを星団の名前にする。 */
+const LEADERS = 4;
+const LEADER_AGREE = 2;
 
 /** 分野を表さないフォルダ名。星団の名前には使わない。 */
 const IGNORED_FOLDERS = new Set([
@@ -26,9 +35,15 @@ function tally(values: string[]): Tally[] {
 const folderTally = (members: BookmarkItem[]): Tally[] =>
   tally(members.map((m) => m.folderPath.at(-1) ?? "").filter((f) => !IGNORED_FOLDERS.has(f)));
 
-/** 分野の語（ドメイン辞書）の集計。フォルダで決まらないときに使う。 */
-const hintTally = (members: BookmarkItem[]): Tally[] =>
-  tally(members.flatMap((m) => hintsFor(domainOf(m.url)).split(/\s+/).filter(Boolean)));
+/** そのブックマークが持つ分野語。ドメイン辞書と、タイトルに含まれる語の両方から。 */
+function hintsOf(item: BookmarkItem): string[] {
+  const fromDomain = hintsFor(domainOf(item.url)).split(/\s+/).filter(Boolean);
+  const fromTitle = HINT_VOCABULARY.filter((w) => w.length >= 2 && item.title.includes(w));
+  return [...new Set([...fromDomain, ...fromTitle])];
+}
+
+/** 分野の語の集計。フォルダで決まらないときに使う。 */
+const hintTally = (members: BookmarkItem[]): Tally[] => tally(members.flatMap(hintsOf));
 
 /**
  * 星団の名前（SPEC 7 章 ＋ 調整）。
@@ -39,6 +54,12 @@ const hintTally = (members: BookmarkItem[]): Tally[] =>
 export function clusterNames(groups: BookmarkItem[][]): string[] {
   const names = groups.map((members, index) => {
     if (members.length === 0) return `無名の星団 ${index + 1}`;
+
+    // 代表 4 件のうち 2 件以上が同じ分野語を持つなら、フォルダの多数決より優先する
+    const leaders = members.slice(0, LEADERS);
+    const shared = tally(leaders.flatMap(hintsOf)).filter((h) => h.n >= LEADER_AGREE);
+    if (shared[0]) return shared[0].key;
+
     const folders = folderTally(members);
     const [top, second] = folders;
 

@@ -226,18 +226,17 @@ export class SpaceView {
       });
     }
 
-    // 星の位置は、ラベルが星の上に重ならないようにするためにも使う
-    const starPoints: { sx: number; sy: number }[] = [];
     const limit = tier === "mid" ? 4 : Infinity;
-    for (const s of this.labelSource.stars) {
-      const at = project(s.x, s.y);
-      if (!at) continue;
-      starPoints.push(at);
-      if (tier === "far" || s.rank >= limit) continue;
-      items.push({ key: s.id, text: s.title, sx: at.sx, sy: at.sy, kind: "star", priority: s.rank });
+    if (tier !== "far") {
+      for (const s of this.labelSource.stars) {
+        if (s.rank >= limit) continue;
+        const at = project(s.x, s.y);
+        if (!at) continue;
+        items.push({ key: s.id, text: s.title, sx: at.sx, sy: at.sy, kind: "star", priority: s.rank });
+      }
     }
 
-    this.labels.render(items, starPoints, tier);
+    this.labels.render(items, tier);
   }
 
   private readonly resize = (): void => {

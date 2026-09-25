@@ -112,6 +112,8 @@ export const DOMAIN_HINTS: Record<string, string> = {
   "jaxa.jp": "宇宙 科学 研究",
   "nasa.gov": "宇宙 科学 研究",
   "apod.nasa.gov": "宇宙 天体 写真",
+  "stellarium.org": "宇宙 星空 天文",
+  "spaceweather.com": "宇宙 天体 観測",
   "sorae.info": "宇宙 科学 ニュース",
   "nao.ac.jp": "天文 宇宙 研究",
   "subarutelescope.org": "天文 宇宙 望遠鏡",
