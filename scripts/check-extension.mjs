@@ -473,36 +473,51 @@ try {
   }
   await evalIn("globalThis.__bukusupe.setZoomTier('far')");
   await sleep(900);
-  const focusBefore = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
-  const focusLabel = JSON.parse((await evalIn(`(() => {
-    const label = [...document.querySelectorAll('.label-cluster-focus')]
-      .find((el) => el.textContent === 'AI');
-    if (!label) return JSON.stringify({ index: -1, hit: false });
-    const rect = label.getBoundingClientRect();
-    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
-    return JSON.stringify({ index: Number(label.dataset.cluster), x, y,
-      hit: document.elementFromPoint(x, y) === label });
-  })()`)) ?? "null");
-  if (focusLabel?.hit) {
-    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: focusLabel.x, y: focusLabel.y }, sessionId);
-    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: focusLabel.x, y: focusLabel.y,
-      button: "left", buttons: 1, clickCount: 1 }, sessionId);
-    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: focusLabel.x, y: focusLabel.y,
-      button: "left", buttons: 0, clickCount: 1 }, sessionId);
+  // 近・中・遠のどの拡大率でも、星団名をクリックするとその星団の中心へ移る。
+  // 中距離より遠ければ中距離まで寄り、それより近ければ距離を保つ。
+  const clusterClicks = [];
+  for (const tier of ["far", "mid", "near"]) {
+    await evalIn("globalThis.__bukusupe.resetCamera()");
+    await evalIn(`globalThis.__bukusupe.setZoomTier(${JSON.stringify(tier)})`);
+    await sleep(700);
+    const before = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
+    let target = null;
+    for (let i = 0; i < 20 && !target; i++) {
+      target = JSON.parse((await evalIn(`(() => {
+        const cam = globalThis.__bukusupe.cameraState();
+        const clusters = globalThis.__bukusupe.layout().clusters;
+        for (const el of document.querySelectorAll('.label-cluster-focus')) {
+          if (Number(getComputedStyle(el).opacity) < 0.9) continue;
+          const rect = el.getBoundingClientRect();
+          const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+          if (x < 0 || y < 0 || x > innerWidth || y > innerHeight || document.elementFromPoint(x, y) !== el) continue;
+          const c = clusters.find((row) => row.index === Number(el.dataset.cluster));
+          if (c && Math.hypot(c.x - cam.x, c.y - cam.y) > 1) {
+            return JSON.stringify({ x, y, cluster: c, cursor: getComputedStyle(el).cursor });
+          }
+        }
+        return "null";
+      })()`)) ?? "null");
+      if (!target) await sleep(150);
+    }
+    if (target) {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: target.x, y: target.y }, sessionId);
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: target.x, y: target.y,
+        button: "left", buttons: 1, clickCount: 1 }, sessionId);
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: target.x, y: target.y,
+        button: "left", buttons: 0, clickCount: 1 }, sessionId);
+    }
+    await sleep(900);
+    const after = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
+    const centered = target && Math.hypot(after.x - target.cluster.x, after.y - target.cluster.y) < 0.1;
+    const distanceOk = tier === "far"
+      ? after.tier === "mid" && after.distance < before.distance
+      : Math.abs(after.distance - before.distance) / before.distance < 0.01;
+    clusterClicks.push({ tier, ok: !!(target && centered && distanceOk && target.cursor === "pointer"),
+      text: target ? `${tier}: ${target.cluster.name} ${before.distance.toFixed(0)}→${after.distance.toFixed(0)} (${after.tier})` : `${tier}: 押せる星団名がない` });
   }
-  await sleep(950);
-  const focusAfter = JSON.parse((await evalIn(`JSON.stringify({
-    camera: globalThis.__bukusupe.cameraState(),
-    starLabels: [...document.querySelectorAll('.label-star')]
-      .filter((el) => Number(getComputedStyle(el).opacity) > 0.9).length
-  })`)) ?? "null");
-  const focusedCluster = layout.clusters.find((cluster) => cluster.index === focusLabel?.index);
-  check(focusLabel?.hit && focusedCluster && focusBefore.tier === "far" && focusAfter.camera.tier !== "far" &&
-    focusAfter.camera.distance < focusBefore.distance &&
-    Math.hypot(focusAfter.camera.x - focusedCluster.x, focusAfter.camera.y - focusedCluster.y) < 0.1 &&
-    focusAfter.starLabels > 0,
-  "遠距離の星団名をクリックすると中心へ拡大し、星のタイトルが出る",
-  focusedCluster ? `${focusedCluster.name}: ${focusBefore.distance.toFixed(1)}→${focusAfter.camera.distance.toFixed(1)} / ${focusAfter.camera.tier}` : "星団名がない");
+  check(clusterClicks.every((row) => row.ok), "近・中・遠のどれでも、星団名のクリックでその星団の中心へ移る（カーソルは指の形）",
+    clusterClicks.map((row) => row.text).join(" / "));
   await evalIn("globalThis.__bukusupe.resetCamera()");
   await evalIn("globalThis.__bukusupe.setZoomTier('mid')");
 
@@ -744,7 +759,7 @@ try {
     button: "right", buttons: 0, clickCount: 1 }, sessionId);
   await sleep(180);
   const tiltAfter = await evalIn("globalThis.__bukusupe.cameraTilt()");
-  check(tiltAfter > tiltBefore + 10 && tiltAfter <= 65.1,
+  check(tiltAfter > tiltBefore + 10 && tiltAfter <= 60.1,
     "右ドラッグで地図の傾きだけが変わる", `${tiltBefore.toFixed(1)}°→${tiltAfter.toFixed(1)}°`);
   await evalIn("globalThis.__bukusupe.setTopDown(true)");
   await sleep(900);
@@ -752,6 +767,50 @@ try {
   await evalIn("globalThis.__bukusupe.setTopDown(false)");
   await sleep(900);
   const restoredTilt = await evalIn("globalThis.__bukusupe.cameraTilt()");
+  // --- キー操作 ---
+  const key = async (type, code, keyName, vk) => send("Input.dispatchKeyEvent",
+    { type, code, key: keyName, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sessionId);
+  const hold = async (code, keyName, vk, ms) => {
+    await key("rawKeyDown", code, keyName, vk);
+    await sleep(ms);
+    await key("keyUp", code, keyName, vk);
+    await sleep(500);   // 止まりの減速が終わるまで
+  };
+  const cam = async () => JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
+  await evalIn("document.activeElement?.blur()");
+  const beforeW = await cam();
+  await hold("KeyW", "w", 87, 600);
+  const afterW = await cam();
+  check(afterW.y > beforeW.y + beforeW.distance * 0.1 && Math.abs(afterW.x - beforeW.x) < 0.01,
+    "W を押し続けるとカメラが上へ移動する", `y ${beforeW.y.toFixed(1)}→${afterW.y.toFixed(1)}`);
+  await evalIn("document.getElementById('search-input').focus()");
+  await sleep(300);
+  const beforeTyping = await cam();
+  await hold("KeyW", "w", 87, 600);
+  const afterTyping = await cam();
+  await evalIn("(() => { const input = document.getElementById('search-input'); input.value = ''; input.dispatchEvent(new Event('input')); input.blur(); })()");
+  await sleep(900);
+  check(Math.hypot(afterTyping.x - beforeTyping.x, afterTyping.y - beforeTyping.y) < 0.01,
+    "入力欄にフォーカスがあるときは W で動かない");
+  const beforeSpace = await cam();
+  await hold("Space", " ", 32, 500);
+  const afterSpace = await cam();
+  await hold("ShiftLeft", "Shift", 16, 500);
+  const afterShift = await cam();
+  check(afterSpace.distance > beforeSpace.distance * 1.2 && afterShift.distance < afterSpace.distance * 0.85,
+    "Space で縮小、Shift で拡大する",
+    `距離 ${beforeSpace.distance.toFixed(0)}→${afterSpace.distance.toFixed(0)}→${afterShift.distance.toFixed(0)}`);
+  const slash = await evalIn(`(() => {
+    document.activeElement?.blur();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }));
+    const focused = document.activeElement === document.getElementById('search-input');
+    document.getElementById('search-input').blur();
+    return focused;
+  })()`);
+  check(slash, "「/」で検索欄にフォーカスする");
+  await evalIn("globalThis.__bukusupe.resetCamera()");
+  await sleep(300);
+
   check(topDownTilt < 1 && Math.abs(restoredTilt - tiltAfter) < 1,
     "検索の真上表示を抜けると右ドラッグで決めた傾きへ戻る",
     `${topDownTilt.toFixed(1)}°→${restoredTilt.toFixed(1)}°`);
@@ -801,6 +860,9 @@ try {
     !editChanged.members.includes(removedId) && editChanged.members.includes(addedId),
   "編集で星を外し、検索圏外の星を加えると excluded / pinned に残る");
   await evalIn("document.getElementById('constellation-name-input').value='わたしの宇宙'");
+  // 星が軌道に着いてタイトルが出るのを待ってから撮る
+  await waitForLabel(':not([data-search-rank=""])');
+  await sleep(300);
   {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
     writeFileSync("docs/screens/constellation-edit.png", Buffer.from(shot.data, "base64"));
@@ -880,14 +942,54 @@ try {
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
   await sleep(850);
   const recalled = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState())")) ?? "null");
-  const cameraOnConstellation = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
-  const recalledPoints = recalled.rows[0].lastMembers.map((id) => byId.get(id)).filter(Boolean);
-  const centerX = (Math.min(...recalledPoints.map((p) => p.x)) + Math.max(...recalledPoints.map((p) => p.x))) / 2;
-  const centerY = (Math.min(...recalledPoints.map((p) => p.y)) + Math.max(...recalledPoints.map((p) => p.y))) / 2;
   check(recalled.active === constellationId && recalled.geometry.find((row) => row.id === constellationId)?.opacity === 0.85 &&
-    !recalled.rows[0].lastMembers.includes(removedId) && recalled.rows[0].lastMembers.includes(addedId) &&
-    Math.hypot(cameraOnConstellation.x - centerX, cameraOnConstellation.y - centerY) < 1,
+    !recalled.rows[0].lastMembers.includes(removedId) && recalled.rows[0].lastMembers.includes(addedId),
   "呼び出しで明るくなり、excluded は除外・pinned は維持される");
+  // カメラが寄り終わり、タイトルの判断（カメラ停止の約 150ms 後）が済むのを待つ
+  for (let i = 0; i < 20; i++) {
+    const ready = await evalIn(`(() => { const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].lastMembers);
+      return [...document.querySelectorAll('.label-star')].some((el) => ids.has(el.dataset.key) && el.style.opacity === '1'); })()`);
+    if (ready) break;
+    await sleep(100);
+  }
+  await sleep(250);
+  // 星座のすべての星が、画面の部品（検索欄・星座一覧と操作・左上のパネル）に隠れず、画面の中にある
+  const fit = JSON.parse((await evalIn(`JSON.stringify((() => {
+    const ids = globalThis.__bukusupe.constellationState().rows[0].lastMembers;
+    const parts = ['search-box', 'constellation-list', 'constellation-manage', 'hud', 'hud-toggle']
+      .map((id) => document.getElementById(id))
+      .filter((el) => el && !el.hidden && getComputedStyle(el).display !== 'none')
+      .map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const bad = [];
+    for (const id of ids) {
+      const p = globalThis.__bukusupe.starScreen(id);
+      if (!p) { bad.push(id); continue; }
+      const inside = p.x >= 0 && p.y >= 0 && p.x <= innerWidth && p.y <= innerHeight;
+      const covered = parts.some((r) => p.x >= r.left - 4 && p.x <= r.right + 4 && p.y >= r.top - 4 && p.y <= r.bottom + 4);
+      if (!inside || covered) bad.push(id);
+    }
+    return { stars: ids.length, bad: bad.length };
+  })())`)) ?? "null");
+  check(fit && fit.stars > 0 && fit.bad === 0, "星座を選ぶと、すべての星が画面の部品を除いた領域に収まる",
+    fit ? `${fit.stars} 星中 ${fit.bad} 星がはみ出し・隠れ` : "測れない");
+  // 星座の星は大きく明るく、タイトルが優先され、他のタイトルは暗い
+  const emphasis = JSON.parse((await evalIn(`JSON.stringify((() => {
+    const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].lastMembers);
+    const labels = [...document.querySelectorAll('.label')].filter((el) => el.style.display !== 'none');
+    const member = labels.filter((el) => ids.has(el.dataset.key));
+    const others = labels.filter((el) => !ids.has(el.dataset.key) && el.style.opacity !== '0');
+    return { members: ids.size, memberLabels: member.length,
+      memberBright: member.every((el) => el.style.opacity === '1'),
+      othersDim: others.every((el) => el.style.opacity === '0.3') };
+  })())`)) ?? "null");
+  check(emphasis && emphasis.memberLabels >= Math.min(3, emphasis.members) && emphasis.memberBright && emphasis.othersDim,
+    "選んだ星座の星のタイトルが優先され、それ以外は暗くなる",
+    emphasis ? `星座 ${emphasis.members} 星・タイトル ${emphasis.memberLabels} 件` : "測れない");
+  {
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    writeFileSync("docs/screens/constellation-selected.png", Buffer.from(shot.data, "base64"));
+    console.log("  画面: docs/screens/constellation-selected.png");
+  }
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
   check((await evalIn("globalThis.__bukusupe.constellationState().active")) === null,
     "もう一度選ぶと星座の強調を解除する");
