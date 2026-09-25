@@ -76,6 +76,50 @@
         transition: width 0.25s ease-out;
       }
 
+      #labels {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        white-space: nowrap;
+        pointer-events: none;
+        text-shadow: 0 0 6px rgba(5, 6, 15, 0.9), 0 0 2px rgba(5, 6, 15, 1);
+      }
+      .label-cluster {
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        color: rgba(222, 230, 255, 0.92);
+      }
+      .label-star {
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: rgba(178, 195, 245, 0.66);
+      }
+
+      #relayout {
+        position: fixed;
+        right: 20px;
+        bottom: 18px;
+        padding: 7px 14px;
+        font: inherit;
+        font-size: 12px;
+        color: var(--dim);
+        background: rgba(8, 10, 26, 0.55);
+        border: 1px solid rgba(150, 170, 255, 0.16);
+        border-radius: 999px;
+        backdrop-filter: blur(8px);
+        cursor: pointer;
+      }
+      #relayout:hover {
+        color: var(--ink);
+        border-color: rgba(150, 170, 255, 0.35);
+      }
+
       #hint {
         position: fixed;
         bottom: 18px;
@@ -101,7 +145,9 @@
   </head>
   <body>
     <canvas id="space"></canvas>
+    <div id="labels"></div>
     <div id="hud"></div>
+    <button id="relayout" title="星団から並べ直す">再配置</button>
     <div id="loading">星を数えている…</div>
     <div id="hint">ドラッグで移動・ホイールで拡大縮小（回転はしない）</div>
     <script type="module" src="/src/main.ts"></script>

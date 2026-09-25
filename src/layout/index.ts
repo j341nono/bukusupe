@@ -1,0 +1,170 @@
+import type { BookmarkItem } from "../bookmarks/types";
+import { clusterCount, kmeans } from "./kmeans";
+import { clusterName } from "./names";
+import { packCircles, } from "./pack";
+import { pca2 } from "./pca";
+import { LAYOUT_SEED } from "./rng";
+import { spiralPoint, spiralRadius } from "./spiral";
+import { centerAndNormalize, dot, meanVector } from "./vector";
+
+/** 配置の形が変わったら上げる。古い保存は捨てて計算し直す。 */
+export const LAYOUT_VERSION = 1;
+
+/** 星の間隔。星団の円の大きさもこれを基準にする。 */
+export const SPACING = 2.0;
+
+export type StarRecord = {
+  id: string;
+  x: number;
+  y: number;
+  cluster: number;
+  /** 星団の中での並び。0 が最も星団らしい星 */
+  rank: number;
+};
+
+export type ClusterRecord = {
+  index: number;
+  name: string;
+  x: number;
+  y: number;
+  radius: number;
+  count: number;
+  /** 平均ベクトル。後から増えた星をどの星団に入れるか決めるのに使う */
+  centroid: Float32Array;
+  /** 次に星を置く螺旋の位置 */
+  nextIndex: number;
+};
+
+export type Layout = {
+  version: number;
+  spacing: number;
+  stars: StarRecord[];
+  clusters: ClusterRecord[];
+};
+
+/**
+ * 星団 → 星の二段構えで配置する（SPEC 7 章）。
+ * 入力の埋め込みは、全体の平均を引いて正規化し直したものを使う。
+ */
+export function computeLayout(
+  items: BookmarkItem[],
+  vectors: Map<string, Float32Array>,
+  mean: Float32Array,
+): Layout {
+  const usable = items.filter((item) => vectors.has(item.id));
+  const n = usable.length;
+  if (n === 0) return { version: LAYOUT_VERSION, spacing: SPACING, stars: [], clusters: [] };
+
+  const centered = usable.map((item) => centerAndNormalize(vectors.get(item.id) as Float32Array, mean));
+
+  // 1. 星団に分ける
+  const k = clusterCount(n);
+  const { assignments, centroids } = kmeans(centered, k, LAYOUT_SEED);
+
+  const groups: number[][] = centroids.map(() => []);
+  assignments.forEach((c, i) => groups[c].push(i));
+
+  // 2. 星団の中心を置く（PCA → 拡大 → 押し広げ）
+  const radii = groups.map((g) => SPACING * Math.sqrt(g.length) * 1.1);
+  const projected = pca2(centroids);
+  const maxAbs = Math.max(1e-6, ...projected.map((p) => Math.hypot(p.x, p.y)));
+  const spread = 1.6 * Math.sqrt(radii.reduce((s, r) => s + r * r, 0));
+  const scaled = projected.map((p) => ({ x: (p.x / maxAbs) * spread, y: (p.y / maxAbs) * spread }));
+  const packed = packCircles(scaled, radii, SPACING * 1.2);
+
+  // 3. 星団の中の星を螺旋に置く
+  const stars: StarRecord[] = [];
+  const clusters: ClusterRecord[] = [];
+
+  groups.forEach((memberIdx, c) => {
+    // 星団らしい順（平均ベクトルとの類似度が高い順）。同点は id で決める
+    const ordered = [...memberIdx].sort((a, b) => {
+      const d = dot(centered[b], centroids[c]) - dot(centered[a], centroids[c]);
+      if (Math.abs(d) > 1e-9) return d;
+      return usable[a].id < usable[b].id ? -1 : 1;
+    });
+
+    ordered.forEach((idx, rank) => {
+      const p = spiralPoint(rank, SPACING);
+      stars.push({
+        id: usable[idx].id,
+        x: packed[c].x + p.x,
+        y: packed[c].y + p.y,
+        cluster: c,
+        rank,
+      });
+    });
+
+    clusters.push({
+      index: c,
+      name: clusterName(ordered.map((i) => usable[i]), c),
+      x: packed[c].x,
+      y: packed[c].y,
+      radius: Math.max(radii[c], spiralRadius(ordered.length, SPACING) + SPACING * 0.5),
+      count: ordered.length,
+      centroid: centroids[c],
+      nextIndex: ordered.length,
+    });
+  });
+
+  stars.sort((a, b) => a.cluster - b.cluster || a.rank - b.rank);
+  return { version: LAYOUT_VERSION, spacing: SPACING, stars, clusters };
+}
+
+/**
+ * 後から増えたブックマークを足す（SPEC 7 章）。
+ * 平均ベクトルが最も近い星団の、螺旋の次の位置（一番外側）に置く。**他の星は動かさない。**
+ */
+export function addStar(layout: Layout, id: string, vector: Float32Array, mean: Float32Array): Layout {
+  if (layout.clusters.length === 0) return layout;
+  const v = centerAndNormalize(vector, mean);
+
+  let best = 0;
+  let bestScore = -Infinity;
+  for (const cluster of layout.clusters) {
+    const score = dot(v, cluster.centroid);
+    if (score > bestScore + 1e-12) { bestScore = score; best = cluster.index; }
+  }
+
+  const cluster = layout.clusters[best];
+  const rank = cluster.nextIndex;
+  const p = spiralPoint(rank, layout.spacing);
+  const star: StarRecord = { id, x: cluster.x + p.x, y: cluster.y + p.y, cluster: best, rank };
+
+  return {
+    ...layout,
+    stars: [...layout.stars, star],
+    clusters: layout.clusters.map((c) =>
+      c.index === best
+        ? {
+            ...c,
+            nextIndex: rank + 1,
+            count: c.count + 1,
+            radius: Math.max(c.radius, Math.hypot(p.x, p.y) + layout.spacing * 0.5),
+          }
+        : c,
+    ),
+  };
+}
+
+/** 消えたブックマークの星を落とす。位置は空けたままでよい（SPEC 7 章）。 */
+export function dropMissing(layout: Layout, aliveIds: Set<string>): Layout {
+  const stars = layout.stars.filter((s) => aliveIds.has(s.id));
+  if (stars.length === layout.stars.length) return layout;
+  const counts = new Map<number, number>();
+  for (const s of stars) counts.set(s.cluster, (counts.get(s.cluster) ?? 0) + 1);
+  return {
+    ...layout,
+    stars,
+    clusters: layout.clusters.map((c) => ({ ...c, count: counts.get(c.index) ?? 0 })),
+  };
+}
+
+/** 地図の広がり（中心から一番遠い星までの距離）。カメラの収まりに使う。 */
+export function layoutExtent(layout: Layout): number {
+  let max = 10;
+  for (const s of layout.stars) max = Math.max(max, Math.hypot(s.x, s.y));
+  return max;
+}
+
+export { meanVector };

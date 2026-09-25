@@ -1,5 +1,13 @@
 import * as THREE from "three";
-import type { LayoutResult } from "../layout/provisional";
+
+export type RenderStar = {
+  id: string;
+  x: number;
+  y: number;
+  /** 0..1。最終利用日時から決める */
+  brightness: number;
+  cluster: number;
+};
 
 const VERT = /* glsl */ `
 uniform float uScale;   // 画面の高さと画角から決まる、世界の大きさ→ピクセルの係数
@@ -45,78 +53,149 @@ export function createStarMaterial(): THREE.ShaderMaterial {
 /** 星団ごとの色み。意味は持たせず、まとまりが見える程度の差にとどめる。 */
 const HUES = [0.58, 0.52, 0.09, 0.75, 0.13, 0.46, 0.86, 0.62, 0.02, 0.33];
 
+const MOVE_SECONDS = 0.9;
+const BORN_SECONDS = 0.5;
+
+/**
+ * 星の群れ。Points 1 つで描くので、数千件でもコマ落ちしない。
+ * 配置が入れ替わったときは、同じ星は前の位置から新しい位置へ動かす。
+ */
 export class StarField {
   readonly object: THREE.Points;
-  private readonly alpha: THREE.BufferAttribute;
-  private readonly count: number;
-  /** 星が一つずつ生まれる演出のための、星ごとの点灯時刻（秒） */
-  private readonly bornAt: Float32Array;
-  private readonly targetAlpha: Float32Array;
 
-  constructor(layout: LayoutResult) {
-    const stars = layout.stars;
-    this.count = stars.length;
+  private geom = new THREE.BufferGeometry();
+  private stars: RenderStar[] = [];
+  private index = new Map<string, number>();
+  private position!: THREE.BufferAttribute;
+  private alphaAttr!: THREE.BufferAttribute;
+  private from = new Float32Array(0);
+  private to = new Float32Array(0);
+  private bornAt = new Float32Array(0);
+  private targetAlpha = new Float32Array(0);
+  private moveT = 1;
+  private elapsed = 0;
 
-    const pos = new Float32Array(stars.length * 3);
-    const size = new Float32Array(stars.length);
-    const color = new Float32Array(stars.length * 3);
-    const alpha = new Float32Array(stars.length);
-    this.bornAt = new Float32Array(stars.length);
-    this.targetAlpha = new Float32Array(stars.length);
+  constructor() {
+    this.object = new THREE.Points(this.geom, createStarMaterial());
+    this.object.frustumCulled = false;
+  }
+
+  get count(): number {
+    return this.stars.length;
+  }
+
+  /** 表示中の星の位置（地図の座標）。ラベルの重ね表示に使う。 */
+  get placed(): RenderStar[] {
+    return this.stars;
+  }
+
+  setStars(next: RenderStar[], animate = true): void {
+    const previous = this.positionsById();
+    const n = next.length;
+
+    const pos = new Float32Array(n * 3);
+    const size = new Float32Array(n);
+    const color = new Float32Array(n * 3);
+    const alpha = new Float32Array(n);
+    this.from = new Float32Array(n * 2);
+    this.to = new Float32Array(n * 2);
+    this.bornAt = new Float32Array(n);
+    this.targetAlpha = new Float32Array(n);
+    this.index = new Map();
 
     const c = new THREE.Color();
-    stars.forEach((s, i) => {
+    const staggered = previous.size === 0;
+    next.forEach((s, i) => {
+      this.index.set(s.id, i);
+      const old = previous.get(s.id);
+      const fx = old ? old.x : s.x;
+      const fy = old ? old.y : s.y;
+      this.from[i * 2] = fx;
+      this.from[i * 2 + 1] = fy;
+      this.to[i * 2] = s.x;
+      this.to[i * 2 + 1] = s.y;
+
       // 地図の (x, y) を three の床面 (x, 0, -y) に置く。奥行きに意味は無い。
-      pos[i * 3] = s.x;
+      pos[i * 3] = fx;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = -s.y;
+      pos[i * 3 + 2] = -fy;
 
       size[i] = 0.95 + s.brightness * 1.25;
-      c.setHSL(HUES[s.groupIndex % HUES.length], 0.35, 0.72 + s.brightness * 0.2);
+      c.setHSL(HUES[s.cluster % HUES.length], 0.35, 0.72 + s.brightness * 0.2);
       color[i * 3] = c.r;
       color[i * 3 + 1] = c.g;
       color[i * 3 + 2] = c.b;
 
       this.targetAlpha[i] = 0.45 + s.brightness * 0.55;
-      alpha[i] = 0;
-      // 内側の星から順に生まれる
-      this.bornAt[i] = (i / Math.max(1, stars.length)) * 1.6;
+      // 初回は内側の星から順に生まれる演出。以降は新しい星だけ光らせる
+      const born = staggered ? (i / Math.max(1, n)) * 1.6 : 0;
+      this.bornAt[i] = old ? -1 : born;
+      alpha[i] = old ? this.targetAlpha[i] : 0;
     });
 
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geom.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
-    geom.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
-    this.alpha = new THREE.BufferAttribute(alpha, 1);
-    geom.setAttribute("aAlpha", this.alpha);
+    this.stars = next;
+    this.elapsed = 0;
+    this.moveT = animate && previous.size > 0 ? 0 : 1;
 
-    this.object = new THREE.Points(geom, createStarMaterial());
-    this.object.frustumCulled = false;
+    this.geom.dispose();
+    this.geom = new THREE.BufferGeometry();
+    this.position = new THREE.BufferAttribute(pos, 3);
+    this.alphaAttr = new THREE.BufferAttribute(alpha, 1);
+    this.geom.setAttribute("position", this.position);
+    this.geom.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+    this.geom.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
+    this.geom.setAttribute("aAlpha", this.alphaAttr);
+    this.object.geometry = this.geom;
   }
 
-  /** 生まれる演出。すべて点灯したら true を返す。 */
-  update(elapsed: number): boolean {
-    let done = true;
-    const a = this.alpha.array as Float32Array;
-    for (let i = 0; i < this.count; i++) {
-      const t = (elapsed - this.bornAt[i]) / 0.5;
+  update(dt: number): void {
+    if (this.stars.length === 0) return;
+    this.elapsed += dt;
+
+    if (this.moveT < 1) {
+      this.moveT = Math.min(1, this.moveT + dt / MOVE_SECONDS);
+      const e = easeInOut(this.moveT);
+      const pos = this.position.array as Float32Array;
+      for (let i = 0; i < this.stars.length; i++) {
+        pos[i * 3] = this.from[i * 2] + (this.to[i * 2] - this.from[i * 2]) * e;
+        pos[i * 3 + 2] = -(this.from[i * 2 + 1] + (this.to[i * 2 + 1] - this.from[i * 2 + 1]) * e);
+      }
+      this.position.needsUpdate = true;
+    }
+
+    const alpha = this.alphaAttr.array as Float32Array;
+    let changed = false;
+    for (let i = 0; i < this.stars.length; i++) {
+      if (this.bornAt[i] < 0) continue;              // もう点いている
+      const t = (this.elapsed - this.bornAt[i]) / BORN_SECONDS;
       if (t >= 1) {
-        a[i] = this.targetAlpha[i];
+        alpha[i] = this.targetAlpha[i];
+        this.bornAt[i] = -1;
+        changed = true;
         continue;
       }
-      done = false;
+      changed = true;
       if (t <= 0) {
-        a[i] = 0;
+        alpha[i] = 0;
       } else {
         // 生まれた瞬間だけ少し強く光ってから落ち着く
         const flash = 1 + 0.9 * Math.sin(Math.PI * t) * (1 - t);
-        a[i] = this.targetAlpha[i] * t * flash;
+        alpha[i] = this.targetAlpha[i] * t * flash;
       }
     }
-    this.alpha.needsUpdate = true;
-    return done;
+    if (changed) this.alphaAttr.needsUpdate = true;
+  }
+
+  private positionsById(): Map<string, { x: number; y: number }> {
+    const map = new Map<string, { x: number; y: number }>();
+    if (this.stars.length === 0) return map;
+    const pos = this.position.array as Float32Array;
+    this.stars.forEach((s, i) => map.set(s.id, { x: pos[i * 3], y: -pos[i * 3 + 2] }));
+    return map;
   }
 }
+
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 /** 遠景の星（ブックマークではない。宇宙に見せるためだけの背景）。 */
 export function createBackdrop(seed = 7): THREE.Points {

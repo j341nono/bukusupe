@@ -9,12 +9,18 @@
  *  4. 外部へ出る通信がモデルの重み（Hugging Face）だけである
  *  5. 埋め込みが全件終わる
  *  6. 再読み込みで計算し直さない（IndexedDB から戻る）
- *  7. 意味検索が妥当（「猫」で猫に近い星が上位に来る）
+ *  7. 意味検索が妥当（検索語ごとに違う星が上位に来る）
+ *  8. 同じデータなら毎回まったく同じ座標になる
+ *  9. 同じ星団の中で星どうしが重ならない
+ * 10. 星団どうしの円が重ならない
+ * 11. ブックマークが 1 件増えても、既存の星の座標が変わらない
+ * 12. 20 / 150 / 2000 件で配置が終わり、2000 件でも 60 コマ/秒を保つ
+ * 13. 遠・中・近の 3 段階のスクリーンショットを docs/screens/ に保存する
  *
  * 新しいプロファイルで動かすのでブックマークは空。表示はサンプル 150 件になる。
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -88,6 +94,7 @@ try {
   const evalIn = async (expression) =>
     (await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result.value;
   const hud = () => evalIn("document.getElementById('hud')?.innerText ?? ''");
+  const phase = () => evalIn("document.body.dataset.phase ?? ''");
 
   // --- 1 回目：モデル取得と全件の埋め込み ---
   let text = "";
@@ -97,7 +104,8 @@ try {
       text = await hud();
       const line = text.split("\n").at(-1) ?? "";
       process.stdout.write(`\r  … ${line.padEnd(56)}`);
-      if (/意味を覚えた|失敗/.test(text)) return true;
+      const p = await phase();
+      if (p === "ready" || p === "error") return p === "ready";
     }
     return false;
   };
@@ -114,7 +122,7 @@ try {
         liveFrames = b - a;
         return;
       }
-      if (/意味を覚えた|失敗/.test(t)) return;
+      if (["ready", "error"].includes(await phase())) return;
     }
   })();
 
@@ -123,7 +131,7 @@ try {
   process.stdout.write("\r" + " ".repeat(64) + "\r");
   console.log("HUD:", JSON.stringify(text));
 
-  check(finished && /意味を覚えた/.test(text), "埋め込みが全件終わる");
+  check(finished, "埋め込みが全件終わって星が並ぶ");
   check(/星\s*150/.test(text.replace(/\s+/g, " ")), "サンプル 150 件が読めている");
   check(await evalIn("typeof chrome !== 'undefined' && !!chrome.bookmarks"), "bookmarks 権限がある");
   check(liveFrames != null && liveFrames > 10, "計算中も画面が動いている",
@@ -151,6 +159,104 @@ try {
   console.log("  意味検索「確定申告」:", control.map((t) => `${t.title}(${t.score.toFixed(3)})`).join(" / "));
   check(top[0]?.title !== control[0]?.title, "違う検索語で違う星が上位に来る");
 
+  // --- 配置（M2） ---
+  const layout = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.layout())")) ?? "null");
+  const again1 = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.computeAgain())")) ?? "null");
+  const again2 = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.computeAgain())")) ?? "null");
+  check(
+    layout != null && JSON.stringify(again1) === JSON.stringify(again2) &&
+      JSON.stringify(layout.stars) === JSON.stringify(again1.stars),
+    "同じデータなら毎回まったく同じ座標になる",
+  );
+
+  const spacing = layout?.spacing ?? 2;
+  const byCluster = new Map();
+  for (const s of layout?.stars ?? []) {
+    if (!byCluster.has(s.cluster)) byCluster.set(s.cluster, []);
+    byCluster.get(s.cluster).push(s);
+  }
+  let minGap = Infinity;
+  for (const group of byCluster.values()) {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        minGap = Math.min(minGap, Math.hypot(group[i].x - group[j].x, group[i].y - group[j].y));
+      }
+    }
+  }
+  check(minGap >= spacing * 0.8, "同じ星団の中で星どうしが重ならない",
+    `最小 ${minGap.toFixed(2)}（間隔 ${spacing} の ${(minGap / spacing).toFixed(2)} 倍）`);
+
+  const live = (layout?.clusters ?? []).filter((c) => c.count > 0);
+  let worstOverlap = Infinity;
+  for (let i = 0; i < live.length; i++) {
+    for (let j = i + 1; j < live.length; j++) {
+      const d = Math.hypot(live[i].x - live[j].x, live[i].y - live[j].y);
+      worstOverlap = Math.min(worstOverlap, d - live[i].radius - live[j].radius);
+    }
+  }
+  check(live.length < 2 || worstOverlap > 0, "星団どうしの円が重ならない",
+    `一番近い組で ${worstOverlap.toFixed(2)} の空き`);
+
+  // 星団ごとの内訳と、フォルダがいくつの星団に散っているか（物語の要点）
+  const folderOf = new Map((layout?.stars ?? []).map((s) => [s.id, s.folder || "(ルート)"]));
+  const spread = new Map();
+  const detail = live.map((c) => {
+    const members = (byCluster.get(c.index) ?? []).map((s) => folderOf.get(s.id) ?? "");
+    const tally = new Map();
+    for (const f of members) {
+      tally.set(f, (tally.get(f) ?? 0) + 1);
+      if (!spread.has(f)) spread.set(f, new Set());
+      spread.get(f).add(c.index);
+    }
+    const folders = [...tally].sort((a, b) => b[1] - a[1]).map(([f, n]) => `${f}:${n}`);
+    return { ...c, folders };
+  });
+  console.log("  星団:", live.map((c) => `${c.name}(${c.count})`).join(" / "));
+  for (const c of detail) console.log(`    #${c.index} ${c.name}（${c.count}）`, c.folders.join(" "));
+  const scattered = [...spread].filter(([, set]) => set.size >= 2);
+  check(scattered.length > 0, "一つのフォルダの星が複数の星団に散っている",
+    scattered.map(([f, set]) => `${f}→${set.size}`).join(" "));
+  writeFileSync("docs/screens/clusters.json", JSON.stringify(detail, null, 1) + "\n");
+
+  const added = JSON.parse((await evalIn(
+    `(async () => JSON.stringify(await globalThis.__bukusupe.simulateAdd(
+       "宇宙飛行士の訓練のすべて", "https://www.jaxa.jp/projects/astronaut/training/", ["あとで読む"])))()`,
+  )) ?? "null");
+  const before = new Map((layout?.stars ?? []).map((s) => [s.id, s]));
+  const moved = (added?.stars ?? []).filter((s) => {
+    const old = before.get(s.id);
+    return old && (old.x !== s.x || old.y !== s.y || old.cluster !== s.cluster);
+  });
+  const newStar = (added?.stars ?? []).find((s) => !before.has(s.id));
+  check(added != null && moved.length === 0 && newStar != null,
+    "1 件増えても既存の星の座標が変わらない",
+    newStar ? `新しい星は星団 ${newStar.cluster} の ${newStar.rank} 番目` : "新しい星が見つからない");
+
+  // --- 件数を増やしたときの配置と描画 ---
+  for (const n of [20, 150, 2000]) {
+    const r = JSON.parse((await evalIn(
+      `(async () => JSON.stringify(await globalThis.__bukusupe.benchmark(${n})))()`,
+    )) ?? "null");
+    const ok = r != null && r.clusters.length > 0;
+    const detail = r ? `配置 ${r.layoutMs.toFixed(0)} ミリ秒 / ${r.fps.toFixed(0)} コマ ・ 星団 ${r.clusters.length}` : "計算できない";
+    if (n === 2000) check(ok && r.fps >= 55, `${n} 件で配置が終わり 60 コマを保つ`, detail);
+    else check(ok, `${n} 件で配置が終わる`, detail);
+  }
+  await evalIn("globalThis.__bukusupe.restore()");
+  await sleep(1200);
+
+  // --- 遠・中・近のスクリーンショット ---
+  mkdirSync("docs/screens", { recursive: true });
+  for (const tier of ["far", "mid", "near"]) {
+    await evalIn(`globalThis.__bukusupe.setZoomTier(${JSON.stringify(tier)})`);
+    await sleep(900);
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    const path = `docs/screens/${tier}.png`;
+    writeFileSync(path, Buffer.from(shot.data, "base64"));
+    console.log("  画面:", path);
+  }
+  await evalIn("globalThis.__bukusupe.setZoomTier('mid')");
+
   // --- 2 回目：再読み込みで計算し直さないこと ---
   events = [];
   const t0 = Date.now();
@@ -159,7 +265,7 @@ try {
   for (let i = 0; i < 30; i++) {
     await sleep(500);
     text = await hud();
-    if (/意味を覚えた/.test(text)) { reloadedOk = true; break; }
+    if ((await phase()) === "ready") { reloadedOk = true; break; }
   }
   const elapsed = Date.now() - t0;
   const refetched = events

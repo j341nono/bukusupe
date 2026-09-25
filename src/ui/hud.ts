@@ -5,9 +5,13 @@ const SOURCE_LABEL: Record<BookmarkSourceKind, string> = {
   sample: "サンプル",
 };
 
+/** いまどこまで進んだか。自動確認はこれを見る（文言を変えても壊れないように）。 */
+export type HudPhase = "loading" | "model" | "embed" | "layout" | "ready" | "error";
+
 export type HudState = {
   count: number;
   kind: BookmarkSourceKind;
+  phase?: HudPhase;
   /** 進み具合の一行。空なら出さない */
   status?: string;
   /** 0..1。あれば細い棒を出す */
@@ -20,6 +24,7 @@ const escape = (s: string) =>
 export function renderHud(state: HudState): void {
   const el = document.getElementById("hud");
   if (!el) return;
+  if (state.phase) document.body.dataset.phase = state.phase;
   const bar =
     state.progress == null
       ? ""
@@ -32,8 +37,9 @@ export function renderHud(state: HudState): void {
   `;
 }
 
-export function renderHudMessage(message: string): void {
+export function renderHudMessage(message: string, phase: HudPhase = "loading"): void {
   const el = document.getElementById("hud");
   if (!el) return;
+  document.body.dataset.phase = phase;
   el.innerHTML = `<div class="hud-title">ブクスペ</div><div class="hud-status">${escape(message)}</div>`;
 }

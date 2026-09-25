@@ -26,7 +26,8 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ├── CLAUDE.md
 ├── docs/
 │   ├── SPEC.md              # 仕様書（正典）
-│   └── PLAN.md              # 実装計画・完了条件
+│   ├── PLAN.md              # 実装計画・完了条件
+│   └── screens/             # check:ext が保存する遠・中・近の画面
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
 ├── public/
 │   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる）
@@ -42,8 +43,9 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── bookmarks/           # ブックマークの取得（Chrome / サンプルの 2 系統）
 │   ├── embed/               # 埋め込み（Worker、入力文の組み立て、ドメイン辞書、ORT 設定）
 │   ├── store/               # IndexedDB
-│   ├── layout/              # 配置（M0 は仮配置、M2 で本実装）
-│   ├── render/              # three.js の描画
+│   ├── layout/              # 配置（平均引き → k-means → PCA → 押し広げ → 螺旋）
+│   ├── render/              # three.js の描画（Points 1 つで数千件）
+│   ├── ui/                  # HUD とラベルの重ね表示
 │   └── data/sample-bookmarks.json   # 開発・デモ用の 150 件
 └── dist/                    # ビルド成果物（拡張機能として読み込む）
 ```
