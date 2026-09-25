@@ -1,0 +1,1466 @@
+[
+ {
+  "id": "s001",
+  "title": "React – ユーザインターフェース構築のためのライブラリ",
+  "url": "https://ja.react.dev/",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1759017600000,
+  "dateLastUsed": 1759104000000
+ },
+ {
+  "id": "s002",
+  "title": "useEffect の完全ガイド",
+  "url": "https://overreacted.io/a-complete-guide-to-useeffect/",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1731369600000
+ },
+ {
+  "id": "s003",
+  "title": "Vue.js - プログレッシブ JavaScript フレームワーク",
+  "url": "https://ja.vuejs.org/guide/introduction.html",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1739232000000,
+  "dateLastUsed": 1769472000000
+ },
+ {
+  "id": "s004",
+  "title": "Svelte • Cybernetically enhanced web apps",
+  "url": "https://svelte.dev/",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1706227200000,
+  "dateLastUsed": 1763596800000
+ },
+ {
+  "id": "s005",
+  "title": "Vite | Next Generation Frontend Tooling",
+  "url": "https://ja.vite.dev/guide/",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1731974400000,
+  "dateLastUsed": 1741392000000
+ },
+ {
+  "id": "s006",
+  "title": "TypeScript: Handbook - The Basics",
+  "url": "https://www.typescriptlang.org/docs/handbook/2/basic-types.html",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1699574400000
+ },
+ {
+  "id": "s007",
+  "title": "CSS Grid Layout を極める",
+  "url": "https://developer.mozilla.org/ja/docs/Web/CSS/CSS_grid_layout",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1717113600000
+ },
+ {
+  "id": "s008",
+  "title": "Flexbox チートシート",
+  "url": "https://css-tricks.com/snippets/css/a-guide-to-flexbox/",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1663718400000
+ },
+ {
+  "id": "s009",
+  "title": "Web Components の作り方",
+  "url": "https://developer.mozilla.org/ja/docs/Web/API/Web_components",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1669334400000,
+  "dateLastUsed": 1754611200000
+ },
+ {
+  "id": "s010",
+  "title": "Tailwind CSS - Rapidly build modern websites",
+  "url": "https://tailwindcss.com/docs/installation",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1648684800000,
+  "dateLastUsed": 1769040000000
+ },
+ {
+  "id": "s011",
+  "title": "Can I use... Support tables for HTML5, CSS3",
+  "url": "https://caniuse.com/",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1679184000000,
+  "dateLastUsed": 1763424000000
+ },
+ {
+  "id": "s012",
+  "title": "Core Web Vitals とは何か",
+  "url": "https://web.dev/articles/vitals?hl=ja",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1729641600000,
+  "dateLastUsed": 1755820800000
+ },
+ {
+  "id": "s013",
+  "title": "Next.js App Router の考え方",
+  "url": "https://nextjs.org/docs/app/building-your-application/routing",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1708646400000
+ },
+ {
+  "id": "s014",
+  "title": "アクセシビリティ入門 - WAI-ARIA の基本",
+  "url": "https://developer.mozilla.org/ja/docs/Web/Accessibility/ARIA",
+  "folderPath": [
+   "開発",
+   "フロントエンド"
+  ],
+  "dateAdded": 1674259200000,
+  "dateLastUsed": 1741910400000
+ },
+ {
+  "id": "s015",
+  "title": "Go by Example",
+  "url": "https://gobyexample.com/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1767657600000
+ },
+ {
+  "id": "s016",
+  "title": "Rust プログラミング言語 日本語版",
+  "url": "https://doc.rust-jp.rs/book-ja/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1740355200000,
+  "dateLastUsed": 1744416000000
+ },
+ {
+  "id": "s017",
+  "title": "PostgreSQL 16 ドキュメント",
+  "url": "https://www.postgresql.jp/document/16/html/index.html",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1686355200000
+ },
+ {
+  "id": "s018",
+  "title": "Redis のデータ型を理解する",
+  "url": "https://redis.io/docs/latest/develop/data-types/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1740960000000,
+  "dateLastUsed": 1769817600000
+ },
+ {
+  "id": "s019",
+  "title": "Docker Compose の書き方",
+  "url": "https://docs.docker.com/compose/compose-file/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1674604800000,
+  "dateLastUsed": 1767657600000
+ },
+ {
+  "id": "s020",
+  "title": "Kubernetes の Pod とは",
+  "url": "https://kubernetes.io/ja/docs/concepts/workloads/pods/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1744156800000,
+  "dateLastUsed": 1766102400000
+ },
+ {
+  "id": "s021",
+  "title": "gRPC の基礎",
+  "url": "https://grpc.io/docs/what-is-grpc/introduction/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1757548800000
+ },
+ {
+  "id": "s022",
+  "title": "REST API 設計のベストプラクティス",
+  "url": "https://qiita.com/NagaokaKenichi/items/0647c30ef596cedf4bf2",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1764720000000,
+  "dateLastUsed": 1771804800000
+ },
+ {
+  "id": "s023",
+  "title": "FastAPI - 高速な Python Web フレームワーク",
+  "url": "https://fastapi.tiangolo.com/ja/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1690156800000
+ },
+ {
+  "id": "s024",
+  "title": "SQL アンチパターン まとめ",
+  "url": "https://zenn.dev/praha/articles/sql-antipatterns",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1730851200000,
+  "dateLastUsed": 1761264000000
+ },
+ {
+  "id": "s025",
+  "title": "分散システムの誤謬 8 つ",
+  "url": "https://architecturenotes.co/p/fallacies-of-distributed-systems",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1696032000000,
+  "dateLastUsed": 1772841600000
+ },
+ {
+  "id": "s026",
+  "title": "nginx のリバースプロキシ設定",
+  "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1650326400000,
+  "dateLastUsed": 1759017600000
+ },
+ {
+  "id": "s027",
+  "title": "OAuth 2.0 と OpenID Connect の違い",
+  "url": "https://www.authlete.com/ja/developers/oauth_and_oidc/",
+  "folderPath": [
+   "開発",
+   "バックエンド"
+  ],
+  "dateAdded": 1753747200000,
+  "dateLastUsed": 1753833600000
+ },
+ {
+  "id": "s028",
+  "title": "Pro Git 日本語版",
+  "url": "https://git-scm.com/book/ja/v2",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1761436800000,
+  "dateLastUsed": 1764720000000
+ },
+ {
+  "id": "s029",
+  "title": "GitHub Actions のワークフロー構文",
+  "url": "https://docs.github.com/ja/actions/using-workflows/workflow-syntax-for-github-actions",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1733356800000,
+  "dateLastUsed": 1754352000000
+ },
+ {
+  "id": "s030",
+  "title": "Vim チートシート",
+  "url": "https://vim.rtorr.com/lang/ja",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1701820800000,
+  "dateLastUsed": 1768348800000
+ },
+ {
+  "id": "s031",
+  "title": "VS Code キーボードショートカット",
+  "url": "https://code.visualstudio.com/docs/getstarted/keybindings",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1766188800000,
+  "dateLastUsed": 1766275200000
+ },
+ {
+  "id": "s032",
+  "title": "tmux の使い方",
+  "url": "https://qiita.com/nmrmsys/items/03f97f5eabec18a3a18b",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1658534400000,
+  "dateLastUsed": 1753920000000
+ },
+ {
+  "id": "s033",
+  "title": "正規表現テスター regex101",
+  "url": "https://regex101.com/",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1705363200000
+ },
+ {
+  "id": "s034",
+  "title": "jq マニュアル",
+  "url": "https://jqlang.github.io/jq/manual/",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1716768000000,
+  "dateLastUsed": 1750982400000
+ },
+ {
+  "id": "s035",
+  "title": "ripgrep の使い方",
+  "url": "https://github.com/BurntSushi/ripgrep",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1680825600000,
+  "dateLastUsed": 1747094400000
+ },
+ {
+  "id": "s036",
+  "title": "Homebrew — macOS 用パッケージマネージャー",
+  "url": "https://brew.sh/ja/",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1766102400000,
+  "dateLastUsed": 1766188800000
+ },
+ {
+  "id": "s037",
+  "title": "Chrome DevTools の便利機能",
+  "url": "https://developer.chrome.com/docs/devtools/?hl=ja",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1674777600000
+ },
+ {
+  "id": "s038",
+  "title": "Chrome 拡張機能 Manifest V3 移行ガイド",
+  "url": "https://developer.chrome.com/docs/extensions/develop/migrate?hl=ja",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1741996800000,
+  "dateLastUsed": 1773964800000
+ },
+ {
+  "id": "s039",
+  "title": "chrome.bookmarks API リファレンス",
+  "url": "https://developer.chrome.com/docs/extensions/reference/api/bookmarks?hl=ja",
+  "folderPath": [
+   "開発",
+   "ツール"
+  ],
+  "dateAdded": 1670198400000,
+  "dateLastUsed": 1749600000000
+ },
+ {
+  "id": "s040",
+  "title": "Attention Is All You Need",
+  "url": "https://arxiv.org/abs/1706.03762",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1762732800000,
+  "dateLastUsed": 1762819200000
+ },
+ {
+  "id": "s041",
+  "title": "The Illustrated Transformer",
+  "url": "https://jalammar.github.io/illustrated-transformer/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1741737600000,
+  "dateLastUsed": 1753228800000
+ },
+ {
+  "id": "s042",
+  "title": "Hugging Face – The AI community building the future",
+  "url": "https://huggingface.co/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1653782400000,
+  "dateLastUsed": 1773532800000
+ },
+ {
+  "id": "s043",
+  "title": "transformers.js ドキュメント",
+  "url": "https://huggingface.co/docs/transformers.js/index",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1756339200000,
+  "dateLastUsed": 1762905600000
+ },
+ {
+  "id": "s044",
+  "title": "multilingual-e5-small モデルカード",
+  "url": "https://huggingface.co/intfloat/multilingual-e5-small",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1676592000000,
+  "dateLastUsed": 1748563200000
+ },
+ {
+  "id": "s045",
+  "title": "埋め込みベクトルとは何か",
+  "url": "https://zenn.dev/microsoft/articles/embedding-introduction",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1683936000000,
+  "dateLastUsed": 1766534400000
+ },
+ {
+  "id": "s046",
+  "title": "RAG（検索拡張生成）の基本",
+  "url": "https://aws.amazon.com/jp/what-is/retrieval-augmented-generation/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1703203200000,
+  "dateLastUsed": 1773705600000
+ },
+ {
+  "id": "s047",
+  "title": "PyTorch チュートリアル",
+  "url": "https://pytorch.org/tutorials/beginner/basics/intro.html",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1668556800000
+ },
+ {
+  "id": "s048",
+  "title": "scikit-learn: machine learning in Python",
+  "url": "https://scikit-learn.org/stable/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1684195200000
+ },
+ {
+  "id": "s049",
+  "title": "t-SNE と UMAP の違いを理解する",
+  "url": "https://pair-code.github.io/understanding-umap/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1671926400000
+ },
+ {
+  "id": "s050",
+  "title": "k-means++ の初期化",
+  "url": "https://en.wikipedia.org/wiki/K-means%2B%2B",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1740009600000,
+  "dateLastUsed": 1773532800000
+ },
+ {
+  "id": "s051",
+  "title": "ONNX Runtime Web で推論を動かす",
+  "url": "https://onnxruntime.ai/docs/tutorials/web/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1653868800000,
+  "dateLastUsed": 1758931200000
+ },
+ {
+  "id": "s052",
+  "title": "プロンプトエンジニアリングガイド",
+  "url": "https://www.promptingguide.ai/jp",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1663977600000
+ },
+ {
+  "id": "s053",
+  "title": "Whisper による音声文字起こし",
+  "url": "https://github.com/openai/whisper",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1663977600000,
+  "dateLastUsed": 1772323200000
+ },
+ {
+  "id": "s054",
+  "title": "拡散モデルの数理",
+  "url": "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/",
+  "folderPath": [
+   "AI"
+  ],
+  "dateAdded": 1685750400000,
+  "dateLastUsed": 1746921600000
+ },
+ {
+  "id": "s055",
+  "title": "Figma の基本操作",
+  "url": "https://help.figma.com/hc/ja/articles/360039823894",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1697414400000,
+  "dateLastUsed": 1759104000000
+ },
+ {
+  "id": "s056",
+  "title": "Material Design 3",
+  "url": "https://m3.material.io/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1708214400000
+ },
+ {
+  "id": "s057",
+  "title": "Refactoring UI のヒント集",
+  "url": "https://www.refactoringui.com/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1715472000000
+ },
+ {
+  "id": "s058",
+  "title": "配色を決めるツール Coolors",
+  "url": "https://coolors.co/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1703462400000
+ },
+ {
+  "id": "s059",
+  "title": "Google Fonts 日本語",
+  "url": "https://fonts.google.com/?subset=japanese",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1768867200000,
+  "dateLastUsed": 1768953600000
+ },
+ {
+  "id": "s060",
+  "title": "アイコン集 Lucide",
+  "url": "https://lucide.dev/icons/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1670716800000
+ },
+ {
+  "id": "s061",
+  "title": "イージング関数チートシート",
+  "url": "https://easings.net/ja",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1692748800000
+ },
+ {
+  "id": "s062",
+  "title": "three.js examples",
+  "url": "https://threejs.org/examples/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1697932800000,
+  "dateLastUsed": 1753920000000
+ },
+ {
+  "id": "s063",
+  "title": "Shadertoy",
+  "url": "https://www.shadertoy.com/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1689897600000,
+  "dateLastUsed": 1767830400000
+ },
+ {
+  "id": "s064",
+  "title": "The Book of Shaders",
+  "url": "https://thebookofshaders.com/?lan=jp",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1693612800000
+ },
+ {
+  "id": "s065",
+  "title": "配色のアクセシビリティ判定",
+  "url": "https://webaim.org/resources/contrastchecker/",
+  "folderPath": [
+   "デザイン"
+  ],
+  "dateAdded": 1699833600000,
+  "dateLastUsed": 1756857600000
+ },
+ {
+  "id": "s066",
+  "title": "基本の肉じゃがレシピ",
+  "url": "https://cookpad.com/jp/recipes/16371745",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1771804800000,
+  "dateLastUsed": 1771891200000
+ },
+ {
+  "id": "s067",
+  "title": "失敗しないカルボナーラの作り方",
+  "url": "https://www.kurashiru.com/recipes/8e1f4a0d",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1746403200000,
+  "dateLastUsed": 1763164800000
+ },
+ {
+  "id": "s068",
+  "title": "土鍋でごはんを炊く",
+  "url": "https://delishkitchen.tv/recipes/144033745623975303",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1705449600000,
+  "dateLastUsed": 1759968000000
+ },
+ {
+  "id": "s069",
+  "title": "だしの取り方 — 昆布とかつお節",
+  "url": "https://www.kikkoman.co.jp/homecook/search/recipe/00001234/",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1746403200000,
+  "dateLastUsed": 1772323200000
+ },
+ {
+  "id": "s070",
+  "title": "週末に作りおきできるおかず 10 品",
+  "url": "https://www.lettuceclub.net/recipe/",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1737244800000,
+  "dateLastUsed": 1769644800000
+ },
+ {
+  "id": "s071",
+  "title": "スパイスから作るチキンカレー",
+  "url": "https://www.sbfoods.co.jp/recipe/detail/00003456.html",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1771718400000,
+  "dateLastUsed": 1771804800000
+ },
+ {
+  "id": "s072",
+  "title": "パン作りの発酵温度",
+  "url": "https://cotta.jp/special/article/?p=12345",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1771459200000
+ },
+ {
+  "id": "s073",
+  "title": "ぬか床の育て方",
+  "url": "https://www.hakko-blog.com/nukadoko/",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1706572800000,
+  "dateLastUsed": 1751155200000
+ },
+ {
+  "id": "s074",
+  "title": "コーヒーのハンドドリップ入門",
+  "url": "https://www.kurasu.kyoto/blogs/journal/hand-drip",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1769990400000,
+  "dateLastUsed": 1770076800000
+ },
+ {
+  "id": "s075",
+  "title": "包丁の研ぎ方",
+  "url": "https://www.kai-group.com/products/special/knife/sharpen/",
+  "folderPath": [
+   "料理"
+  ],
+  "dateAdded": 1665273600000
+ },
+ {
+  "id": "s076",
+  "title": "青春18きっぷの使い方",
+  "url": "https://www.jr-odekake.net/railroad/ticket/seishun18/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1670889600000,
+  "dateLastUsed": 1772323200000
+ },
+ {
+  "id": "s077",
+  "title": "屋久島 縄文杉トレッキング",
+  "url": "https://yakukan.jp/course/jomonsugi/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1658966400000,
+  "dateLastUsed": 1743552000000
+ },
+ {
+  "id": "s078",
+  "title": "台北 3 泊 4 日のモデルコース",
+  "url": "https://www.taiwan-tourism.jp/model-course/taipei/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1656547200000,
+  "dateLastUsed": 1749081600000
+ },
+ {
+  "id": "s079",
+  "title": "北海道 道東ドライブ",
+  "url": "https://www.visit-eastern-hokkaido.jp/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1743379200000,
+  "dateLastUsed": 1748131200000
+ },
+ {
+  "id": "s080",
+  "title": "格安航空券の探し方 Skyscanner",
+  "url": "https://www.skyscanner.jp/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1767830400000
+ },
+ {
+  "id": "s081",
+  "title": "Google マップでマイマップを作る",
+  "url": "https://www.google.com/maps/about/mymaps/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1685318400000,
+  "dateLastUsed": 1773360000000
+ },
+ {
+  "id": "s082",
+  "title": "ヨーロッパ鉄道パス Eurail",
+  "url": "https://www.eurail.com/ja",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1726099200000
+ },
+ {
+  "id": "s083",
+  "title": "御朱印めぐりの作法",
+  "url": "https://jinjahoncho.or.jp/goshuin/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1678665600000,
+  "dateLastUsed": 1741478400000
+ },
+ {
+  "id": "s084",
+  "title": "星がきれいに見える場所 星空指数",
+  "url": "https://tenki.jp/indexes/starry_sky/",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1756598400000,
+  "dateLastUsed": 1756684800000
+ },
+ {
+  "id": "s085",
+  "title": "パッキングリストのテンプレート",
+  "url": "https://www.notion.so/templates/packing-list",
+  "folderPath": [
+   "旅行"
+  ],
+  "dateAdded": 1767312000000,
+  "dateLastUsed": 1767398400000
+ },
+ {
+  "id": "s086",
+  "title": "Spotify Web Player",
+  "url": "https://open.spotify.com/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1738886400000
+ },
+ {
+  "id": "s087",
+  "title": "ギターコード辞典",
+  "url": "https://www.ufret.jp/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1716336000000,
+  "dateLastUsed": 1761436800000
+ },
+ {
+  "id": "s088",
+  "title": "音楽理論入門 — ダイアトニックコード",
+  "url": "https://soundquest.jp/quest/chord/diatonic/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1653868800000
+ },
+ {
+  "id": "s089",
+  "title": "DTM 初心者のためのミックス",
+  "url": "https://sleepfreaks-dtm.com/mixing/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1737244800000,
+  "dateLastUsed": 1760227200000
+ },
+ {
+  "id": "s090",
+  "title": "Ableton Live の使い方",
+  "url": "https://www.ableton.com/ja/live/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1746144000000,
+  "dateLastUsed": 1772150400000
+ },
+ {
+  "id": "s091",
+  "title": "フリー音源 DOVA-SYNDROME",
+  "url": "https://dova-s.jp/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1694649600000,
+  "dateLastUsed": 1746835200000
+ },
+ {
+  "id": "s092",
+  "title": "レコードの手入れと保管",
+  "url": "https://www.stereosound.co.jp/analog/care/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1734307200000
+ },
+ {
+  "id": "s093",
+  "title": "Bandcamp で音楽を買う",
+  "url": "https://bandcamp.com/",
+  "folderPath": [
+   "音楽"
+  ],
+  "dateAdded": 1661558400000,
+  "dateLastUsed": 1764979200000
+ },
+ {
+  "id": "s094",
+  "title": "新NISA の制度をまとめて理解する",
+  "url": "https://www.fsa.go.jp/policy/nisa2/about/index.html",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1741478400000
+ },
+ {
+  "id": "s095",
+  "title": "確定申告の手引き（国税庁）",
+  "url": "https://www.nta.go.jp/taxes/shiraberu/shinkoku/tebiki/index.htm",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1768262400000
+ },
+ {
+  "id": "s096",
+  "title": "ふるさと納税の仕組み",
+  "url": "https://www.furusato-tax.jp/about",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1664668800000,
+  "dateLastUsed": 1756771200000
+ },
+ {
+  "id": "s097",
+  "title": "インデックス投資の基本",
+  "url": "https://www.rakuten-sec.co.jp/web/learn/index_fund/",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1687132800000
+ },
+ {
+  "id": "s098",
+  "title": "家計簿アプリ マネーフォワード ME",
+  "url": "https://moneyforward.com/",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1722729600000,
+  "dateLastUsed": 1742601600000
+ },
+ {
+  "id": "s099",
+  "title": "個人事業主の開業届の出し方",
+  "url": "https://www.freee.co.jp/kb/kb-kaigyou/kaigyou-todoke/",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1752624000000
+ },
+ {
+  "id": "s100",
+  "title": "住宅ローン 金利の比較",
+  "url": "https://www.homes.co.jp/loan/",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1760659200000
+ },
+ {
+  "id": "s101",
+  "title": "年金の受け取り方を考える",
+  "url": "https://www.nenkin.go.jp/service/jukyu/",
+  "folderPath": [
+   "お金"
+  ],
+  "dateAdded": 1680739200000
+ },
+ {
+  "id": "s102",
+  "title": "腰痛を防ぐストレッチ",
+  "url": "https://www.tyojyu.or.jp/net/kenkou-tyoju/undou/stretch.html",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1666915200000,
+  "dateLastUsed": 1751068800000
+ },
+ {
+  "id": "s103",
+  "title": "睡眠の質を上げる 12 の指針",
+  "url": "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000047221.html",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1678060800000,
+  "dateLastUsed": 1771804800000
+ },
+ {
+  "id": "s104",
+  "title": "ランニング初心者の走り方",
+  "url": "https://runnet.jp/beginner/",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1709251200000,
+  "dateLastUsed": 1757203200000
+ },
+ {
+  "id": "s105",
+  "title": "筋トレのメニューの組み方",
+  "url": "https://www.myprotein.jp/thezone/training/workout-routine/",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1703289600000
+ },
+ {
+  "id": "s106",
+  "title": "デスクワークの姿勢を直す",
+  "url": "https://www.j-ohta.or.jp/posture/",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1652054400000
+ },
+ {
+  "id": "s107",
+  "title": "目の疲れをとる方法",
+  "url": "https://www.santen.co.jp/ja/healthcare/eye/eyecare/",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1739404800000,
+  "dateLastUsed": 1761004800000
+ },
+ {
+  "id": "s108",
+  "title": "献血の予約",
+  "url": "https://www.kenketsu.jp/",
+  "folderPath": [
+   "健康"
+  ],
+  "dateAdded": 1690588800000,
+  "dateLastUsed": 1749772800000
+ },
+ {
+  "id": "s109",
+  "title": "HHKB Professional HYBRID",
+  "url": "https://happyhackingkb.com/jp/products/hybrid/",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1736208000000,
+  "dateLastUsed": 1742860800000
+ },
+ {
+  "id": "s110",
+  "title": "自作キーボードの始め方",
+  "url": "https://salicylic-acid3.hatenablog.com/entry/keyboard-guide",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1725148800000
+ },
+ {
+  "id": "s111",
+  "title": "Raspberry Pi 5 のセットアップ",
+  "url": "https://www.raspberrypi.com/documentation/computers/getting-started.html",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1733961600000
+ },
+ {
+  "id": "s112",
+  "title": "M4 MacBook Pro レビュー",
+  "url": "https://www.itmedia.co.jp/pcuser/articles/2411/12/news100.html",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1721520000000,
+  "dateLastUsed": 1765497600000
+ },
+ {
+  "id": "s113",
+  "title": "電子ペーパー端末の比較",
+  "url": "https://www.gizmodo.jp/2024/06/eink-tablet-comparison.html",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1745884800000
+ },
+ {
+  "id": "s114",
+  "title": "モニターアームの選び方",
+  "url": "https://www.ergotron.com/ja-jp/monitor-arms",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1680480000000,
+  "dateLastUsed": 1762041600000
+ },
+ {
+  "id": "s115",
+  "title": "ノイズキャンセリングイヤホン比較",
+  "url": "https://kakaku.com/kaden/earphone/",
+  "folderPath": [
+   "ガジェット"
+  ],
+  "dateAdded": 1708473600000
+ },
+ {
+  "id": "s116",
+  "title": "Hacker News",
+  "url": "https://news.ycombinator.com/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1759881600000,
+  "dateLastUsed": 1771545600000
+ },
+ {
+  "id": "s117",
+  "title": "はてなブックマーク - テクノロジー",
+  "url": "https://b.hatena.ne.jp/hotentry/it",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1763942400000
+ },
+ {
+  "id": "s118",
+  "title": "ITmedia NEWS",
+  "url": "https://www.itmedia.co.jp/news/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1691452800000,
+  "dateLastUsed": 1746230400000
+ },
+ {
+  "id": "s119",
+  "title": "日経電子版",
+  "url": "https://www.nikkei.com/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1737504000000,
+  "dateLastUsed": 1744070400000
+ },
+ {
+  "id": "s120",
+  "title": "NHK ニュース",
+  "url": "https://www3.nhk.or.jp/news/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1763337600000,
+  "dateLastUsed": 1765584000000
+ },
+ {
+  "id": "s121",
+  "title": "TechCrunch",
+  "url": "https://techcrunch.com/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1764892800000,
+  "dateLastUsed": 1764979200000
+ },
+ {
+  "id": "s122",
+  "title": "宇宙開発ニュース sorae",
+  "url": "https://sorae.info/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1671408000000,
+  "dateLastUsed": 1749513600000
+ },
+ {
+  "id": "s123",
+  "title": "JAXA | 宇宙航空研究開発機構",
+  "url": "https://www.jaxa.jp/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1667260800000
+ },
+ {
+  "id": "s124",
+  "title": "NASA Astronomy Picture of the Day",
+  "url": "https://apod.nasa.gov/apod/astropix.html",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1645142400000,
+  "dateLastUsed": 1765584000000
+ },
+ {
+  "id": "s125",
+  "title": "ゼロから作る Deep Learning のノート",
+  "url": "https://zenn.dev/ganariya/articles/deep-learning-from-scratch",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1658275200000,
+  "dateLastUsed": 1769644800000
+ },
+ {
+  "id": "s126",
+  "title": "なぜ我々はスタンドアップをするのか",
+  "url": "https://martinfowler.com/articles/on-dailies.html",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1700956800000
+ },
+ {
+  "id": "s127",
+  "title": "京都の紅葉の名所 2025",
+  "url": "https://kyoto-design.jp/special/momiji",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1768435200000
+ },
+ {
+  "id": "s128",
+  "title": "ブラックホールの写真はどう撮られたか",
+  "url": "https://www.natureasia.com/ja-jp/ndigest/v16/n6/",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1702944000000,
+  "dateLastUsed": 1750896000000
+ },
+ {
+  "id": "s129",
+  "title": "料理がうまくなる人の共通点",
+  "url": "https://note.com/cooking_note/n/n123456789",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1745539200000,
+  "dateLastUsed": 1756512000000
+ },
+ {
+  "id": "s130",
+  "title": "個人開発で月 10 万円を目指す",
+  "url": "https://zenn.dev/hokuto/articles/indie-dev-revenue",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1694390400000,
+  "dateLastUsed": 1752278400000
+ },
+ {
+  "id": "s131",
+  "title": "フェルマー螺旋とひまわりの種",
+  "url": "https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A7%E3%83%AB%E3%83%9E%E3%83%BC%E8%9E%BA%E6%97%8B",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1722297600000,
+  "dateLastUsed": 1749340800000
+ },
+ {
+  "id": "s132",
+  "title": "星座の起源と歴史",
+  "url": "https://www.nao.ac.jp/astro/basic/constellation.html",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1712880000000,
+  "dateLastUsed": 1769472000000
+ },
+ {
+  "id": "s133",
+  "title": "積ん読の心理学",
+  "url": "https://gigazine.net/news/20240301-tsundoku/",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1680393600000,
+  "dateLastUsed": 1742169600000
+ },
+ {
+  "id": "s134",
+  "title": "英語の多読を続けるコツ",
+  "url": "https://note.com/english_reading/n/n987654321",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1677628800000,
+  "dateLastUsed": 1747180800000
+ },
+ {
+  "id": "s135",
+  "title": "投資を始める前に読む本 5 冊",
+  "url": "https://diamond.jp/articles/-/334455",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1745020800000
+ },
+ {
+  "id": "s136",
+  "title": "ポモドーロ・テクニックの実践",
+  "url": "https://francescocirillo.com/products/the-pomodoro-technique",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1662076800000
+ },
+ {
+  "id": "s137",
+  "title": "Google",
+  "url": "https://www.google.com/",
+  "folderPath": [],
+  "dateAdded": 1680998400000,
+  "dateLastUsed": 1747440000000
+ },
+ {
+  "id": "s138",
+  "title": "GitHub",
+  "url": "https://github.com/",
+  "folderPath": [],
+  "dateAdded": 1703462400000,
+  "dateLastUsed": 1746748800000
+ },
+ {
+  "id": "s139",
+  "title": "Gmail",
+  "url": "https://mail.google.com/",
+  "folderPath": [],
+  "dateAdded": 1700006400000,
+  "dateLastUsed": 1745884800000
+ },
+ {
+  "id": "s140",
+  "title": "YouTube",
+  "url": "https://www.youtube.com/",
+  "folderPath": [],
+  "dateAdded": 1701820800000
+ },
+ {
+  "id": "s141",
+  "title": "X",
+  "url": "https://x.com/home",
+  "folderPath": [],
+  "dateAdded": 1708041600000
+ },
+ {
+  "id": "s142",
+  "title": "Amazon.co.jp",
+  "url": "https://www.amazon.co.jp/",
+  "folderPath": [],
+  "dateAdded": 1670716800000,
+  "dateLastUsed": 1767225600000
+ },
+ {
+  "id": "s143",
+  "title": "Notion",
+  "url": "https://www.notion.so/",
+  "folderPath": [],
+  "dateAdded": 1715990400000,
+  "dateLastUsed": 1743811200000
+ },
+ {
+  "id": "s144",
+  "title": "DeepL 翻訳",
+  "url": "https://www.deepl.com/ja/translator",
+  "folderPath": [],
+  "dateAdded": 1726012800000,
+  "dateLastUsed": 1761609600000
+ },
+ {
+  "id": "s145",
+  "title": "Wikipedia 日本語版",
+  "url": "https://ja.wikipedia.org/",
+  "folderPath": [],
+  "dateAdded": 1746576000000,
+  "dateLastUsed": 1765411200000
+ },
+ {
+  "id": "s146",
+  "title": "天気予報 - tenki.jp",
+  "url": "https://tenki.jp/",
+  "folderPath": [],
+  "dateAdded": 1651017600000,
+  "dateLastUsed": 1766016000000
+ },
+ {
+  "id": "s147",
+  "title": "Google カレンダー",
+  "url": "https://calendar.google.com/",
+  "folderPath": [],
+  "dateAdded": 1736294400000
+ },
+ {
+  "id": "s148",
+  "title": "乗換案内 - Yahoo!路線情報",
+  "url": "https://transit.yahoo.co.jp/",
+  "folderPath": [],
+  "dateAdded": 1717459200000
+ },
+ {
+  "id": "s149",
+  "title": "すばる望遠鏡 - 国立天文台ハワイ観測所",
+  "url": "https://subarutelescope.org/jp/",
+  "folderPath": [
+   "ニュース"
+  ],
+  "dateAdded": 1745000000000,
+  "dateLastUsed": 1770000000000
+ },
+ {
+  "id": "s150",
+  "title": "最小全域木（プリム法）の解説",
+  "url": "https://qiita.com/drken/items/mst-prim",
+  "folderPath": [
+   "あとで読む"
+  ],
+  "dateAdded": 1750000000000
+ }
+]

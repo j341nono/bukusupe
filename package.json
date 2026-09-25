@@ -1,0 +1,24 @@
+{
+  "name": "bukusupe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome のブックマークを意味で並べた宇宙地図として見る拡張機能",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/gen-icons.mjs",
+    "check:ext": "node scripts/check-extension.mjs"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.28",
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  }
+}
