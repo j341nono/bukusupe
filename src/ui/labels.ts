@@ -67,6 +67,7 @@ export class LabelLayer {
   private hovered: string | null = null;
   onHover: ((key: string | null) => void) | null = null;
   onClick: ((key: string) => void) | null = null;
+  onClusterClick: ((cluster: number) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     container.addEventListener("mouseover", this.onOver);
@@ -156,7 +157,7 @@ export class LabelLayer {
       el.textContent = text;
       const orbit = item.searchRank == null ? "" : item.searchRank < 3 ? " label-orbit-inner"
         : item.searchRank < 9 ? " label-orbit-middle" : " label-orbit-outer";
-      el.className = `label label-${item.kind}${orbit}`;
+      el.className = `label label-${item.kind}${orbit}${item.kind === "cluster" && item.centered ? " label-cluster-focus" : ""}`;
       el.dataset.key = item.key;
       el.dataset.searchRank = item.searchRank == null ? "" : String(item.searchRank);
       el.dataset.cluster = item.cluster == null ? "" : String(item.cluster);
@@ -167,7 +168,7 @@ export class LabelLayer {
       el.style.boxSizing = item.searchRank == null ? "" : "border-box";
       el.style.setProperty("--cluster-color", item.color ?? "transparent");
       // 省略したものだけ、マウスを乗せたら全文を出す
-      el.style.pointerEvents = item.kind === "star" ? "auto" : "none";
+      el.style.pointerEvents = item.kind === "star" || item.centered ? "auto" : "none";
       el.style.transform = `translate3d(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px, 0)`;
       if (fresh) requestAnimationFrame(() => { if (this.active.some(({ item: active }) => active.key === item.key)) el.style.opacity = "1"; });
       else el.style.opacity = "1";
@@ -192,8 +193,10 @@ export class LabelLayer {
 
   private readonly onLabelClick = (e: MouseEvent) => {
     const el = e.target as HTMLElement;
-    if (el?.dataset?.kind !== "star" || !el.dataset.key) return;
-    this.onClick?.(el.dataset.key);
+    if (el?.dataset?.kind === "star" && el.dataset.key) this.onClick?.(el.dataset.key);
+    else if (el?.dataset?.kind === "cluster" && el.classList.contains("label-cluster-focus")) {
+      this.onClusterClick?.(Number(el.dataset.cluster));
+    }
   };
 
   private textWidth(text: string, size: number): number {

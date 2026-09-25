@@ -349,6 +349,39 @@ try {
     writeFileSync(path, Buffer.from(shot.data, "base64"));
     console.log("  画面:", path);
   }
+  await evalIn("globalThis.__bukusupe.setZoomTier('far')");
+  await sleep(900);
+  const focusBefore = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
+  const focusLabel = JSON.parse((await evalIn(`(() => {
+    const label = [...document.querySelectorAll('.label-cluster-focus')]
+      .find((el) => el.textContent === 'AI');
+    if (!label) return JSON.stringify({ index: -1, hit: false });
+    const rect = label.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    return JSON.stringify({ index: Number(label.dataset.cluster), x, y,
+      hit: document.elementFromPoint(x, y) === label });
+  })()`)) ?? "null");
+  if (focusLabel?.hit) {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: focusLabel.x, y: focusLabel.y }, sessionId);
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: focusLabel.x, y: focusLabel.y,
+      button: "left", buttons: 1, clickCount: 1 }, sessionId);
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: focusLabel.x, y: focusLabel.y,
+      button: "left", buttons: 0, clickCount: 1 }, sessionId);
+  }
+  await sleep(950);
+  const focusAfter = JSON.parse((await evalIn(`JSON.stringify({
+    camera: globalThis.__bukusupe.cameraState(),
+    starLabels: [...document.querySelectorAll('.label-star')]
+      .filter((el) => Number(getComputedStyle(el).opacity) > 0.9).length
+  })`)) ?? "null");
+  const focusedCluster = layout.clusters.find((cluster) => cluster.index === focusLabel?.index);
+  check(focusLabel?.hit && focusedCluster && focusBefore.tier === "far" && focusAfter.camera.tier !== "far" &&
+    focusAfter.camera.distance < focusBefore.distance &&
+    Math.hypot(focusAfter.camera.x - focusedCluster.x, focusAfter.camera.y - focusedCluster.y) < 0.1 &&
+    focusAfter.starLabels > 0,
+  "遠距離の星団名をクリックすると中心へ拡大し、星のタイトルが出る",
+  focusedCluster ? `${focusedCluster.name}: ${focusBefore.distance.toFixed(1)}→${focusAfter.camera.distance.toFixed(1)} / ${focusAfter.camera.tier}` : "星団名がない");
+  await evalIn("globalThis.__bukusupe.resetCamera()");
   await evalIn("globalThis.__bukusupe.setZoomTier('mid')");
 
   // --- M3: 検索の精度・時間・見た目 ---

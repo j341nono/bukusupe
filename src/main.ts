@@ -409,6 +409,8 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   },
 
   setZoomTier: (tier: ZoomTier) => view?.setZoomTier(tier),
+  cameraState: () => view?.cameraState(),
+  resetCamera: () => view?.resetCamera(),
   labelGeometry: () => view?.labelGeometry() ?? [],
   setTopDown: (on: boolean) => view?.setTopDown(on),
   relayout,

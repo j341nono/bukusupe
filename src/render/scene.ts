@@ -60,6 +60,8 @@ export class SpaceView {
   private tiltPointer: number | null = null;
   private tiltPointerY = 0;
   private tiltCapture: HTMLElement | null = null;
+  private focus: { from: THREE.Vector3; to: THREE.Vector3; fromDistance: number;
+    toDistance: number; elapsed: number } | null = null;
   private searchIds: string[] = [];
   private searchCenter = { x: 0, y: 0 };
   private searchUnit = 1;
@@ -108,6 +110,7 @@ export class SpaceView {
     this.controls.screenSpacePanning = false;
     this.controls.minDistance = 6;
     this.controls.maxDistance = 2000;
+    this.controls.addEventListener("start", () => { this.focus = null; });
     for (const surface of [canvas, labelContainer]) {
       surface.addEventListener("pointerdown", this.onTiltStart, true);
       surface.addEventListener("pointermove", this.onTiltMove, true);
@@ -177,6 +180,7 @@ export class SpaceView {
     this.labels = new LabelLayer(labelContainer);
     this.labels.onHover = (key) => this.hoverStar(key);
     this.labels.onClick = (key) => this.onStarLabelClick?.(key);
+    this.labels.onClusterClick = (cluster) => this.focusCluster(cluster);
 
     addEventListener("resize", this.resize);
     this.resize();
@@ -205,6 +209,7 @@ export class SpaceView {
 
   private readonly onTiltStart = (event: PointerEvent): void => {
     if (event.button !== 2) return;
+    this.focus = null;
     this.tiltPointer = event.pointerId;
     this.tiltPointerY = event.clientY;
     this.tiltCapture = event.currentTarget as HTMLElement;
@@ -303,6 +308,37 @@ export class SpaceView {
 
   cameraTilt(): number {
     return THREE.MathUtils.radToDeg(this.tilt);
+  }
+
+  cameraState(): { x: number; y: number; distance: number; tier: ZoomTier } {
+    return { x: this.controls.target.x, y: -this.controls.target.z,
+      distance: this.camera.position.distanceTo(this.controls.target), tier: this.zoomTier };
+  }
+
+  /** 遠距離の星団名から、その星団が画面に収まる距離へ寄る。 */
+  focusCluster(index: number): void {
+    if (this.searchIds.length || this.zoomTier !== "far") return;
+    const cluster = this.labelSource.clusters.find((row) => row.index === index && row.count > 0);
+    if (!cluster) return;
+    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const tanH = tanV * this.camera.aspect;
+    const distance = cluster.radius * (Math.sin(this.tilt) + Math.max(
+      Math.cos(this.tilt) / (0.72 * tanV), 1 / (0.75 * tanH),
+    ));
+    this.focus = {
+      from: this.controls.target.clone(),
+      to: new THREE.Vector3(cluster.x, 0, -cluster.y),
+      fromDistance: this.camera.position.distanceTo(this.controls.target),
+      toDistance: Math.max(this.controls.minDistance, distance),
+      elapsed: 0,
+    };
+  }
+
+  /** 確認用：星団へ寄った後に全体表示へ戻す。 */
+  resetCamera(): void {
+    this.focus = null;
+    this.frameAll();
+    this.labelsDirty = true;
   }
 
   pickStar(clientX: number, clientY: number): string | null {
@@ -406,6 +442,16 @@ export class SpaceView {
   private readonly tick = (): void => {
     this.frames++;
     const dt = Math.min(0.05, this.clock.getDelta());
+
+    if (this.focus) {
+      const focus = this.focus;
+      focus.elapsed = Math.min(0.65, focus.elapsed + dt);
+      const progress = focus.elapsed / 0.65;
+      const eased = progress * progress * (3 - 2 * progress);
+      this.controls.target.lerpVectors(focus.from, focus.to, eased);
+      this.setDistance(THREE.MathUtils.lerp(focus.fromDistance, focus.toDistance, eased));
+      if (progress === 1) this.focus = null;
+    }
 
     if (Math.abs(this.tilt - this.tiltTarget) > 1e-4) {
       const step = this.tiltSpeed * dt;
@@ -563,6 +609,7 @@ export class SpaceView {
         sx: at.sx,
         sy: at.sy,
         kind: "cluster",
+        cluster: c.index,
         priority: -1000 + (1000 - c.count),   // 大きい星団ほど先に置く
       });
     }
