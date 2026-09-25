@@ -1,8 +1,12 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import { pathWords } from "../embed/text";
 import { centerAndNormalize, dot } from "../layout/vector";
+import type { Layout } from "../layout";
 
 export const GENERALITY_PENALTY = 0.03;
+export const CLUSTER_PRIOR = 0.5;
+/** 1 位に比べてこの割合以上の星だけを軌道へ呼ぶ。 */
+export const ATTRACT_RATIO = 0.85;
 
 export type SearchHit = { id: string; title: string; score: number; lexical: number; semantic: number };
 
@@ -37,8 +41,12 @@ export function semanticScores(
   mean: Float32Array,
   generality: Map<string, number>,
   coefficient = GENERALITY_PENALTY,
+  layout?: Layout | null,
+  priorCoefficient = CLUSTER_PRIOR,
 ): Map<string, number> {
   const query = centerAndNormalize(queryVector, mean);
+  const clusterOf = new Map(layout?.stars.map((star) => [star.id, star.cluster]) ?? []);
+  const clusterPrior = new Map(layout?.clusters.map((cluster) => [cluster.index, dot(query, cluster.centroid)]) ?? []);
   const raw = items.flatMap((item) => {
     const vector = vectors.get(item.id);
     if (!vector) return [];
@@ -46,7 +54,8 @@ export function semanticScores(
     const penalty = coefficient * Math.max(0, generality.get(item.id) ?? 0);
     const weak = weakMetadata(item) ? 0.2 : 0;
     const landing = genericLandingPage(item) ? 0.16 : 0;
-    return [{ id: item.id, value: dot(query, centered) - penalty - weak - landing }];
+    const prior = priorCoefficient * Math.max(0, clusterPrior.get(clusterOf.get(item.id) ?? -1) ?? 0);
+    return [{ id: item.id, value: dot(query, centered) - penalty - weak - landing + prior }];
   });
   if (!raw.length) return new Map();
   const avg = raw.reduce((sum, row) => sum + row.value, 0) / raw.length;

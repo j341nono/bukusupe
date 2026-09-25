@@ -12,6 +12,7 @@ export type PlacedLabel = {
   cluster?: number;
   side?: "left" | "right";
   color?: string;
+  searchRank?: number;
 };
 
 export type Box = { l: number; t: number; r: number; b: number };
@@ -59,6 +60,7 @@ export class LabelLayer {
   private readonly measure = document.createElement("canvas").getContext("2d");
   private readonly fullText = new Map<string, string>();
   private hovered: string | null = null;
+  onHover: ((key: string | null) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     container.addEventListener("mouseover", this.onOver);
@@ -78,8 +80,10 @@ export class LabelLayer {
           ? truncate(full, MID_WIDTH)
           : full;
 
-      const size = FONT[item.kind];
-      const w = this.textWidth(shortened, size) + PADDING_X * 2 + (item.kind === "star" ? DOT_WIDTH : 0);
+      const size = item.searchRank == null ? FONT[item.kind]
+        : item.searchRank < 3 ? 14 : item.searchRank < 9 ? 12 : 10;
+      const w = this.textWidth(shortened, size) + PADDING_X * 2 + (item.kind === "star" ? DOT_WIDTH : 0)
+        + (item.searchRank == null ? 0 : 16);
       const h = size + 6;
       const t = item.sy - h / 2;
 
@@ -116,13 +120,19 @@ export class LabelLayer {
     shown.forEach(({ item, text, box }, i) => {
       const el = this.pool[i];
       el.textContent = text;
-      el.className = `label label-${item.kind}`;
+      const orbit = item.searchRank == null ? "" : item.searchRank < 3 ? " label-orbit-inner"
+        : item.searchRank < 9 ? " label-orbit-middle" : " label-orbit-outer";
+      el.className = `label label-${item.kind}${orbit}`;
       el.dataset.key = item.key;
+      el.dataset.searchRank = item.searchRank == null ? "" : String(item.searchRank);
       el.dataset.cluster = item.cluster == null ? "" : String(item.cluster);
       el.dataset.side = item.side ?? "";
+      el.style.textAlign = item.side === "left" ? "right" : "left";
+      el.style.width = item.searchRank == null ? "" : `${(box.r - box.l).toFixed(1)}px`;
+      el.style.boxSizing = item.searchRank == null ? "" : "border-box";
       el.style.setProperty("--cluster-color", item.color ?? "transparent");
       // 省略したものだけ、マウスを乗せたら全文を出す
-      el.style.pointerEvents = text === this.fullText.get(item.key) ? "none" : "auto";
+      el.style.pointerEvents = item.searchRank != null || text !== this.fullText.get(item.key) ? "auto" : "none";
       el.style.transform = `translate(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px)`;
       el.style.display = "block";
     });
@@ -130,14 +140,19 @@ export class LabelLayer {
   }
 
   private readonly onOver = (e: Event) => {
-    const key = (e.target as HTMLElement)?.dataset?.key;
+    const el = e.target as HTMLElement;
+    const key = el?.dataset?.key;
     if (!key) return;
     this.hovered = key;
-    (e.target as HTMLElement).textContent = this.fullText.get(key) ?? "";
+    this.onHover?.(key);
+    el.classList.add("is-hovered");
+    el.textContent = this.fullText.get(key) ?? "";
   };
 
-  private readonly onOut = () => {
+  private readonly onOut = (e: Event) => {
+    (e.target as HTMLElement).classList.remove("is-hovered");
     this.hovered = null;
+    this.onHover?.(null);
   };
 
   private textWidth(text: string, size: number): number {

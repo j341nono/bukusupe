@@ -55,11 +55,24 @@ export class SpaceView {
     new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({ color: 0x91baff, transparent: true, opacity: 0.32, depthWrite: false }),
   );
+  private readonly tails = new THREE.LineSegments(
+    new THREE.BufferGeometry(),
+    new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      vertexShader: `attribute float aAlpha; varying float vAlpha;
+        void main() { vAlpha = aAlpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `varying float vAlpha;
+        void main() { gl_FragColor = vec4(0.56, 0.73, 1.0, vAlpha); }`,
+    }),
+  );
   private readonly selectedHalo = new THREE.Mesh(
     new THREE.RingGeometry(0.35, 0.47, 32),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
   );
   private selectedId: string | null = null;
+  private hoveredId: string | null = null;
+  private fullTraceCount = 0;
+  private maxTailPixels = 0;
 
   /** 描画できたコマ数。計算中も画面が動いていることの確認に使う。 */
   frames = 0;
@@ -101,14 +114,20 @@ export class SpaceView {
     this.blackHole.visible = false;
     this.scene.add(this.blackHole);
     this.trace.visible = false;
-    this.trace.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(21 * 6), 3).setUsage(THREE.DynamicDrawUsage));
+    this.trace.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(2 * 6), 3).setUsage(THREE.DynamicDrawUsage));
     this.trace.geometry.setDrawRange(0, 0);
     this.scene.add(this.trace);
+    this.tails.visible = false;
+    this.tails.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(21 * 8 * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    this.tails.geometry.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(21 * 8), 1).setUsage(THREE.DynamicDrawUsage));
+    this.tails.geometry.setDrawRange(0, 0);
+    this.scene.add(this.tails);
     this.selectedHalo.rotation.x = -Math.PI / 2;
     this.selectedHalo.visible = false;
     this.scene.add(this.selectedHalo);
 
     this.labels = new LabelLayer(labelContainer);
+    this.labels.onHover = (key) => this.hoverStar(key);
 
     addEventListener("resize", this.resize);
     this.resize();
@@ -150,12 +169,29 @@ export class SpaceView {
     this.blackHole.position.set(at.x, 0, at.z);
     this.blackHole.scale.setScalar(unit);
     this.trace.visible = this.searchIds.length > 0;
+    this.tails.visible = this.searchIds.length > 0;
+    this.hoveredId = null;
     this.labelTimer = 0;
   }
 
   selectSearch(id: string | null): void {
     this.selectedId = id;
     this.selectedHalo.visible = !!id;
+  }
+
+  hoverStar(id: string | null): void {
+    this.hoveredId = id && this.searchIds.includes(id) ? id : null;
+  }
+
+  traceGeometry(): { tails: number; fullLines: number; maxTailPixels: number; startAlpha: number; endAlpha: number } {
+    const values = this.tails.geometry.getAttribute("aAlpha").array as Float32Array;
+    return {
+      tails: this.searchIds.length,
+      fullLines: this.fullTraceCount,
+      maxTailPixels: this.maxTailPixels,
+      startAlpha: values[0] ?? 0,
+      endAlpha: values[7] ?? 0,
+    };
   }
 
   searchGeometry(): { center: { x: number; y: number }; unit: number; stars: { id: string; x: number; y: number }[] } {
@@ -179,6 +215,10 @@ export class SpaceView {
 
   starPosition(id: string): { x: number; y: number } | null {
     return this.field.displayPosition(id);
+  }
+
+  starVisual(id: string): { size: number; alpha: number } | null {
+    return this.field.visual(id);
   }
 
   cameraTilt(): number {
@@ -293,16 +333,55 @@ export class SpaceView {
 
     this.field.update(dt);
     if (this.searchIds.length) {
-      const position = this.trace.geometry.getAttribute("position") as THREE.BufferAttribute;
-      const values = position.array as Float32Array;
+      const tailPosition = this.tails.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const tailAlpha = this.tails.geometry.getAttribute("aAlpha") as THREE.BufferAttribute;
+      const tailValues = tailPosition.array as Float32Array;
+      const tailAlphas = tailAlpha.array as Float32Array;
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.maxTailPixels = 0;
       this.searchIds.forEach((id, i) => {
         const home = this.field.placed.find((star) => star.id === id);
         const current = this.field.displayPosition(id);
         if (!home || !current) return;
-        values.set([home.x, 0.02, -home.y, current.x, 0.02, -current.y], i * 6);
+        const a = new THREE.Vector3(current.x, 0, -current.y).project(this.camera);
+        const b = new THREE.Vector3(home.x, 0, -home.y).project(this.camera);
+        const distance = Math.hypot((a.x - b.x) * size.x / 2, (a.y - b.y) * size.y / 2);
+        const fraction = distance > 0 ? Math.min(1, 40 / distance) : 0;
+        this.maxTailPixels = Math.max(this.maxTailPixels, distance * fraction);
+        for (let j = 0; j < 4; j++) {
+          for (let end = 0; end < 2; end++) {
+            const step = (j + end) / 4;
+            const t = step * fraction;
+            const index = i * 8 + j * 2 + end;
+            tailValues.set([
+              current.x + (home.x - current.x) * t, 0.05,
+              -(current.y + (home.y - current.y) * t),
+            ], index * 3);
+            tailAlphas[index] = 0.48 * (1 - step) ** 2;
+          }
+        }
       });
+      tailPosition.needsUpdate = true;
+      tailAlpha.needsUpdate = true;
+      this.tails.geometry.setDrawRange(0, this.searchIds.length * 8);
+      const position = this.trace.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const values = position.array as Float32Array;
+      const highlighted = [...new Set([this.selectedId, this.hoveredId])]
+        .filter((id): id is string => !!id && this.searchIds.includes(id));
+      this.fullTraceCount = 0;
+      for (const id of highlighted) {
+        const home = this.field.placed.find((star) => star.id === id);
+        const current = this.field.displayPosition(id);
+        if (!home || !current) continue;
+        values.set([home.x, 0.03, -home.y, current.x, 0.03, -current.y], this.fullTraceCount * 6);
+        this.fullTraceCount++;
+      }
       position.needsUpdate = true;
-      this.trace.geometry.setDrawRange(0, this.searchIds.length * 2);
+      this.trace.geometry.setDrawRange(0, this.fullTraceCount * 2);
+      this.trace.visible = this.fullTraceCount > 0;
+    } else {
+      this.fullTraceCount = 0;
+      this.maxTailPixels = 0;
     }
     if (this.selectedId) {
       const p = this.field.displayPosition(this.selectedId);
@@ -384,6 +463,7 @@ export class SpaceView {
           sy: this.searchIds.length ? at.sy + (at.sy - size.y / 2) / outward * 10 : at.sy,
           kind: "star",
           priority: this.searchIds.length ? (searchRank.get(s.id) ?? 99) - 100 : s.rank,
+          searchRank: this.searchIds.length ? searchRank.get(s.id) : undefined,
           cluster: s.cluster,
           side: this.searchIds.length ? (at.sx >= size.x / 2 ? "right" : "left") : !own || s.x >= own.x ? "right" : "left",
           color: clusterColor(s.cluster).getStyle(),

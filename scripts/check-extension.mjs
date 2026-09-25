@@ -321,27 +321,37 @@ try {
   ];
   const repeated = new Map();
   const report = [];
+  const attractRatio = await evalIn("globalThis.__bukusupe.attractRatio");
   console.log("  M3 検索（上位 5 件 / 期待件数）:");
   for (const [query, expected] of cases) {
     const result = JSON.parse((await evalIn(`(async () => {
       const start = performance.now();
-      const hits = await globalThis.__bukusupe.search(${JSON.stringify(query)}, 10);
+      const hits = await globalThis.__bukusupe.search(${JSON.stringify(query)}, 30);
       return JSON.stringify({ hits, ms: performance.now() - start });
     })()`)) ?? "null");
     const top5 = result?.hits?.slice(0, 5) ?? [];
     const count = top5.filter(expected).length;
+    const baseline = JSON.parse((await evalIn(`(async () => JSON.stringify(await globalThis.__bukusupe.search(${JSON.stringify(query)}, 5, 0.03, 0)))()`)) ?? "[]");
+    const previous = baseline.filter(expected).length;
+    const attracted = result?.hits?.filter((r) => r.score >= result.hits[0].score * attractRatio).slice(0, 21).length ?? 0;
     for (const hit of top5) repeated.set(hit.id, { title: hit.title, n: (repeated.get(hit.id)?.n ?? 0) + 1 });
-    report.push({ query, expected: count, ms: result?.ms ?? Infinity, titles: top5.map((r) => r.title) });
-    console.log(`    ${query}: ${count}/5, ${result?.ms?.toFixed(0)}ms — ${top5.map((r) => r.title).join(" / ")}`);
+    report.push({ query, previous, expected: count, attracted, ms: result?.ms ?? Infinity, titles: top5.map((r) => r.title) });
+    console.log(`    ${query}: ${previous}→${count}/5, 引き寄せ ${attracted} 件, ${result?.ms?.toFixed(0)}ms — ${top5.map((r) => r.title).join(" / ")}`);
   }
   const frequent = [...repeated.values()].filter((r) => r.n >= 4);
   console.log("  4 回以上出る星:", frequent.length ? frequent.map((r) => `${r.title}(${r.n})`).join(" / ") : "なし");
   writeFileSync("docs/screens/search-results.json", JSON.stringify({
     generalityCoefficient: await evalIn("globalThis.__bukusupe.searchCoefficient"),
-    queries: report.map(({ query, expected, titles }) => ({ query, expected, top5: titles })),
+    clusterPriorCoefficient: await evalIn("globalThis.__bukusupe.clusterPriorCoefficient"),
+    attractRatio: await evalIn("globalThis.__bukusupe.attractRatio"),
+    queries: report.map(({ query, previous, expected, attracted, titles }) => ({ query, previous, expected, attracted, top5: titles })),
     repeatedAtLeastFour: frequent,
   }, null, 2) + "\n");
   check(report.every((r) => r.expected >= 1), "全検索語で期待分野の星が上位 5 件に入る");
+  check(report.every((r) => r.expected >= r.previous), "星団の事前確率で既存 9 語の期待件数が悪化しない",
+    `${report.reduce((sum, r) => sum + r.previous, 0)}→${report.reduce((sum, r) => sum + r.expected, 0)}/45`);
+  check(report.some((r) => r.attracted < 21) && report.every((r) => r.attracted > 0 && r.attracted <= 21),
+    "引き寄せる数がスコア比率で変わる", report.map((r) => r.attracted).join(" / "));
   check(frequent.length === 0, "上位 5 件に 4 回以上出る汎用的な星がない");
   const universe10 = JSON.parse((await evalIn(`(async () => JSON.stringify(await globalThis.__bukusupe.search('宇宙を感じたい', 10)))()`)) ?? "[]");
   const genericSpace = universe10.filter((r) => ["YouTube", "X", "Amazon.co.jp"].includes(r.title));
@@ -364,9 +374,49 @@ try {
   await sleep(1400);
   const searchGeometry = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.searchGeometry())")) ?? "null");
   const radii = searchGeometry.stars.map((s) => Math.hypot(s.x - searchGeometry.center.x, s.y - searchGeometry.center.y) / searchGeometry.unit);
-  check(searchGeometry.stars.length === 21 && radii.every((r, i) =>
+  check(searchGeometry.stars.length === report[0].attracted && radii.every((r, i) =>
     Math.abs(r - (i < 3 ? 1 : i < 9 ? 1.75 : 2.55)) < 0.15),
-  "上位 21 件が 3 / 6 / 12 の軌道へ並ぶ", `${searchGeometry.stars.length} 件`);
+  "しきい値以上の星だけが 3 / 6 / 12 の軌道へ並ぶ", `${searchGeometry.stars.length} 件`);
+  const traceBase = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.traceGeometry())")) ?? "null");
+  check(traceBase.tails === searchGeometry.stars.length && traceBase.fullLines === 1 &&
+    traceBase.maxTailPixels <= 41 && traceBase.startAlpha > traceBase.endAlpha,
+    "短い尾だけを常時表示し、全体線は選択中の星だけ", JSON.stringify(traceBase));
+  const visuals = JSON.parse((await evalIn(`JSON.stringify([0, 3, 9].map((rank) =>
+    globalThis.__bukusupe.starVisual(globalThis.__bukusupe.searchState().ids[rank])))`)) ?? "[]");
+  check(visuals.every(Boolean) && visuals[0].size > visuals[1].size && visuals[1].size > visuals[2].size &&
+    visuals[0].alpha > visuals[1].alpha && visuals[1].alpha > visuals[2].alpha,
+    "内側ほど星が大きく明るい", JSON.stringify(visuals));
+  const labels = JSON.parse((await evalIn(`JSON.stringify([...document.querySelectorAll('.label-star')]
+    .filter((el) => getComputedStyle(el).display !== 'none' && el.dataset.searchRank !== '')
+    .map((el) => { const rect = el.getBoundingClientRect();
+      return { rank: Number(el.dataset.searchRank), side: el.dataset.side,
+        l: rect.left, r: rect.right, t: rect.top, b: rect.bottom,
+        font: parseFloat(getComputedStyle(el).fontSize),
+        star: globalThis.__bukusupe.starScreen(el.dataset.key) }; }))`)) ?? "[]");
+  const aligned = labels.every((label) => label.side === "right"
+    ? label.l > label.star.x : label.r < label.star.x);
+  const separate = labels.every((a, i) => labels.every((b, j) => i === j ||
+    a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t));
+  const inner = labels.filter((label) => label.rank < 3);
+  const outer = labels.find((label) => label.rank >= 9);
+  check(inner.length === Math.min(3, searchGeometry.stars.length) && !!outer &&
+    inner.every((label) => label.font > outer.font) && aligned && separate,
+    "タイトルは外向きで重ならず、内側を優先して大きく表示",
+    `${labels.length} 件表示、内側 ${inner.length}、外側 ${outer?.font ?? '-'}px、向き ${aligned}、重なりなし ${separate}`);
+  if (!aligned) console.log("  タイトル向きの不一致:", labels.filter((label) => label.side === "right" ? label.l <= label.star.x : label.r >= label.star.x));
+  check(await evalIn(`(() => { const el = document.querySelector('.label-orbit-outer');
+    if (!el) return false; el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    const highlighted = el.classList.contains('is-hovered');
+    el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    return highlighted; })()`), "外側のタイトルはマウスを乗せると明るくなる");
+  const secondId = searchGeometry.stars[1]?.id;
+  await evalIn(`(() => { const p = globalThis.__bukusupe.starScreen(${JSON.stringify(secondId)});
+    document.getElementById('space').dispatchEvent(new MouseEvent('mousemove', { clientX: p.x, clientY: p.y, bubbles: true })); })()`);
+  await sleep(180);
+  check((await evalIn("globalThis.__bukusupe.traceGeometry().fullLines")) === 2,
+    "マウスを乗せた星だけ元位置までの線が増える");
+  await evalIn("document.getElementById('space').dispatchEvent(new MouseEvent('mouseleave'))");
+  await sleep(180);
   check((await evalIn("globalThis.__bukusupe.cameraTilt()")) < 1,
     "入力欄のフォーカスでカメラが真上になる");
   check(JSON.stringify(layout.stars) === JSON.stringify(JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.layout())")) ?? "null").stars),

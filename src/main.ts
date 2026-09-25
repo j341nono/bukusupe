@@ -13,7 +13,7 @@ import {
 } from "./layout";
 import { provisionalLayout } from "./layout/provisional";
 import { clusterNames } from "./layout/names";
-import { GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
+import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
 import { readMeta, writeMeta } from "./store/db";
@@ -195,10 +195,12 @@ function show(layout: Layout, frame = true): void {
   }
 }
 
-async function searchResults(text: string, coefficient = GENERALITY_PENALTY): Promise<SearchHit[]> {
+async function searchResults(text: string, coefficient = GENERALITY_PENALTY,
+  priorCoefficient = CLUSTER_PRIOR): Promise<SearchHit[]> {
   if (!embedder || !state.mean || text.trim().length < 2) return rankSearch(state.items, text);
   const [query] = await embedder.embed([queryText(text)]);
-  const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality, coefficient);
+  const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality,
+    coefficient, state.layout, priorCoefficient);
   return rankSearch(state.items, text, semantic);
 }
 
@@ -221,7 +223,8 @@ function showCard(id: string): void {
 }
 
 function applySearch(next: SearchHit[]): void {
-  hits = next.slice(0, 21);
+  const threshold = (next[0]?.score ?? 0) * ATTRACT_RATIO;
+  hits = next.filter((hit) => hit.score >= threshold).slice(0, 21);
   selectedIndex = 0;
   view?.setSearch(hits.map((hit) => hit.id));
   view?.selectSearch(hits[0]?.id ?? null);
@@ -273,6 +276,8 @@ function setupSearch(canvas: HTMLCanvasElement): void {
     if (id) showCard(id);
     else card.hidden = true;
   });
+  canvas.addEventListener("mousemove", (event) => view?.hoverStar(view.pickStar(event.clientX, event.clientY)));
+  canvas.addEventListener("mouseleave", () => view?.hoverStar(null));
   canvas.addEventListener("dblclick", (event) => {
     const id = view?.pickStar(event.clientX, event.clientY);
     if (id) openBookmark(id);
@@ -407,8 +412,8 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   setTopDown: (on: boolean) => view?.setTopDown(on),
   relayout,
 
-  async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY) {
-    const ranked = await searchResults(text, coefficient);
+  async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY, priorCoefficient = CLUSTER_PRIOR) {
+    const ranked = await searchResults(text, coefficient, priorCoefficient);
     const byId = new Map(state.items.map((i) => [i.id, i]));
     const clusterOf = new Map((state.layout?.stars ?? []).map((s) => [s.id, s.cluster]));
     const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, c.name]));
@@ -432,9 +437,13 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   },
   searchState: () => ({ ids: hits.map((hit) => hit.id), selected: hits[selectedIndex]?.id ?? null }),
   searchCoefficient: GENERALITY_PENALTY,
+  clusterPriorCoefficient: CLUSTER_PRIOR,
+  attractRatio: ATTRACT_RATIO,
   searchGeometry: () => view?.searchGeometry(),
   starScreen: (id: string) => view?.starScreen(id),
   starPosition: (id: string) => view?.starPosition(id),
+  starVisual: (id: string) => view?.starVisual(id),
+  traceGeometry: () => view?.traceGeometry(),
   cameraTilt: () => view?.cameraTilt(),
   measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
 };

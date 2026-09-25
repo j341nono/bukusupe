@@ -74,6 +74,9 @@ export class StarField {
   private index = new Map<string, number>();
   private position!: THREE.BufferAttribute;
   private alphaAttr!: THREE.BufferAttribute;
+  private sizeAttr!: THREE.BufferAttribute;
+  private baseSize = new Float32Array(0);
+  private searchSize = new Float32Array(0);
   private from = new Float32Array(0);
   private to = new Float32Array(0);
   private bornAt = new Float32Array(0);
@@ -122,6 +125,8 @@ export class StarField {
     this.searchX = new Float32Array(n);
     this.searchY = new Float32Array(n);
     this.searchAlpha = new Float32Array(n);
+    this.baseSize = new Float32Array(n);
+    this.searchSize = new Float32Array(n);
     this.index = new Map();
 
     const c = new THREE.Color();
@@ -146,6 +151,7 @@ export class StarField {
       // 螺旋の内側（その星団らしい星）ほど少し大きく、少し明るく
       const lead = 1 / (1 + s.rank * 0.5);
       size[i] = (0.95 + s.brightness * 1.25) * (1 + lead * 0.45);
+      this.baseSize[i] = this.searchSize[i] = size[i];
       c.copy(clusterColor(s.cluster, 0.72 + s.brightness * 0.2));
       color[i * 3] = c.r;
       color[i * 3 + 1] = c.g;
@@ -168,8 +174,9 @@ export class StarField {
     this.geom = new THREE.BufferGeometry();
     this.position = new THREE.BufferAttribute(pos, 3);
     this.alphaAttr = new THREE.BufferAttribute(alpha, 1);
+    this.sizeAttr = new THREE.BufferAttribute(size, 1);
     this.geom.setAttribute("position", this.position);
-    this.geom.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+    this.geom.setAttribute("aSize", this.sizeAttr);
     this.geom.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
     this.geom.setAttribute("aAlpha", this.alphaAttr);
     this.object.geometry = this.geom;
@@ -185,6 +192,7 @@ export class StarField {
         this.searchX[i] = star.x;
         this.searchY[i] = star.y;
         this.searchAlpha[i] = this.searching ? this.targetAlpha[i] * 0.25 : this.targetAlpha[i];
+        this.searchSize[i] = this.baseSize[i];
         return;
       }
       const ring = r < 3 ? 0 : r < 9 ? 1 : 2;
@@ -194,13 +202,23 @@ export class StarField {
       const radius = [1, 1.75, 2.55][ring] * unit;
       this.searchX[i] = center.x + Math.cos(angle) * radius;
       this.searchY[i] = center.y + Math.sin(angle) * radius;
-      this.searchAlpha[i] = 1;
+      this.searchAlpha[i] = [1, 0.78, 0.55][ring];
+      this.searchSize[i] = [3.4, 2.5, 1.7][ring];
     });
   }
 
   displayPosition(id: string): { x: number; y: number } | null {
     const i = this.index.get(id);
     return i == null ? null : { x: this.springX[i], y: this.springY[i] };
+  }
+
+  visual(id: string): { size: number; alpha: number } | null {
+    const i = this.index.get(id);
+    if (i == null) return null;
+    return {
+      size: (this.sizeAttr.array as Float32Array)[i],
+      alpha: (this.alphaAttr.array as Float32Array)[i],
+    };
   }
 
   update(dt: number): void {
@@ -261,6 +279,13 @@ export class StarField {
         alpha[i] += (this.searchAlpha[i] - alpha[i]) * Math.min(1, dt * 12);
       }
       this.alphaAttr.needsUpdate = true;
+    }
+    const sizes = this.sizeAttr.array as Float32Array;
+    if (this.stars.some((_, i) => Math.abs(sizes[i] - this.searchSize[i]) > 0.001)) {
+      for (let i = 0; i < this.stars.length; i++) {
+        sizes[i] += (this.searchSize[i] - sizes[i]) * Math.min(1, dt * 12);
+      }
+      this.sizeAttr.needsUpdate = true;
     }
   }
 
