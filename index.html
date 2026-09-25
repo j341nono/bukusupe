@@ -122,8 +122,8 @@
         letter-spacing: 0.12em;
         color: rgba(222, 230, 255, 0.92);
       }
-      .label-cluster-focus { cursor: zoom-in; }
-      .label-cluster-focus:hover { color: #fff; }
+      .label-cluster-focus { cursor: pointer; }
+      .label-cluster-focus:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
       .label-star {
         font-size: 11px;
         letter-spacing: 0.02em;
@@ -302,7 +302,7 @@
     <div id="hud"></div>
     <button id="relayout" title="星団から並べ直す">再配置</button>
     <div id="loading">星を数えている…</div>
-    <div id="hint">左ドラッグで移動・右ドラッグで傾き変更・ホイールで拡大縮小</div>
+    <div id="hint">左ドラッグ・W A S D で移動　右ドラッグで傾き　ホイール・Space（縮小）・Shift（拡大）　星団名をクリックで移動　/ で検索</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

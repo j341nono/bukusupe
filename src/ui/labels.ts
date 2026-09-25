@@ -17,6 +17,8 @@ export type PlacedLabel = {
   x: number;
   y: number;
   centered?: boolean;
+  /** 星座を強調しているとき、星座以外のタイトルを暗くする */
+  dim?: boolean;
 };
 
 export type Box = { l: number; t: number; r: number; b: number };
@@ -107,7 +109,8 @@ export class LabelLayer {
             : { l: item.sx + OFFSET_X, t, r: item.sx + OFFSET_X + w, b: t + h };
 
       if (labelBoxes.some((p) => overlaps(p, box))) continue;
-      if (item.kind === "star" && circles.some((c) => c.cluster !== item.cluster && entersCircle(box, c))) continue;
+      if (item.kind === "star" && item.priority > -3000 &&
+        circles.some((c) => c.cluster !== item.cluster && entersCircle(box, c))) continue;
 
       labelBoxes.push(box);
       shown.push({ item, text: shortened, box });
@@ -161,7 +164,9 @@ export class LabelLayer {
       el.textContent = text;
       const orbit = item.searchRank == null ? "" : item.searchRank < 3 ? " label-orbit-inner"
         : item.searchRank < 9 ? " label-orbit-middle" : " label-orbit-outer";
-      el.className = `label label-${item.kind}${orbit}${item.kind === "cluster" && item.centered ? " label-cluster-focus" : ""}`;
+      // 星団名はどの拡大率でもクリックでその星団へ移れる
+      el.className = `label label-${item.kind}${orbit}${item.kind === "cluster" ? " label-cluster-focus" : ""}` +
+        `${item.dim ? " label-dim" : ""}`;
       el.dataset.key = item.key;
       el.dataset.searchRank = item.searchRank == null ? "" : String(item.searchRank);
       el.dataset.cluster = item.cluster == null ? "" : String(item.cluster);
@@ -172,10 +177,11 @@ export class LabelLayer {
       el.style.boxSizing = item.searchRank == null ? "" : "border-box";
       el.style.setProperty("--cluster-color", item.color ?? "transparent");
       // 省略したものだけ、マウスを乗せたら全文を出す
-      el.style.pointerEvents = item.kind === "star" || item.centered ? "auto" : "none";
+      el.style.pointerEvents = "auto";
       el.style.transform = `translate3d(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px, 0)`;
-      if (fresh) requestAnimationFrame(() => { if (this.active.some(({ item: active }) => active.key === item.key)) el.style.opacity = "1"; });
-      else el.style.opacity = "1";
+      const opacity = item.dim ? "0.3" : "1";
+      if (fresh) requestAnimationFrame(() => { if (this.active.some(({ item: active }) => active.key === item.key)) el.style.opacity = opacity; });
+      else el.style.opacity = opacity;
     });
   }
 

@@ -4,13 +4,33 @@ import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
-import { StarField, clusterColor, createBackdrop, type RenderStar } from "./stars";
+import { StarField, clusterColor, createBackdrop, type EmphasisMode, type RenderStar } from "./stars";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
 
 /** 静止時のカメラの傾き（真上から 40 度。SPEC 7 章） */
 const TILT = THREE.MathUtils.degToRad(40);
-const MAX_TILT = THREE.MathUtils.degToRad(65);
+/** 右ドラッグで変えられる傾きの上限（真上から 60 度。水平方向には回さない） */
+const MAX_TILT = THREE.MathUtils.degToRad(60);
+/** 星団名・星座へのカメラ移動にかける時間 */
+const CLUSTER_FOCUS_SECONDS = 0.6;
+/** 「中距離」の代表の距離（地図全体が収まる距離に対する割合） */
+const MID_DISTANCE = 0.85;
+const POINTS_FOCUS_SECONDS = 0.65;
+/** キー操作の移動の速さ（1 秒あたり、カメラ距離に対する割合）と、ズームの速さ */
+const KEY_PAN_SPEED = 0.8;
+const KEY_ZOOM_RATE = 1.1;
+/** 動き出しと止まりの加速・減速のなめらかさ（大きいほど速く目標の速さに着く） */
+const KEY_EASE = 9;
+const MOVE_KEYS: Record<string, [number, number]> = {
+  KeyW: [0, 1], KeyS: [0, -1], KeyA: [-1, 0], KeyD: [1, 0],
+};
+
+/** 文字を打っている最中か（キー操作を無効にする） */
+function typing(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  return !!el && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable);
+}
 /** 傾き⇄真上の切り替えにかける時間（SPEC 7 章） */
 const TURN_SECONDS = 0.6;
 
@@ -64,7 +84,13 @@ export class SpaceView {
   private tiltPointerY = 0;
   private tiltCapture: HTMLElement | null = null;
   private focus: { from: THREE.Vector3; to: THREE.Vector3; fromDistance: number;
-    toDistance: number; elapsed: number } | null = null;
+    toDistance: number; elapsed: number; duration: number } | null = null;
+  private readonly keys = new Set<string>();
+  private readonly keyPan = new THREE.Vector2();
+  private keyZoom = 0;
+  private editIds: string[] = [];
+  private emphasisIds = new Set<string>();
+  private emphasisMode: EmphasisMode = "none";
   private searchIds: string[] = [];
   private searchCenter = { x: 0, y: 0 };
   private searchUnit = 1;
@@ -191,11 +217,63 @@ export class SpaceView {
     this.labels.onClusterClick = (cluster) => this.focusCluster(cluster);
 
     addEventListener("resize", this.resize);
+    addEventListener("keydown", this.onKeyDown);
+    addEventListener("keyup", this.onKeyUp);
+    // ウィンドウからフォーカスが外れたら、押したままの状態をすべて解除する
+    addEventListener("blur", this.releaseKeys);
+    document.addEventListener("visibilitychange", this.releaseKeys);
     this.resize();
+  }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (typing() || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.code in MOVE_KEYS) this.keys.add(event.code);
+    else if (event.code === "Space") {
+      this.keys.add("Space");
+      event.preventDefault();   // ページのスクロールや、フォーカス中のボタンの押下を止める
+    } else if (event.key === "Shift") this.keys.add("Shift");
+  };
+
+  private readonly onKeyUp = (event: KeyboardEvent): void => {
+    if (event.code in MOVE_KEYS) this.keys.delete(event.code);
+    else if (event.code === "Space") { this.keys.delete("Space"); event.preventDefault(); }
+    else if (event.key === "Shift") this.keys.delete("Shift");
+  };
+
+  private readonly releaseKeys = (): void => { this.keys.clear(); };
+
+  /** W・A・S・D で移動、Space で縮小、Shift で拡大。押している間は連続で、始まりと終わりはなめらかに。 */
+  private applyKeys(dt: number): void {
+    if (typing()) this.keys.clear();
+    const dir = new THREE.Vector2();
+    for (const code of this.keys) {
+      const d = MOVE_KEYS[code];
+      if (d) dir.add(new THREE.Vector2(d[0], d[1]));
+    }
+    if (dir.lengthSq() > 0) dir.normalize();   // 斜めでも同じ速さ
+    const distance = this.camera.position.distanceTo(this.controls.target);
+    const ease = 1 - Math.exp(-dt * KEY_EASE);
+    this.keyPan.lerp(dir.multiplyScalar(distance * KEY_PAN_SPEED), ease);
+    const zoomWant = (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") ? 1 : 0);
+    this.keyZoom += (zoomWant * KEY_ZOOM_RATE - this.keyZoom) * ease;
+
+    const panning = this.keyPan.length() > distance * 0.002;
+    const zooming = Math.abs(this.keyZoom) > 0.002;
+    if (!panning) this.keyPan.set(0, 0);
+    if (!zooming) this.keyZoom = 0;
+    if (!panning && !zooming) return;
+    this.focus = null;
+    // 画面の上＝地図の +y（three の -z）。水平方向の回転はしないので、画面の向きと地図の向きは常に同じ
+    this.controls.target.x += this.keyPan.x * dt;
+    this.controls.target.z -= this.keyPan.y * dt;
+    const next = THREE.MathUtils.clamp(distance * Math.exp(this.keyZoom * dt),
+      this.controls.minDistance, this.controls.maxDistance);
+    this.setDistance(next);
   }
 
   setLayout(layout: Layout, stars: RenderStar[], source: LabelSource, frame = true): void {
     this.field.setStars(stars);
+    this.field.setEmphasis([...this.emphasisIds], this.emphasisMode);
     this.nebulae.set(
       source.clusters
         .filter((c) => c.count > 0)
@@ -209,13 +287,35 @@ export class SpaceView {
     this.labelsDirty = true;
   }
 
-  setConstellations(rows: DrawnConstellation[]): void { this.constellations.set(rows); }
+  setConstellations(rows: DrawnConstellation[]): void {
+    this.constellations.set(rows);
+    this.refreshEmphasis();
+  }
 
-  setEditMembers(points: ConstellationPoint[]): void { this.constellations.editMembers(points); }
+  setEditMembers(points: ConstellationPoint[]): void {
+    this.editIds = points.map((point) => point.id);
+    this.refreshEmphasis();
+  }
+
+  /** 星座の星を強調し、小さな輪を付け、タイトルを優先する。 */
+  private refreshEmphasis(): void {
+    const selected = this.constellationNameId ? this.constellations.points(this.constellationNameId) : [];
+    const mode: EmphasisMode = this.editIds.length ? "edit" : selected.length ? "selected" : "none";
+    const ids = mode === "edit" ? this.editIds : selected.map((point) => point.id);
+    this.emphasisIds = new Set(ids);
+    this.emphasisMode = mode;
+    this.field.setEmphasis(ids, mode);
+    this.constellations.editMembers(ids.flatMap((id) => {
+      const p = this.field.displayPosition(id);
+      return p ? [{ id, ...p }] : [];
+    }), mode === "edit");
+    this.labelsDirty = true;
+  }
 
   selectConstellation(id: string | null, name = ""): void {
     this.constellations.select(id);
     this.constellationNameId = id;
+    this.refreshEmphasis();
     this.constellationNameWait = false;
     if (this.constellationName) {
       this.constellationName.textContent = name;
@@ -230,6 +330,7 @@ export class SpaceView {
     this.constellations.select(id);
     this.constellations.startDrawing(id);
     this.constellationNameId = id;
+    this.refreshEmphasis();
     this.constellationNameWait = true;
     if (this.constellationName) {
       this.constellationName.textContent = name;
@@ -238,18 +339,74 @@ export class SpaceView {
     this.focusPoints(points);
   }
 
+  /**
+   * 星座全体が、画面の部品（検索欄・画面下の星座一覧と操作・左上のパネル）を除いた領域に収まるよう寄る。
+   * 傾きの移動中なら行き先の傾きで合わせる。カメラを仮に動かして投影し、位置と距離を詰めていく。
+   */
   focusPoints(points: ConstellationPoint[]): void {
     if (!points.length) return;
+    const safe = this.safeRect();
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const saved = { target: this.controls.target.clone(), position: this.camera.position.clone(), tilt: this.tilt };
     const b = boundsOf(points, this.extent);
-    const x = (b.minX + b.maxX) / 2, y = (b.minY + b.maxY) / 2;
-    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const tanH = tanV * this.camera.aspect;
-    const width = Math.max(4, b.maxX - b.minX + 4);
-    const height = Math.max(4, b.maxY - b.minY + 7);
-    const distance = Math.max(this.controls.minDistance,
-      width / (2 * tanH * 0.72), height / (2 * tanV * 0.72));
-    this.focus = { from: this.controls.target.clone(), to: new THREE.Vector3(x, 0, -y),
-      fromDistance: this.camera.position.distanceTo(this.controls.target), toDistance: distance, elapsed: 0 };
+    const target = new THREE.Vector3((b.minX + b.maxX) / 2, 0, -(b.minY + b.maxY) / 2);
+    let distance = Math.max(this.controls.minDistance, (b.maxX - b.minX + b.maxY - b.minY) * 1.2 + 10);
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const ray = new THREE.Raycaster();
+    const hit = (px: number, py: number) => {
+      ray.setFromCamera(new THREE.Vector2(px / size.x * 2 - 1, -(py / size.y) * 2 + 1), this.camera);
+      return ray.ray.intersectPlane(ground, new THREE.Vector3());
+    };
+    const p = new THREE.Vector3();
+    this.tilt = this.tiltTarget;
+    for (let i = 0; i < 8; i++) {
+      this.controls.target.copy(target);
+      this.setDistance(distance);
+      this.camera.updateMatrixWorld();
+      let l = Infinity, r = -Infinity, t = Infinity, bottom = -Infinity;
+      for (const point of points) {
+        p.set(point.x, 0, -point.y).project(this.camera);
+        const sx = (p.x * 0.5 + 0.5) * size.x, sy = (-p.y * 0.5 + 0.5) * size.y;
+        l = Math.min(l, sx); r = Math.max(r, sx); t = Math.min(t, sy); bottom = Math.max(bottom, sy);
+      }
+      // 星の大きさとタイトル分の余白を見込んで、領域の 80% に収める
+      const scale = Math.max((r - l + 24) / (safe.width * 0.8), (bottom - t + 24) / (safe.height * 0.8), 0.05);
+      const from = hit((l + r) / 2, (t + bottom) / 2);
+      const to = hit(safe.left + safe.width / 2, safe.top + safe.height / 2);
+      if (from && to) target.add(from.sub(to));
+      distance = THREE.MathUtils.clamp(distance * scale, this.controls.minDistance, this.controls.maxDistance);
+    }
+    this.controls.target.copy(saved.target);
+    this.camera.position.copy(saved.position);
+    this.tilt = saved.tilt;
+    this.controls.update();
+    this.focus = { from: this.controls.target.clone(), to: target,
+      fromDistance: this.camera.position.distanceTo(this.controls.target), toDistance: distance,
+      elapsed: 0, duration: POINTS_FOCUS_SECONDS };
+  }
+
+  /** 画面の部品を除いた、星座を置いてよい領域（左上のパネルは、上か左のどちらかを削る方を選ぶ）。 */
+  safeRect(): { left: number; top: number; width: number; height: number } {
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const rectOf = (id: string) => {
+      const el = document.getElementById(id);
+      if (!el || el.hidden || getComputedStyle(el).display === "none") return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 ? r : null;
+    };
+    const pad = 12;
+    const search = rectOf("search-box");
+    const bottoms = ["constellation-list", "constellation-manage"].map(rectOf).filter((r) => !!r) as DOMRect[];
+    const panel = ["hud", "hud-toggle"].map(rectOf).filter((r) => !!r) as DOMRect[];
+    const top = (search?.bottom ?? 0) + pad;
+    const bottom = Math.min(size.y, ...bottoms.map((r) => r.top)) - pad;
+    const panelRight = Math.max(0, ...panel.map((r) => r.right)) + pad;
+    const panelBottom = Math.max(0, ...panel.map((r) => r.bottom)) + pad;
+    const beside = { left: panel.length ? panelRight : pad, top, right: size.x - pad, bottom };
+    const below = { left: pad, top: Math.max(top, panel.length ? panelBottom : 0), right: size.x - pad, bottom };
+    const area = (r: typeof beside) => Math.max(0, r.right - r.left) * Math.max(0, r.bottom - r.top);
+    const best = area(beside) >= area(below) ? beside : below;
+    return { left: best.left, top: best.top, width: Math.max(40, best.right - best.left), height: Math.max(40, best.bottom - best.top) };
   }
 
   constellationAnimationState(): ReturnType<ConstellationLayer["animationState"]> {
@@ -374,22 +531,23 @@ export class SpaceView {
       distance: this.camera.position.distanceTo(this.controls.target), tier: this.zoomTier };
   }
 
-  /** 遠距離の星団名から、その星団が画面に収まる距離へ寄る。 */
+  /**
+   * 星団名のクリックで、その星団の中心へ約 0.6 秒で移る（どの拡大率でも）。
+   * 今が中距離より遠ければ中距離まで寄り、それより近ければ今の距離を保つ。
+   */
   focusCluster(index: number): void {
-    if (this.searchIds.length || this.zoomTier !== "far") return;
+    if (this.searchIds.length) return;
     const cluster = this.labelSource.clusters.find((row) => row.index === index && row.count > 0);
     if (!cluster) return;
-    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const tanH = tanV * this.camera.aspect;
-    const distance = cluster.radius * (Math.sin(this.tilt) + Math.max(
-      Math.cos(this.tilt) / (0.72 * tanV), 1 / (0.75 * tanH),
-    ));
+    const current = this.camera.position.distanceTo(this.controls.target);
+    const mid = this.fitDistance * MID_DISTANCE;
     this.focus = {
       from: this.controls.target.clone(),
       to: new THREE.Vector3(cluster.x, 0, -cluster.y),
-      fromDistance: this.camera.position.distanceTo(this.controls.target),
-      toDistance: Math.max(this.controls.minDistance, distance),
+      fromDistance: current,
+      toDistance: this.zoomTier === "far" ? mid : current,
       elapsed: 0,
+      duration: CLUSTER_FOCUS_SECONDS,
     };
   }
 
@@ -427,7 +585,7 @@ export class SpaceView {
 
   /** 確認用：段階ごとの決まった拡大率に合わせる。 */
   setZoomTier(tier: ZoomTier): void {
-    const factor = tier === "far" ? 1.9 : tier === "mid" ? 0.85 : 0.3;
+    const factor = tier === "far" ? 1.9 : tier === "mid" ? MID_DISTANCE : 0.3;
     this.setDistance(this.fitDistance * factor);
   }
 
@@ -501,11 +659,12 @@ export class SpaceView {
   private readonly tick = (): void => {
     this.frames++;
     const dt = Math.min(0.05, this.clock.getDelta());
+    this.applyKeys(dt);
 
     if (this.focus) {
       const focus = this.focus;
-      focus.elapsed = Math.min(0.65, focus.elapsed + dt);
-      const progress = focus.elapsed / 0.65;
+      focus.elapsed = Math.min(focus.duration, focus.elapsed + dt);
+      const progress = focus.elapsed / focus.duration;
       const eased = progress * progress * (3 - 2 * progress);
       this.controls.target.lerpVectors(focus.from, focus.to, eased);
       this.setDistance(THREE.MathUtils.lerp(focus.fromDistance, focus.toDistance, eased));
@@ -526,7 +685,9 @@ export class SpaceView {
     }
 
     this.field.update(dt);
-    this.constellations.moveEditMembers((id) => this.field.displayPosition(id));
+    // 輪は遠くからでも見分けられるよう、画面上で半径約 9px を保つ（寄ったときは縮めない）
+    const ringScale = Math.max(1, this.camera.position.distanceTo(this.controls.target) * 0.024);
+    this.constellations.moveEditMembers((id) => this.field.displayPosition(id), ringScale);
     this.constellations.update(dt);
     if (this.constellationNameWait && this.constellations.animationState().phase === "done") {
       this.constellationNameWait = false;
@@ -694,15 +855,19 @@ export class SpaceView {
         kind: "cluster",
         cluster: c.index,
         priority: -1000 + (1000 - c.count),   // 大きい星団ほど先に置く
+        dim: this.emphasisMode !== "none",
       });
     }
 
     const limit = tier === "mid" ? 4 : Infinity;
-    if (this.searchIds.length || tier !== "far") {
+    const emphasized = this.emphasisIds;
+    if (this.searchIds.length || tier !== "far" || emphasized.size) {
       const searchRank = new Map(this.searchIds.map((id, i) => [id, i]));
       for (const s of this.labelSource.stars) {
-        if (this.searchIds.length && !searchRank.has(s.id)) continue;
-        if (!this.searchIds.length && s.rank >= limit) continue;
+        // 星座の星のタイトルは、拡大率や検索に関係なく出す
+        const star = emphasized.has(s.id);
+        if (!star && this.searchIds.length && !searchRank.has(s.id)) continue;
+        if (!star && !this.searchIds.length && (tier === "far" || s.rank >= limit)) continue;
         const displayed = this.searchIds.length ? this.field.displayPosition(s.id) : null;
         const at = project(displayed?.x ?? s.x, displayed?.y ?? s.y);
         if (!at) continue;
@@ -714,7 +879,10 @@ export class SpaceView {
           sx: this.searchIds.length ? at.sx + (at.sx - size.x / 2) / outward * 10 : at.sx,
           sy: this.searchIds.length ? at.sy + (at.sy - size.y / 2) / outward * 10 : at.sy,
           kind: "star",
-          priority: this.searchIds.length ? (searchRank.get(s.id) ?? 99) - 100 : s.rank,
+          // 星座の星を最優先。それ以外は暗くする
+          priority: star ? -3000 + s.rank
+            : this.searchIds.length ? (searchRank.get(s.id) ?? 99) - 100 : s.rank,
+          dim: emphasized.size > 0 && !star,
           searchRank: this.searchIds.length ? searchRank.get(s.id) : undefined,
           cluster: s.cluster,
           side: this.searchIds.length ? (at.sx >= size.x / 2 ? "right" : "left") : !own || s.x >= own.x ? "right" : "left",
@@ -723,8 +891,9 @@ export class SpaceView {
       }
     }
 
+    // 星座の星のタイトルは省略せず、隣の星団の円に入っても間引かない
     this.labels.render(this.searchIds.length ? items.filter((item) => item.kind === "star") : items,
-      this.searchIds.length ? "near" : tier, this.searchIds.length ? [] : circles);
+      this.searchIds.length || emphasized.size ? "near" : tier, this.searchIds.length ? [] : circles);
   }
 
   private readonly resize = (): void => {

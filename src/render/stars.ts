@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+/** 星座の星の強調。selected は描いている・選んでいるとき、edit は編集しているとき。 */
+export type EmphasisMode = "none" | "selected" | "edit";
+
 export type RenderStar = {
   id: string;
   x: number;
@@ -92,6 +95,10 @@ export class StarField {
   private searchAlpha = new Float32Array(0);
   private searching = false;
   private settling = false;
+  private lastSearch: { ids: string[]; center: { x: number; y: number }; unit: number } =
+    { ids: [], center: { x: 0, y: 0 }, unit: 1 };
+  private emphasis = new Set<string>();
+  private emphasisMode: EmphasisMode = "none";
 
   /** 星が動いている最中か（配置の移動、または検索の引き寄せ・戻りのばね）。 */
   get isSettling(): boolean {
@@ -179,6 +186,7 @@ export class StarField {
     this.elapsed = 0;
     this.moveT = animate && previous.size > 0 ? 0 : 1;
     this.searching = false;
+    this.lastSearch = { ids: [], center: { x: 0, y: 0 }, unit: 1 };
 
     this.geom.dispose();
     this.geom = new THREE.BufferGeometry();
@@ -196,6 +204,22 @@ export class StarField {
   setSearch(ids: string[], center: { x: number; y: number }, unit: number): void {
     // 配置の移動の途中なら、いまの位置（spring に同期済み）からばねで続ける
     this.moveT = 1;
+    this.lastSearch = { ids, center, unit };
+    this.applyTargets();
+  }
+
+  /**
+   * 星座の星を強調する（描いているとき・選んでいるとき・編集しているとき）。
+   * 強調した星は少し大きく明るく。編集中は、星座に入っていない星をさらに暗くして差をはっきりさせる。
+   */
+  setEmphasis(ids: string[], mode: EmphasisMode): void {
+    this.emphasis = new Set(mode === "none" ? [] : ids);
+    this.emphasisMode = mode;
+    this.applyTargets();
+  }
+
+  private applyTargets(): void {
+    const { ids, center, unit } = this.lastSearch;
     this.searching = ids.length > 0;
     const rank = new Map(ids.slice(0, 21).map((id, i) => [id, i]));
     this.stars.forEach((star, i) => {
@@ -216,6 +240,16 @@ export class StarField {
       this.searchY[i] = center.y + Math.sin(angle) * radius;
       this.searchAlpha[i] = [1, 0.78, 0.55][ring];
       this.searchSize[i] = [3.4, 2.5, 1.7][ring];
+    });
+    if (this.emphasisMode === "none") return;
+    this.stars.forEach((star, i) => {
+      if (this.emphasis.has(star.id)) {
+        this.searchSize[i] = Math.max(this.searchSize[i], this.baseSize[i]) * 1.45;
+        this.searchAlpha[i] = Math.min(1, Math.max(this.searchAlpha[i], this.targetAlpha[i]) * 1.4 + 0.1);
+      } else if (this.emphasisMode === "edit") {
+        this.searchAlpha[i] *= 0.45;
+        this.searchSize[i] *= 0.85;
+      }
     });
   }
 

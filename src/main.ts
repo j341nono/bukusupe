@@ -450,6 +450,14 @@ function applySearch(next: SearchHit[]): void {
 function setupSearch(canvas: HTMLCanvasElement): void {
   const input = document.getElementById("search-input") as HTMLInputElement;
   const card = document.getElementById("star-card") as HTMLElement;
+  // 「/」で検索欄へ（文字を打っている最中は、そのまま文字として入れる）
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
+    event.preventDefault();
+    input.focus();
+  });
   input.addEventListener("focus", () => view?.setTopDown(true));
   input.addEventListener("blur", () => { if (!input.value.trim()) view?.setTopDown(false); });
   input.addEventListener("input", () => {

@@ -57,7 +57,11 @@ export class ConstellationLayer {
 
   select(id: string | null): void { this.active = id; this.style(); }
 
-  editMembers(points: ConstellationPoint[]): void {
+  /**
+   * 星座の星に小さな輪を付ける。編集中（strong）は太く明るく、星座に入っているかどうかを
+   * はっきり見分けられるようにする。描いているとき・選んでいるときは控えめにする。
+   */
+  editMembers(points: ConstellationPoint[], strong = true): void {
     this.ringIds = points.map((point) => point.id);
     for (const mesh of [...this.rings.children]) {
       this.rings.remove(mesh);
@@ -65,19 +69,21 @@ export class ConstellationLayer {
       ((mesh as THREE.Mesh).material as THREE.Material).dispose();
     }
     for (const point of points) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.42, 24),
-        new THREE.MeshBasicMaterial({ color: 0xffe5ad, transparent: true, opacity: 0.9,
-          side: THREE.DoubleSide, depthWrite: false }));
+      const ring = new THREE.Mesh(strong ? new THREE.RingGeometry(0.34, 0.52, 28) : new THREE.RingGeometry(0.36, 0.44, 28),
+        new THREE.MeshBasicMaterial({ color: strong ? 0xffe0a0 : 0xfff0d2, transparent: true,
+          opacity: strong ? 0.95 : 0.6, side: THREE.DoubleSide, depthWrite: false }));
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(point.x, 0.16, -point.y);
       this.rings.add(ring);
     }
   }
 
-  moveEditMembers(position: (id: string) => { x: number; y: number } | null): void {
+  /** 輪を星の表示位置に合わせる。scale は画面上でほぼ一定の大きさに見せるための倍率。 */
+  moveEditMembers(position: (id: string) => { x: number; y: number } | null, scale = 1): void {
     this.rings.children.forEach((ring, i) => {
       const p = position(this.ringIds[i]);
       if (p) ring.position.set(p.x, 0.16, -p.y);
+      ring.scale.setScalar(scale);
     });
   }
 
