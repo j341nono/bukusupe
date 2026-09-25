@@ -137,6 +137,15 @@ try {
   await send("Performance.enable", {}, sessionId);
   const layoutCount = async () => (await send("Performance.getMetrics", {}, sessionId))
     .metrics.find((metric) => metric.name === "LayoutCount")?.value ?? NaN;
+  /** 表示の判断は星が落ち着いてから行い、ラベルは 180ms で現れる。現れ終わるまで待つ（最大 3 秒）。 */
+  const waitForLabel = async (filter) => {
+    for (let i = 0; i < 30; i++) {
+      if (await evalIn(`[...document.querySelectorAll('.label-star${filter}')]
+        .some((el) => Number(getComputedStyle(el).opacity) > 0.9)`)) return true;
+      await sleep(100);
+    }
+    return false;
+  };
   const sampleLabels = `JSON.stringify((() => {
     const cx = innerWidth / 2, cy = innerHeight / 2;
     const out = {};
@@ -388,6 +397,16 @@ try {
     newStar ? `新しい星は星団 ${newStar.cluster} の ${newStar.rank} 番目` : "新しい星が見つからない");
 
   // --- 件数を増やしたときの配置と描画 ---
+  // 12〜19 件でも、統合で SPEC の下限（12 件以上なら 3 個）を割らない
+  const small = [];
+  for (const n of [12, 15, 19]) {
+    const r = JSON.parse((await evalIn(
+      `(async () => JSON.stringify(await globalThis.__bukusupe.benchmark(${n})))()`,
+    )) ?? "null");
+    small.push(`${n} 件→${r?.clusters.length ?? "?"} 個`);
+    if (!r || r.clusters.length < 3) small.failed = true;
+  }
+  check(!small.failed, "12・15・19 件でも星団が 3 個以上ある", small.join(" / "));
   for (const n of [20, 150, 2000]) {
     const r = JSON.parse((await evalIn(
       `(async () => JSON.stringify(await globalThis.__bukusupe.benchmark(${n})))()`,
@@ -420,6 +439,7 @@ try {
   check(labelGeometry?.labels?.length > 0 && intrusive.length === 0,
     "初期画面でタイトルが隣の星団の円に入らない",
     `${labelGeometry?.labels?.length ?? 0} 件表示、侵入 ${intrusive.length} 件`);
+  await waitForLabel("");
   const labelCard = JSON.parse((await evalIn(`(() => {
     const el = [...document.querySelectorAll('.label-star')]
       .find((label) => Number(getComputedStyle(label).opacity) > 0.9);
@@ -565,6 +585,7 @@ try {
   check(visuals.every(Boolean) && visuals[0].size > visuals[1].size && visuals[1].size > visuals[2].size &&
     visuals[0].alpha > visuals[1].alpha && visuals[1].alpha > visuals[2].alpha,
     "内側ほど星が大きく明るい", JSON.stringify(visuals));
+  await waitForLabel(':not([data-search-rank=""])');
   const labels = JSON.parse((await evalIn(`JSON.stringify([...document.querySelectorAll('.label-star')]
     .filter((el) => getComputedStyle(el).display !== 'none' && el.dataset.searchRank !== '')
     .map((el) => { const rect = el.getBoundingClientRect();
@@ -635,6 +656,7 @@ try {
   })()`)) ?? "null");
   check(!clicked.hidden && !!clicked.title, "星のクリックでカードが開く", clicked.title);
   await evalIn("document.getElementById('star-card').hidden = true");
+  await waitForLabel(':not([data-search-rank=""])');
   const searchLabelCard = JSON.parse((await evalIn(`(() => {
     const el = document.querySelector('.label-orbit-inner');
     if (!el) return JSON.stringify({ found: false });
@@ -655,6 +677,37 @@ try {
     writeFileSync("docs/screens/search.png", Buffer.from(shot.data, "base64"));
     console.log("  画面: docs/screens/search.png");
   }
+  // 真上のまま検索語を打ち替える。星が軌道に着いてからタイトルの左右と重なりを決めていれば、
+  // タイトルは星から見て外側に出て、互いに重ならない。
+  const labelAudit = `JSON.stringify((() => {
+    const cx = innerWidth / 2;
+    const labels = [...document.querySelectorAll('.label-star')]
+      .filter((el) => el.dataset.searchRank !== '' && el.style.opacity === '1');
+    let wrongSide = 0, overlaps = 0;
+    const boxes = labels.map((el) => el.getBoundingClientRect());
+    labels.forEach((el, i) => {
+      const p = globalThis.__bukusupe.starScreen(el.dataset.key);
+      // 中心線の上の星（各リングの先頭は黒穴の真上に来る）は、左右どちらに出ても外向き
+      if (!p || Math.abs(p.x - cx) < 4) return;
+      const outwardRight = p.x >= cx;
+      const labelRight = (boxes[i].left + boxes[i].right) / 2 >= p.x;
+      if (outwardRight !== labelRight) wrongSide++;
+    });
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) overlaps++;
+    }
+    return { shown: labels.length, wrongSide, overlaps };
+  })())`;
+  const retyped = [];
+  for (const query of ["パスタ", "React の状態管理", "睡眠を改善したい", "宇宙を感じたい"]) {
+    await evalIn(`(async () => { await globalThis.__bukusupe.searchNow(${JSON.stringify(query)}); })()`);
+    await sleep(2000);
+    retyped.push({ query, ...JSON.parse((await evalIn(labelAudit)) ?? "{}") });
+  }
+  check(retyped.every((r) => r.shown > 0 && r.wrongSide === 0 && r.overlaps === 0),
+    "検索語を打ち替えても、タイトルが内側に出たり重なったりしない",
+    retyped.map((r) => `${r.query}: ${r.shown} 件・内側 ${r.wrongSide}・重なり ${r.overlaps}`).join(" / "));
   await dragLabels("検索中");
   const opened = JSON.parse((await evalIn(`(async () => {
     const before = (await chrome.tabs.query({})).map((tab) => tab.id);
