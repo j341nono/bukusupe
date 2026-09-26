@@ -27,6 +27,8 @@ export type RenderStar = {
   y: number;
   /** 0..1。最終利用日時から決める */
   brightness: number;
+  /** 最後に触れた日（最終利用日と追加日の新しいほう。無ければ undefined）。見え方の関数が使う */
+  touched?: number;
   cluster: number;
   /** 星団の中での並び。0 が最も星団らしい星 */
   rank: number;

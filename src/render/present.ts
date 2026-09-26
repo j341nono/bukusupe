@@ -1,6 +1,7 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import type { Layout } from "../layout";
 import { brightnessOf } from "../layout/brightness";
+import { lastTouched } from "./magnitude";
 import type { LabelSource } from "./scene";
 import type { RenderStar } from "./stars";
 
@@ -10,7 +11,8 @@ export function toRenderStars(layout: Layout, byId: Map<string, BookmarkItem>): 
   for (const s of layout.stars) {
     const item = byId.get(s.id);
     if (!item) continue;
-    stars.push({ id: s.id, x: s.x, y: s.y, brightness: brightnessOf(item), cluster: s.cluster, rank: s.rank });
+    stars.push({ id: s.id, x: s.x, y: s.y, brightness: brightnessOf(item), touched: lastTouched(item),
+      cluster: s.cluster, rank: s.rank });
   }
   return stars;
 }

@@ -4,7 +4,7 @@ import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
-import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
+import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type AppearanceFn, type EmphasisMode, type RenderStar } from "./stars";
 import { FLIGHT_SCALE, Flight, type FlightInput } from "./flight";
 import { createShip } from "./ship";
 import { FlightNebulae, FlightSky } from "./sky";
@@ -583,6 +583,11 @@ export class SpaceView {
     };
     this.flightNebulae.set(live.map((c) => ({ index: c.index, ...at(c), color: nebulaColor(c.index) })));
     this.signs.set(live.map((c) => ({ index: c.index, name: c.name, ...at(c) })));
+  }
+
+  /** 星の見え方（大きさ・明るさ・色）を決める関数を差し替える。地図と飛行モードの両方に効く */
+  setStarAppearance(fn: AppearanceFn): void {
+    this.field.setAppearance(fn);
   }
 
   /** いまの空間の拡大率（地図 1 → 飛行中 FLIGHT_SCALE。立ち上がりと一緒に変わる） */

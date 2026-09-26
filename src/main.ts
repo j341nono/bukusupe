@@ -17,6 +17,7 @@ import { membersFor, minimumSpanningTree, pointsFor, type Constellation } from "
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
+import { lastTouched, touchAppearance } from "./render/magnitude";
 import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, settleHud, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
@@ -60,6 +61,8 @@ async function main(): Promise<void> {
 
   setupHudControls();
   view = new SpaceView(canvas, labels);
+  // 星の色と明るさは「最後に触れた日」から（段階 2 の一部。ラベルの目立ち方は段階 2 の残り）
+  view.setStarAppearance(touchAppearance);
   view.onStarLabelClick = handleStarClick;
   setupFlight();
   view.start();
@@ -771,6 +774,12 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   flightTeleport: (id: string, distance: number) => view?.flightTeleport(id, distance),
   starScreenSize: (id: string) => view?.starScreenSize(id),
   flightConstellationSegments: () => view?.flightConstellationSegments(),
+  /** 確認用：最終利用日・追加日・螺旋の順位から、星の見え方（大きさ・明るさ・色）を求める */
+  appearanceFor: (input: { id?: string; dateLastUsed?: number; dateAdded?: number; rank?: number }) => {
+    const look = touchAppearance({ id: input.id ?? "", x: 0, y: 0, brightness: 0, cluster: 0, rank: input.rank ?? 0,
+      touched: lastTouched(input) });
+    return { size: look.size, alpha: look.alpha, color: [look.color.r, look.color.g, look.color.b] };
+  },
   relayout,
 
   async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY, priorCoefficient = CLUSTER_PRIOR) {
