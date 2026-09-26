@@ -19,6 +19,8 @@ export type PlacedLabel = {
   centered?: boolean;
   /** 文字の大きさ（px）。星団名は件数に応じて変える。無ければ種類の既定値 */
   fontSize?: number;
+  /** 通常の地図で、最終利用日に応じたタイトルの濃さ */
+  opacity?: number;
   /** 星座を強調しているとき、星座以外のタイトルを暗くする */
   dim?: boolean;
 };
@@ -118,8 +120,11 @@ export class LabelLayer {
             : { l: item.sx + OFFSET_X, t, r: item.sx + OFFSET_X + w, b: t + h };
 
       if (labelBoxes.some((p) => overlaps(p, box))) continue;
+      // 実際の DOM は日本語と英数字の混在で canvas の測定より広くなることがある。
+      // 星団の境界には余白を取り、描画後の帯が隣の星雲へ入らないようにする。
+      const circleBox = { l: box.l - 20, t: box.t - 4, r: box.r + 20, b: box.b + 4 };
       if (item.kind === "star" && item.priority > -3000 &&
-        circles.some((c) => c.cluster !== item.cluster && entersCircle(box, c))) continue;
+        circles.some((c) => c.cluster !== item.cluster && entersCircle(circleBox, c))) continue;
 
       labelBoxes.push(box);
       shown.push({ item, text: shortened, box });
@@ -189,7 +194,7 @@ export class LabelLayer {
       // 省略したものだけ、マウスを乗せたら全文を出す
       el.style.pointerEvents = "auto";
       el.style.transform = `translate3d(${box.l.toFixed(1)}px, ${box.t.toFixed(1)}px, 0)`;
-      const opacity = item.dim ? "0.3" : "1";
+      const opacity = item.dim ? "0.3" : this.hovered === item.key ? "1" : String(item.opacity ?? 1);
       if (fresh) requestAnimationFrame(() => { if (this.active.some(({ item: active }) => active.key === item.key)) el.style.opacity = opacity; });
       else el.style.opacity = opacity;
     });
@@ -202,6 +207,8 @@ export class LabelLayer {
     this.hovered = key;
     this.onHover?.(key);
     el.classList.add("is-hovered");
+    const hovered = this.active.find(({ item }) => item.key === key);
+    if (hovered?.item.opacity != null) el.style.opacity = "1";
     const full = this.fullText.get(key) ?? "";
     el.textContent = full;
     // 左側のタイトルは右端（星の側）を固定して、全文を左へ伸ばす。星の上にかぶらないように
@@ -219,6 +226,7 @@ export class LabelLayer {
     if (entry) {
       el.textContent = entry.text;
       entry.width = entry.baseWidth;
+      el.style.opacity = entry.item.dim ? "0.3" : String(entry.item.opacity ?? 1);
     }
     this.hovered = null;
     this.onHover?.(null);

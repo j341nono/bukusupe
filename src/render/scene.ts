@@ -14,6 +14,7 @@ import { FlightFarLabels } from "../ui/flight-far-labels";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
+import { recency } from "./magnitude";
 
 /** 星に入る（SPEC 13 章）：芯の半径、突入の演出の長さ、開いた後の押し戻しと、同じ星に反応しない時間。
  *  半径と押し戻しは、広げた空間（FLIGHT_SCALE 倍）の単位 */
@@ -63,7 +64,7 @@ function boundsOf(stars: { x: number; y: number }[], fallback: number) {
 
 export type LabelSource = {
   clusters: { index: number; name: string; x: number; y: number; radius: number; count: number }[];
-  stars: { id: string; title: string; url: string; x: number; y: number; cluster: number; rank: number }[];
+  stars: { id: string; title: string; url: string; x: number; y: number; cluster: number; rank: number; touched?: number }[];
 };
 
 export class SpaceView {
@@ -85,6 +86,7 @@ export class SpaceView {
   private fitDistance = 90;
   private labelSource: LabelSource = { clusters: [], stars: [] };
   private labelsDirty = true;
+  private hoveredMapId: string | null = null;
   private lastLabelMotion = 0;
   private lastLabelTier: ZoomTier | null = null;
   private readonly lastLabelCamera = new THREE.Matrix4();
@@ -787,6 +789,11 @@ export class SpaceView {
 
   hoverStar(id: string | null): void {
     this.hoveredId = id && this.searchIds.includes(id) ? id : null;
+    const next = this.searchIds.length ? null : id;
+    if (this.hoveredMapId !== next) {
+      this.hoveredMapId = next;
+      this.labelsDirty = true;
+    }
   }
 
   traceGeometry(): { tails: number; fullLines: number; maxTailPixels: number; startAlpha: number; endAlpha: number } {
@@ -1441,15 +1448,26 @@ export class SpaceView {
       });
     }
 
-    const limit = tier === "mid" ? 4 : Infinity;
     const emphasized = this.emphasisIds;
+    const plainMap = !this.searchIds.length && !emphasized.size;
+    // 中距離では等級の高い星を星団ごとに選ぶ。日時不明の星は近距離かホバーで読める。
+    const midBright = new Set<string>();
+    if (plainMap && tier === "mid") {
+      for (const c of this.labelSource.clusters) {
+        this.labelSource.stars.filter((s) => s.cluster === c.index && recency(s.touched) > 0.55)
+          .sort((a, b) => recency(b.touched) - recency(a.touched) || a.rank - b.rank || a.id.localeCompare(b.id))
+          .slice(0, 2).forEach((s) => midBright.add(s.id));
+      }
+    }
     if (this.searchIds.length || tier !== "far" || emphasized.size) {
       const searchRank = new Map(this.searchIds.map((id, i) => [id, i]));
       for (const s of this.labelSource.stars) {
         // 星座の星のタイトルは、拡大率や検索に関係なく出す
         const star = emphasized.has(s.id);
         if (!star && this.searchIds.length && !searchRank.has(s.id)) continue;
-        if (!star && !this.searchIds.length && (tier === "far" || s.rank >= limit)) continue;
+        if (!star && !this.searchIds.length && (tier === "far" ||
+          (plainMap && tier === "mid" && !midBright.has(s.id) && s.id !== this.hoveredMapId) ||
+          (!plainMap && tier === "mid" && s.rank >= 4))) continue;
         const displayed = this.searchIds.length ? this.field.displayPosition(s.id) : null;
         const at = project(displayed?.x ?? s.x, displayed?.y ?? s.y);
         if (!at) continue;
@@ -1463,9 +1481,13 @@ export class SpaceView {
           kind: "star",
           // 星座の星を最優先。それ以外は暗くする
           priority: star ? -3000 + s.rank
-            : this.searchIds.length ? (searchRank.get(s.id) ?? 99) - 100 : s.rank,
+            : this.searchIds.length ? (searchRank.get(s.id) ?? 99) - 100
+              : plainMap && s.id === this.hoveredMapId ? -2000
+                : plainMap ? (1 - recency(s.touched)) * 100 + s.rank * 0.01 : s.rank,
           dim: emphasized.size > 0 && !star,
           searchRank: this.searchIds.length ? searchRank.get(s.id) : undefined,
+          fontSize: plainMap ? Math.round((10 + 2 * recency(s.touched)) * 10) / 10 : undefined,
+          opacity: plainMap ? 0.4 + 0.6 * recency(s.touched) : undefined,
           cluster: s.cluster,
           side: this.searchIds.length ? (at.sx >= size.x / 2 ? "right" : "left") : !own || s.x >= own.x ? "right" : "left",
         });

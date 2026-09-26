@@ -426,6 +426,28 @@ try {
     const detail = r ? `配置 ${r.layoutMs.toFixed(0)} ミリ秒 / ${r.fps.toFixed(0)} コマ ・ 星団 ${r.clusters.length}` : "計算できない";
     if (n === 2000) check(ok && r.fps >= 55, `${n} 件で配置が終わり 60 コマを保つ`, detail);
     else check(ok, `${n} 件で配置が終わる`, detail);
+    if (n === 2000) {
+      await evalIn("globalThis.__bukusupe.setZoomTier('mid')");
+      await sleep(500);
+      const mid = JSON.parse((await evalIn(`(() => {
+        const items = globalThis.__bukusupe.state.items;
+        const byId = new Map(items.map((item) => [item.id, item]));
+        const recent = (item) => {
+          const touched = Math.max(item?.dateLastUsed ?? 0, item?.dateAdded ?? 0);
+          if (!touched) return 0.5;
+          const days = Math.max(0, (Date.now() - touched) / 86400000);
+          return 1 - Math.min(1, Math.log(days + 1) / Math.log(731));
+        };
+        const shown = [...document.querySelectorAll('.label-star')].filter((el) =>
+          Number(getComputedStyle(el).opacity) > 0.05 && byId.has(el.dataset.key));
+        const avg = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+        return JSON.stringify({ count: shown.length, all: avg(items.map(recent)),
+          shown: avg(shown.map((el) => recent(byId.get(el.dataset.key)))) });
+      })()`)) ?? "null");
+      check(mid && mid.count >= 6 && mid.count <= 32 && mid.shown > mid.all + 0.15,
+        "2000 件の中距離では、明るい星のラベルを優先して読みやすい数に収める",
+        mid ? `${mid.count} 件・表示星の平均 ${mid.shown.toFixed(3)} / 全体 ${mid.all.toFixed(3)}` : "測れない");
+    }
   }
   await evalIn("globalThis.__bukusupe.restore()");
   await sleep(1200);
@@ -437,7 +459,8 @@ try {
       .filter((el) => getComputedStyle(el).display !== 'none')
       .map((el) => {
         const r = el.getBoundingClientRect();
-        return { cluster: Number(el.dataset.cluster), l: r.left, t: r.top, r: r.right, b: r.bottom };
+        return { title: el.textContent, opacity: getComputedStyle(el).opacity,
+          cluster: Number(el.dataset.cluster), l: r.left, t: r.top, r: r.right, b: r.bottom };
       })
   })`)) ?? "null");
   const intrusive = (labelGeometry?.labels ?? []).filter((box) =>
@@ -449,7 +472,7 @@ try {
     }));
   check(labelGeometry?.labels?.length > 0 && intrusive.length === 0,
     "初期画面でタイトルが隣の星団の円に入らない",
-    `${labelGeometry?.labels?.length ?? 0} 件表示、侵入 ${intrusive.length} 件`);
+    `${labelGeometry?.labels?.length ?? 0} 件表示、侵入 ${intrusive.length} 件 ${JSON.stringify(intrusive)}`);
   await waitForLabel("");
   const labelCard = JSON.parse((await evalIn(`(() => {
     const el = [...document.querySelectorAll('.label-star')]
@@ -482,6 +505,30 @@ try {
     writeFileSync(path, Buffer.from(shot.data, "base64"));
     console.log("  画面:", path);
   }
+  const contrast = JSON.parse((await evalIn(`(() => {
+    const byId = new Map(globalThis.__bukusupe.state.items.map((item) => [item.id, item]));
+    const recent = (item) => {
+      const touched = Math.max(item?.dateLastUsed ?? 0, item?.dateAdded ?? 0);
+      if (!touched) return 0.5;
+      const days = Math.max(0, (Date.now() - touched) / 86400000);
+      return 1 - Math.min(1, Math.log(days + 1) / Math.log(731));
+    };
+    const rows = [...document.querySelectorAll('.label-star')].filter((el) =>
+      Number(getComputedStyle(el).opacity) > 0.05 && byId.has(el.dataset.key))
+      .map((el) => ({ brightness: recent(byId.get(el.dataset.key)),
+        opacity: Number(getComputedStyle(el).opacity), font: parseFloat(getComputedStyle(el).fontSize) }))
+      .sort((a, b) => a.brightness - b.brightness);
+    const count = Math.max(1, Math.floor(rows.length / 4));
+    const avg = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+    const dark = rows.slice(0, count), bright = rows.slice(-count);
+    return JSON.stringify({ count: rows.length,
+      dark: { brightness: avg(dark.map((row) => row.brightness)), opacity: avg(dark.map((row) => row.opacity)), font: avg(dark.map((row) => row.font)) },
+      bright: { brightness: avg(bright.map((row) => row.brightness)), opacity: avg(bright.map((row) => row.opacity)), font: avg(bright.map((row) => row.font)) } });
+  })()`)) ?? "null");
+  check(contrast && contrast.count >= 8 && contrast.bright.brightness > contrast.dark.brightness + 0.2 &&
+    contrast.bright.opacity > contrast.dark.opacity + 0.1 && contrast.bright.font > contrast.dark.font,
+  "明るい星のタイトルは暗い星より不透明度が高く、文字も大きい",
+  contrast ? `${contrast.count} 件・不透明度 ${contrast.dark.opacity.toFixed(2)}→${contrast.bright.opacity.toFixed(2)}・文字 ${contrast.dark.font.toFixed(1)}→${contrast.bright.font.toFixed(1)}px` : "測れない");
   await evalIn("globalThis.__bukusupe.setZoomTier('far')");
   await sleep(900);
   // 近・中・遠のどの拡大率でも、星団名をクリックするとその星団の中心へ移る。
