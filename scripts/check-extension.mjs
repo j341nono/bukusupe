@@ -59,10 +59,21 @@ rfd.on("data", (chunk) => {
 
 const listeners = [];
 let seq = 0;
+// ヘッドレス Chrome が稀に応答しなくなる（ブラウザ本体が CPU 100% のまま）。無限に待たず、
+// 60 秒で失敗として止めて、どの命令で止まったかを出す。
+const SEND_TIMEOUT_MS = 60_000;
 const send = (method, params = {}, sessionId) =>
   new Promise((ok, ng) => {
     const id = ++seq;
-    pending.set(id, (m) => (m.error ? ng(new Error(`${method}: ${JSON.stringify(m.error)}`)) : ok(m.result)));
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      ng(new Error(`${method} が ${SEND_TIMEOUT_MS / 1000} 秒応答しない（ヘッドレス Chrome の不調の可能性）`));
+    }, SEND_TIMEOUT_MS);
+    pending.set(id, (m) => {
+      clearTimeout(timer);
+      if (m.error) ng(new Error(`${method}: ${JSON.stringify(m.error)}`));
+      else ok(m.result);
+    });
     wfd.write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + "\0");
   });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -584,6 +595,9 @@ try {
   check(lexicalMs <= 16, "1 文字の文字一致が 16ms 以内", `${lexicalMs.toFixed(2)}ms`);
   check((await evalIn("globalThis.__bukusupe.searchState().ids.length")) > 0,
     "1 文字入力で文字一致の星がすぐ集まる");
+  // 前の確認で置いたままのマウスの下に検索のタイトルが現れると、ホバー扱いになって線が増える。
+  // 何も無い左下の隅へ退避させてから検索する。
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 4, y: 790 }, sessionId);
   await evalIn(`(async () => globalThis.__bukusupe.searchNow('宇宙を感じたい'))()`);
   await sleep(1400);
   const searchGeometry = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.searchGeometry())")) ?? "null");
@@ -768,13 +782,23 @@ try {
   await sleep(900);
   const restoredTilt = await evalIn("globalThis.__bukusupe.cameraTilt()");
   // --- キー操作 ---
-  const key = async (type, code, keyName, vk) => send("Input.dispatchKeyEvent",
-    { type, code, key: keyName, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }, sessionId);
-  const hold = async (code, keyName, vk, ms) => {
-    await key("rawKeyDown", code, keyName, vk);
+  // キーはページの中で KeyboardEvent として発行する。CDP の Input.dispatchKeyEvent は、macOS の
+  // ヘッドレス Chrome ではブラウザ本体のキー振り分け（AppKit の routeKeyEquivalent）で詰まり、
+  // その後の再読み込みで固まることがあった（sample で確認）。アプリが見ているのは window の
+  // keydown / keyup と event.code・event.key なので、確認の意味は変わらない。
+  const key = async (type, code, keyName) => evalIn(`(() => {
+    const target = document.activeElement ?? document.body;
+    const event = new KeyboardEvent(${JSON.stringify(type)}, { code: ${JSON.stringify(code)}, key: ${JSON.stringify(keyName)},
+      bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  })()`);
+  const hold = async (code, keyName, _vk, ms) => {
+    const prevented = await key("keydown", code, keyName);
     await sleep(ms);
-    await key("keyUp", code, keyName, vk);
+    await key("keyup", code, keyName);
     await sleep(500);   // 止まりの減速が終わるまで
+    return prevented;
   };
   const cam = async () => JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
   await evalIn("document.activeElement?.blur()");
@@ -793,8 +817,9 @@ try {
   check(Math.hypot(afterTyping.x - beforeTyping.x, afterTyping.y - beforeTyping.y) < 0.01,
     "入力欄にフォーカスがあるときは W で動かない");
   const beforeSpace = await cam();
-  await hold("Space", " ", 32, 500);
+  const spacePrevented = await hold("Space", " ", 32, 500);
   const afterSpace = await cam();
+  check(spacePrevented === true, "Space でページがスクロールしない（既定の動作を止めている）");
   await hold("ShiftLeft", "Shift", 16, 500);
   const afterShift = await cam();
   check(afterSpace.distance > beforeSpace.distance * 1.2 && afterShift.distance < afterSpace.distance * 0.85,
@@ -1156,8 +1181,8 @@ try {
   console.error(err);
   problems.push(String(err));
 } finally {
-  await send("Browser.close").catch(() => {});
-  child.kill();
+  await Promise.race([send("Browser.close").catch(() => {}), sleep(5000)]);
+  child.kill("SIGKILL");
   await sleep(500);
   try { rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* 無視 */ }
 }
