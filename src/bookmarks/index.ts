@@ -24,7 +24,9 @@ export function setPreferSample(on: boolean): void {
  * chromeCount は Chrome のブックマーク（http(s) のもの）の件数。サンプルを表示しているときも数える
  * （「自分のブックマークに戻る」を出すか、少ないときに案内を出すかの判断に使う）。
  */
-export async function loadBookmarks(): Promise<BookmarkSnapshot & { chromeCount: number }> {
+export async function loadBookmarks(): Promise<BookmarkSnapshot & { chromeCount: number; bench?: string }> {
+  const bench = await loadBenchBookmarks();
+  if (bench) return bench;
   const forced = new URLSearchParams(location.search).get("sample") === "1" || prefersSample();
   if (hasChromeBookmarks()) {
     try {
@@ -36,6 +38,20 @@ export async function loadBookmarks(): Promise<BookmarkSnapshot & { chromeCount:
     }
   }
   return { kind: "sample", items: loadSampleBookmarks(), chromeCount: 0 };
+}
+
+/**
+ * 測定用（docs/BENCHMARK.md）：`?debug=1&bench=<名前>` で開いたときだけ、測定スクリプトが chrome.storage.local の
+ * `bench:<名前>` に書いた、サンプルから生成したブックマークを読み込む。データ源はサンプルとして扱い、DB は名前ごとに分ける。
+ * ブックマーク自体には触らない。
+ */
+async function loadBenchBookmarks(): Promise<(BookmarkSnapshot & { chromeCount: number; bench: string }) | null> {
+  const params = new URLSearchParams(location.search);
+  const bench = params.get("debug") === "1" ? params.get("bench") : null;
+  if (!bench || typeof chrome === "undefined" || !chrome.storage?.local) return null;
+  const key = `bench:${bench}`;
+  const items = (await chrome.storage.local.get(key))[key];
+  return Array.isArray(items) ? { kind: "sample", items, chromeCount: 0, bench } : null;
 }
 
 export * from "./types";

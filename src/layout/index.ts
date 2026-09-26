@@ -8,6 +8,7 @@ import { pca2 } from "./pca";
 import { LAYOUT_SEED } from "./rng";
 import { spiralPoint, spiralRadius } from "./spiral";
 import { centerAndNormalize, dot, generalityScores, meanVector, standardize } from "./vector";
+import { timed } from "../debug/timing";
 
 /** 配置の形が変わったら上げる。古い保存は捨てて計算し直す。 */
 export const LAYOUT_VERSION = 3;   // 3：統合で星団の下限を割らないようにした
@@ -72,30 +73,32 @@ export function computeLayout(
   const n = usable.length;
   if (n === 0) return { version: LAYOUT_VERSION, spacing: SPACING, stars: [], clusters: [] };
 
-  const centered = usable.map((item) => centerAndNormalize(vectors.get(item.id) as Float32Array, mean));
+  // timed() は測定（?debug=1 の測定スクリプト）のときだけ時間を記録する。通常はそのまま呼ぶだけ
+  const centered = timed("center", () => usable.map((item) => centerAndNormalize(vectors.get(item.id) as Float32Array, mean)));
   // 汎用度は中心化する前のベクトルで測り、類似度の差と同じ物差しに直す
-  const generality = standardize(generalityScores(usable.map((i) => vectors.get(i.id) as Float32Array)));
+  const generality = timed("generality", () => standardize(generalityScores(usable.map((i) => vectors.get(i.id) as Float32Array))));
 
   // 1. 星団に分ける
   const k = clusterCount(n);
-  const { assignments, centroids } = refineClusters(centered, kmeans(centered, k, LAYOUT_SEED), LAYOUT_SEED);
+  const grouping = timed("kmeans", () => kmeans(centered, k, LAYOUT_SEED));
+  const { assignments, centroids } = timed("refine", () => refineClusters(centered, grouping, LAYOUT_SEED));
 
   const groups: number[][] = centroids.map(() => []);
   assignments.forEach((c, i) => groups[c].push(i));
 
   // 2. 星団の中心を置く（PCA → 拡大 → 押し広げ）
   const radii = groups.map((g) => SPACING * Math.sqrt(g.length) * 1.1);
-  const projected = pca2(centroids);
+  const projected = timed("pca", () => pca2(centroids));
   const maxAbs = Math.max(1e-6, ...projected.map((p) => Math.hypot(p.x, p.y)));
   const spread = 1.6 * Math.sqrt(radii.reduce((s, r) => s + r * r, 0));
   const scaled = projected.map((p) => ({ x: (p.x / maxAbs) * spread, y: (p.y / maxAbs) * spread }));
-  const packed = packCircles(scaled, radii, CLUSTER_GAP);
+  const packed = timed("pack", () => packCircles(scaled, radii, CLUSTER_GAP));
 
   // 3. 星団の中の星を螺旋に置く
   const stars: StarRecord[] = [];
   const clusters: ClusterRecord[] = [];
-  const orderedByCluster = groups.map((memberIdx, c) => orderMembers(memberIdx, c));
-  const names = clusterNames(orderedByCluster.map((g) => g.map((i) => usable[i])));
+  const orderedByCluster = timed("order", () => groups.map((memberIdx, c) => orderMembers(memberIdx, c)));
+  const names = timed("names", () => clusterNames(orderedByCluster.map((g) => g.map((i) => usable[i]))));
 
   function orderMembers(memberIdx: number[], c: number): number[] {
     // 代表らしい順。誰とでも似ているものは内側に来ないようにする
@@ -120,7 +123,7 @@ export function computeLayout(
     });
   }
 
-  orderedByCluster.forEach((ordered, c) => {
+  timed("spiral", () => orderedByCluster.forEach((ordered, c) => {
     ordered.forEach((idx, rank) => {
       const p = spiralPoint(rank, SPACING);
       const j = jitterOf(usable[idx].id, SPACING);
@@ -143,7 +146,7 @@ export function computeLayout(
       centroid: centroids[c],
       nextIndex: ordered.length,
     });
-  });
+  }));
 
   stars.sort((a, b) => a.cluster - b.cluster || a.rank - b.rank);
   return { version: LAYOUT_VERSION, spacing: SPACING, stars, clusters };

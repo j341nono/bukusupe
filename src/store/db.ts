@@ -24,8 +24,9 @@ export type StoredEmbedding = {
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 /** どのデータ源の DB を使うか。最初に DB を開く前に一度だけ決める。 */
-export function useDataSource(kind: BookmarkSourceKind): void {
-  const next = `bukusupe-${kind}`;
+export function useDataSource(kind: BookmarkSourceKind, bench?: string): void {
+  // bench は測定（?debug=1&bench=…）のときだけ。生成したブックマークの DB を、サンプルの DB と分ける
+  const next = bench ? `bukusupe-bench-${bench}` : `bukusupe-${kind}`;
   if (dbPromise && next !== dbName) throw new Error("DB を開いた後にデータ源は変えられない");
   dbName = next;
 }

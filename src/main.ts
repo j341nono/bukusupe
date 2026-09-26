@@ -18,6 +18,8 @@ import { membersFor, minimumSpanningTree, pointsFor, type Constellation } from "
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
+import { startTiming, stopTiming } from "./debug/timing";
+import type { EmbedDtype } from "./embed/protocol";
 import { lastTouched, touchAppearance } from "./render/magnitude";
 import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, setSourceSwitch, settleHud, setupHudControls } from "./ui/hud";
@@ -43,6 +45,26 @@ type AppState = {
 const state: AppState = {
   kind: "sample", items: [], vectors: new Map(), mean: null, generality: new Map(), layout: null,
 };
+/**
+ * 測定（docs/BENCHMARK.md）の印。`?debug=1` のときだけ、起動の節目の時刻（performance.now）を控える。
+ * `?debug=1&dtype=fp16|fp32` は量子化の比較のためだけの切り替え（通常は q8）。
+ */
+const PARAMS = new URLSearchParams(location.search);
+const DEBUG = PARAMS.get("debug") === "1";
+const DTYPE = DEBUG && ["q8", "fp16", "fp32"].includes(PARAMS.get("dtype") ?? "") ? PARAMS.get("dtype") as EmbedDtype : undefined;
+const benchMarks: Record<string, number> = {};
+const mark = (name: string): void => {
+  if (DEBUG && benchMarks[name] === undefined) benchMarks[name] = performance.now();
+};
+const createEmbedder = (): WorkerEmbedder => {
+  const created = DEBUG ? new WorkerEmbedder({ debug: true, dtype: DTYPE }) : new WorkerEmbedder();
+  if (DEBUG) {
+    mark("embedderStart");
+    created.ready().then(() => mark("modelReady")).catch(() => {});
+  }
+  return created;
+};
+
 /** Web のデモ（`npm run build:web`）。サンプルだけで動き、計算済みの配置で開いた瞬間に星空を出す（M6） */
 const WEB = import.meta.env.MODE === "web";
 let embedder: Embedder | null = null;
@@ -115,12 +137,13 @@ async function main(): Promise<void> {
 
   renderHudMessage("ブックマークを読み込んでいる…");
   const snapshot = await loadBookmarks();
+  mark("bookmarks");
   state.kind = snapshot.kind;
   state.items = snapshot.items;
   // サンプル⇄自分のブックマーク（ⓘ のパネル）。自分のブックマークが 1 件も無ければ、戻る先が無いので出さない
   setSourceSwitch(state.kind === "chrome" ? "sample" : snapshot.chromeCount > 0 ? "chrome" : null, switchSource);
   // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）
-  useDataSource(state.kind);
+  useDataSource(state.kind, snapshot.bench);
   onDbBlocked(() => renderHudMessage("ほかのブクスペのタブを閉じると続きを始める"));
 
   if (WEB && (await startFromSampleCache())) {
@@ -132,14 +155,16 @@ async function main(): Promise<void> {
     renderHud({ count: state.items.length, kind: state.kind, status: "星を読み解いている…", phase: "embed" });
     document.getElementById("loading")?.remove();
 
-    embedder = new WorkerEmbedder();
+    embedder = createEmbedder();
     await computeEmbeddings();
     await placeStars();
   }
+  mark("ready");
   constellations = await readConstellations<Constellation>();
   await reconcileConstellations();
   refreshConstellations();
   setupSearch(canvas);
+  mark("searchReady");
   setupConstellations();
   await restoreReturnState();
   offerSample();
@@ -177,7 +202,7 @@ function loadModelInBackground(): void {
   const status = document.getElementById("model-status");
   document.body.dataset.model = "loading";
   if (status) status.hidden = false;
-  embedder = new WorkerEmbedder();
+  embedder = createEmbedder();
   embedder.onDownload = (_file, percent) => {
     if (status) status.textContent = `意味の検索を準備している ${percent.toFixed(0)}%（それまでは文字の一致で探す）`;
   };
@@ -238,6 +263,7 @@ async function computeEmbeddings(): Promise<void> {
   const base = { count: state.items.length, kind: state.kind };
   try {
     state.vectors = await ensureEmbeddings(state.items, embedder, (p) => {
+      mark(`embed:${p.phase}`);
       if (p.phase === "model") {
         renderHud({ ...base, status: `モデルを取り込んでいる ${p.percent.toFixed(0)}%`, progress: p.percent / 100, phase: "model" });
       } else if (p.phase === "embed") {
@@ -351,6 +377,10 @@ async function loadOrComputeMean(): Promise<{ mean: Float32Array; recomputed: bo
 
 function show(layout: Layout, frame = true): void {
   state.layout = layout;
+  // 測定：最初に星を描いたコマ（show の後の最初のコマ）
+  if (DEBUG && layout.stars.length && benchMarks.firstStars === undefined) {
+    requestAnimationFrame(() => requestAnimationFrame(() => mark("firstStars")));
+  }
   const byId = new Map(state.items.map((i) => [i.id, i]));
   view?.setLayout(layout, toRenderStars(layout, byId), toLabelSource(layout, byId), frame);
   refreshConstellations();
@@ -989,6 +1019,54 @@ const debugApi = {
   exportSampleCache: () => (state.kind === "sample" && state.layout && state.mean ? encodeSampleCache(state.items, MODEL_ID,
     { vectors: state.vectors, mean: state.mean, generality: state.generality, layout: state.layout }) : null),
   modelReady: () => modelReady,
+
+  // --- 測定（docs/BENCHMARK.md、scripts/bench/）---
+  /** 起動の節目の時刻（performance.now、ミリ秒） */
+  marks: () => ({ ...benchMarks }),
+  /** 今の入力で配置をもう一度計算し、段ごとの時間を返す（保存も表示もしない） */
+  layoutTimings() {
+    if (!state.mean) return null;
+    const steps = startTiming();
+    const start = performance.now();
+    const layout = computeLayout(state.items, state.vectors, state.mean);
+    const total = performance.now() - start;
+    stopTiming();
+    return { n: layout.stars.length, clusters: layout.clusters.length, total, steps: { ...steps } };
+  },
+  /** 検索の内訳：検索語の埋め込み・意味のスコア・順位づけ（文字一致を含む）の時間 */
+  async searchTimings(text: string) {
+    if (!embedder || !state.mean) return null;
+    const t0 = performance.now();
+    const [query] = await embedder.embed([queryText(text)]);
+    const t1 = performance.now();
+    const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality,
+      GENERALITY_PENALTY, state.layout, CLUSTER_PRIOR);
+    const t2 = performance.now();
+    const ranked = rankSearch(state.items, text, semantic);
+    const t3 = performance.now();
+    return { embedMs: t1 - t0, scoreMs: t2 - t1, rankMs: t3 - t2, totalMs: t3 - t0, hits: ranked.length };
+  },
+  /** 検索語 1 つの埋め込みの時間 */
+  async embedTimed(text: string) {
+    if (!embedder) return null;
+    const start = performance.now();
+    await embedder.embed([queryText(text)]);
+    return performance.now() - start;
+  },
+  /** 汎用度の計算の時間（全件） */
+  generalityTiming() {
+    const vectors = state.items.flatMap((item) => state.vectors.get(item.id) ?? []);
+    const start = performance.now();
+    standardize(generalityScores(vectors));
+    return performance.now() - start;
+  },
+  wasmMemory: () => (embedder instanceof WorkerEmbedder ? embedder.wasmMemory() : null),
+  storageEstimate: () => navigator.storage.estimate(),
+  renderInfo: () => view?.renderInfo(),
+  setProfiling: (on: boolean) => view?.setProfiling(on),
+  takeProfile: () => view?.takeProfile() ?? [],
+  setLoopPaused: (paused: boolean) => view?.setLoopPaused(paused),
+  dtype: () => DTYPE ?? "q8",
 };
 if (new URLSearchParams(location.search).get("debug") === "1") {
   (globalThis as unknown as { __bukusupe: typeof debugApi }).__bukusupe = debugApi;

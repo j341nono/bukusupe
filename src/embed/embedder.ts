@@ -1,4 +1,4 @@
-import type { EmbedRequest, EmbedResponse } from "./protocol";
+import type { EmbedDtype, EmbedRequest, EmbedResponse } from "./protocol";
 import { ortBaseUrl } from "./ort-url";
 
 /**
@@ -23,11 +23,19 @@ export class WorkerEmbedder implements Embedder {
 
   private readonly worker: Worker;
   private readonly waiting = new Map<number, { resolve: (v: Float32Array[]) => void; reject: (e: Error) => void }>();
+  private readonly memoryWaiting = new Map<number, (v: { bytes: number; memories: number }) => void>();
   private nextId = 1;
   private readyPromise: Promise<void>;
 
-  constructor() {
-    this.worker = new Worker(new URL("./embed.worker.ts", import.meta.url), { type: "module" });
+  /**
+   * options は測定（?debug=1）のときだけ渡す：debug で Worker が WebAssembly のメモリを答えるようにし、
+   * dtype で量子化を切り替える（通常は q8）。
+   */
+  constructor(private readonly options: { debug?: boolean; dtype?: EmbedDtype } = {}) {
+    // Vite は Worker の起動の書き方を静的に読むので、2 通りをそのまま書く
+    this.worker = options.debug
+      ? new Worker(new URL("./embed.worker.ts", import.meta.url), { type: "module", name: "bukusupe-debug" })
+      : new Worker(new URL("./embed.worker.ts", import.meta.url), { type: "module" });
 
     let resolveReady: () => void;
     let rejectReady: (e: Error) => void;
@@ -44,6 +52,10 @@ export class WorkerEmbedder implements Embedder {
           break;
         case "download":
           this.onDownload?.(msg.file, msg.progress);
+          break;
+        case "memory":
+          this.memoryWaiting.get(msg.requestId)?.({ bytes: msg.bytes, memories: msg.memories });
+          this.memoryWaiting.delete(msg.requestId);
           break;
         case "vectors": {
           this.waiting.get(msg.requestId)?.resolve(msg.vectors);
@@ -64,7 +76,8 @@ export class WorkerEmbedder implements Embedder {
     };
     this.worker.onerror = (e) => rejectReady(new Error(`Worker が落ちた: ${e.message}`));
 
-    this.send({ type: "init", ortBaseUrl: ortBaseUrl(), model: this.model });
+    this.send({ type: "init", ortBaseUrl: ortBaseUrl(), model: this.model,
+      ...(this.options.dtype ? { dtype: this.options.dtype } : {}) });
   }
 
   ready(): Promise<void> {
@@ -77,6 +90,15 @@ export class WorkerEmbedder implements Embedder {
     return new Promise((resolve, reject) => {
       this.waiting.set(requestId, { resolve, reject });
       this.send({ type: "embed", requestId, texts });
+    });
+  }
+
+  /** 測定用：Worker の中の WebAssembly のメモリの合計（バイト）。debug で起動したときだけ意味がある。 */
+  wasmMemory(): Promise<{ bytes: number; memories: number }> {
+    const requestId = this.nextId++;
+    return new Promise((resolve) => {
+      this.memoryWaiting.set(requestId, resolve);
+      this.send({ type: "memory", requestId });
     });
   }
 

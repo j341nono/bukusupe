@@ -67,6 +67,9 @@ export type LabelSource = {
   stars: { id: string; title: string; url: string; x: number; y: number; cluster: number; rank: number; touched?: number }[];
 };
 
+/** 測定用：1 コマの時間（ミリ秒）。at はコマの始まり（performance.now） */
+export type FrameProfile = { at: number; total: number; overlay: number; render: number };
+
 export class SpaceView {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -1007,7 +1010,54 @@ export class SpaceView {
     this.controls.update();
   }
 
+  /**
+   * 測定用（?debug=1 の測定スクリプトだけが使う。docs/BENCHMARK.md）：1 コマごとの、全体・ラベルと窓の位置の更新・描画の時間。
+   * null の間（通常）は何も測らない。
+   */
+  private profile: { frames: FrameProfile[]; current: { overlay: number; render: number } } | null = null;
+
+  /** 測定中なら kind の時間を足す。通常は fn を呼ぶだけ */
+  private phase<T>(kind: "overlay" | "render", fn: () => T): T {
+    if (!this.profile) return fn();
+    const start = performance.now();
+    const result = fn();
+    this.profile.current[kind] += performance.now() - start;
+    return result;
+  }
+
   private readonly tick = (): void => {
+    if (!this.profile) { this.step(); return; }
+    const start = performance.now();
+    this.profile.current = { overlay: 0, render: 0 };
+    this.step();
+    this.profile.frames.push({ at: start, total: performance.now() - start, ...this.profile.current });
+  };
+
+  /** 測定用：1 コマごとの時間の記録を始める・止める。 */
+  setProfiling(on: boolean): void {
+    this.profile = on ? { frames: [], current: { overlay: 0, render: 0 } } : null;
+  }
+
+  /** 測定用：ここまでの 1 コマごとの記録を取り出して空にする。 */
+  takeProfile(): FrameProfile[] {
+    const frames = this.profile?.frames ?? [];
+    if (this.profile) this.profile.frames = [];
+    return frames;
+  }
+
+  /** 測定用：three.js の描画の資源（直前のコマの描画の呼び出し回数など）。 */
+  renderInfo(): { geometries: number; textures: number; programs: number; calls: number; triangles: number; points: number; lines: number } {
+    const info = this.renderer.info;
+    return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0,
+      calls: info.render.calls, triangles: info.render.triangles, points: info.render.points, lines: info.render.lines };
+  }
+
+  /** 測定用：描画のループを止める・再開する（何もしていないときの CPU 使用率への影響を見るためだけ）。 */
+  setLoopPaused(paused: boolean): void {
+    this.renderer.setAnimationLoop(paused ? null : this.tick);
+  }
+
+  private step(): void {
     this.frames++;
     const dt = Math.min(0.05, this.clock.getDelta());
     if (this.flight.active) {
@@ -1135,7 +1185,7 @@ export class SpaceView {
     const tier = this.zoomTier;
     if (this.lastLabelTier === null || tier !== this.lastLabelTier ||
       (!moving && now - this.lastLabelMotion >= 150 && (this.labelsDirty || this.lastLabelMotion > 0))) {
-      this.decideLabels();
+      this.phase("overlay", () => this.decideLabels());
       this.labelsDirty = false;
       this.lastLabelTier = tier;
       this.lastLabelMotion = 0;
@@ -1144,7 +1194,7 @@ export class SpaceView {
     const labelStart = performance.now();
     const size = this.renderer.getSize(new THREE.Vector2());
     const point = new THREE.Vector3();
-    this.labels.updatePositions((item) => {
+    this.phase("overlay", () => this.labels.updatePositions((item) => {
       const current = item.searchRank == null ? null : this.field.displayPosition(item.key);
       point.set(current?.x ?? item.x, 0, -(current?.y ?? item.y)).project(this.camera);
       if (point.z > 1) return null;
@@ -1156,11 +1206,11 @@ export class SpaceView {
         sy += (sy - size.y / 2) / outward * 10;
       }
       return { sx, sy };
-    });
+    }));
     this.labelPositionUpdates++;
     this.maxLabelPositionMs = Math.max(this.maxLabelPositionMs, performance.now() - labelStart);
-    this.renderer.render(this.scene, this.camera);
-  };
+    this.phase("render", () => this.renderer.render(this.scene, this.camera));
+  }
 
   /** 飛行中の 1 コマ：宇宙船とカメラ、星の立ち上がり、星座の線。地図のラベルや操作は動かさない。 */
   private flightTick(dt: number): void {
@@ -1208,14 +1258,16 @@ export class SpaceView {
     this.ship.group.rotation.set(ship.pitch, ship.yaw, 0);
     this.ship.setThrust(this.flight.thrustLevel);
     this.camera.updateMatrixWorld();
-    if (this.flight.phase === "flying") this.updateWindows(dt);
-    else if (this.flight.phase === "leaving") { this.windows.clear(); this.farLabels.clear(); }
-    this.updateSigns();
+    this.phase("overlay", () => {
+      if (this.flight.phase === "flying") this.updateWindows(dt);
+      else if (this.flight.phase === "leaving") { this.windows.clear(); this.farLabels.clear(); }
+      this.updateSigns();
+    });
     this.field.setLift(this.flight.lift);
     this.field.update(dt);
     this.constellations.update(dt);
     this.camera.updateMatrixWorld();
-    this.renderer.render(this.scene, this.camera);
+    this.phase("render", () => this.renderer.render(this.scene, this.camera));
     if (finished === "left") this.finishFlight();
   }
 
