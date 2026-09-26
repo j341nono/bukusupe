@@ -1,5 +1,5 @@
 node_modules/
-dist/
 .DS_Store
 *.log
 public/ort/
+dist-web/

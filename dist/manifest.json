@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "ブクスペ — ブックマークの宇宙",
+  "short_name": "ブクスペ",
+  "version": "0.1.0",
+  "description": "ブックマークを星にして、意味の近さで並べた宇宙地図。検索で星を引き寄せ、選んだ星を星座として残し、星の間を飛べる。ブックマークはブラウザの外に送りません。",
+  "minimum_chrome_version": "114",
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "unlimitedStorage",
+    "favicon"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "ブクスペを開く",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "host_permissions": [
+    "https://huggingface.co/*",
+    "https://*.hf.co/*",
+    "https://*.huggingface.co/*",
+    "https://*.xethub.hf.co/*"
+  ]
+}
