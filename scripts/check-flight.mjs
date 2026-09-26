@@ -537,7 +537,7 @@ try {
     "ページに切り替えて「戻る」で戻ると、飛行中の宇宙船の位置・向きと検索語が元に戻る",
     `移動 ${left ? "した" : "しない"}・再開 ${resumed ? "した" : "しない"}・宇宙船 ${shipBack ? "同じ位置" : "違う位置"}・検索語「${back?.input ?? ""}」・預けた検索 ${back?.stashed ?? "?"} 件`);
   // 新しく開いたときは、保存した状態を使わない
-  const fresh = await app.send("Target.createTarget", { url: `chrome-extension://${app.extId}/index.html` });
+  const fresh = await app.send("Target.createTarget", { url: `chrome-extension://${app.extId}/index.html?debug=1` });
   const freshSession = (await app.send("Target.attachToTarget", { targetId: fresh.targetId, flatten: true })).sessionId;
   await app.send("Runtime.enable", {}, freshSession);
   let freshState = null;

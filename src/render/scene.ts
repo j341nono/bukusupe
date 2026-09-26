@@ -194,6 +194,8 @@ export class SpaceView {
     this.controls.dampingFactor = 0.08;
     this.controls.screenSpacePanning = false;
     this.controls.minDistance = 6;
+    // タッチ（スマホ）：1 本指のドラッグで移動、2 本指のピンチで拡大縮小（と移動）。回転は使わない
+    this.controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     this.controls.maxDistance = 2000;
     this.controls.addEventListener("start", () => { this.focus = null; });
     for (const surface of [canvas, labelContainer]) {

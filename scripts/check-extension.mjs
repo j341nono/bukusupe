@@ -125,7 +125,7 @@ try {
   const { id: extId } = await send("Extensions.loadUnpacked", { path: DIST });
   console.log("拡張機能 ID:", extId);
 
-  const { targetId } = await send("Target.createTarget", { url: `chrome-extension://${extId}/index.html` });
+  const { targetId } = await send("Target.createTarget", { url: `chrome-extension://${extId}/index.html?debug=1` });
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Runtime.enable", {}, sessionId);
   await send("Log.enable", {}, sessionId);
@@ -1221,6 +1221,7 @@ try {
   const chromeGap = await tryEval(meanGap);
   check(chromeGap != null && chromeGap < 1e-5, "平均ベクトルが実ブックマークから作り直される",
     chromeGap == null ? "測れない" : `実ブックマークの平均との差 最大 ${chromeGap.toFixed(4)}`);
+  const hintAt20 = await tryEval("!!document.getElementById('sample-hint') && !document.getElementById('sample-hint').hidden");
   const chromeRows = await tryEval("globalThis.__bukusupe.constellationState().rows.length");
   check(chromeRows === 0, "サンプルの星座が実ブックマークの画面に混ざらない", `${chromeRows} 件`);
 
@@ -1246,6 +1247,21 @@ try {
   "本物の削除通知で、星座のメンバーと線が結び直される",
   `${chromeRow?.lastMembers.length ?? 0} → ${chromeLines?.members.length ?? 0} 星 / ${chromeLines?.edges.length ?? 0} 辺`);
 
+  // 3b. ブックマークが 20 件未満なら、初回に「サンプルで試す」を勧める案内が控えめに出る（2 回目以降は出ない）
+  const hintVisible = "(() => { const el = document.getElementById('sample-hint'); return !!el && !el.hidden && getComputedStyle(el).display !== 'none'; })()";
+  await send("Page.reload", {}, sessionId);
+  await waitUntil("globalThis.__bukusupe?.state.kind === 'chrome' && document.body.dataset.phase === 'ready'", 60000);
+  await sleep(500);
+  const hintFirst = await tryEval(hintVisible);
+  const hintCount = await tryEval("globalThis.__bukusupe.state.items.length");
+  await send("Page.reload", {}, sessionId);
+  await waitUntil("globalThis.__bukusupe?.state.kind === 'chrome' && document.body.dataset.phase === 'ready'", 60000);
+  await sleep(500);
+  const hintSecond = await tryEval(hintVisible);
+  check(hintAt20 === false && hintFirst === true && hintCount < 20 && hintSecond === false,
+    "ブックマークが 20 件未満なら、初回だけサンプルを勧める案内が出る（20 件では出ない）",
+    `20 件 ${hintAt20 ? "出る" : "出ない"}・${hintCount} 件の初回 ${hintFirst ? "出る" : "出ない"}・2 回目 ${hintSecond ? "出る" : "出ない"}`);
+
   // 4. 続けてブックマークが変わっても、更新が重ならず、配置に重複・欠落がない（M3）
   await evalIn(`(async () => {
     for (let i = 0; i < 3; i++) await chrome.bookmarks.create({ parentId: "1", title: "星空の撮影地 " + i, url: "https://example.com/burst-a/" + i });
@@ -1262,8 +1278,22 @@ try {
   check(consistent, "続けてブックマークが変わっても、配置に重複・欠落がない",
     `${await tryEval("globalThis.__bukusupe.state.items.length")} 件 / 星 ${await tryEval("globalThis.__bukusupe.layout()?.stars.length")} 個`);
 
+  // 4b. ⓘ のパネルの切り替えで、サンプルの宇宙へ（読み込み直す）。もう一度押すと自分のブックマークに戻る
+  const toggleLabel = "document.getElementById('source-toggle')?.textContent?.trim() ?? null";
+  const labelOnChrome = await tryEval(toggleLabel);
+  await evalIn("window.__beforeToggle = true");
+  await tryEval("document.getElementById('source-toggle')?.click()");
+  const toSample = await waitUntil("globalThis.__bukusupe?.state.kind === 'sample' && document.body.dataset.phase === 'ready' && window.__beforeToggle !== true", 60000);
+  const sampleRows = await tryEval(`globalThis.__bukusupe.constellationState().rows.some((row) => row.id === ${JSON.stringify(sampleRow?.id)})`);
+  const labelOnSample = await tryEval(toggleLabel);
+  await tryEval("document.getElementById('source-toggle')?.click()");
+  const toChrome = await waitUntil("globalThis.__bukusupe?.state.kind === 'chrome' && document.body.dataset.phase === 'ready' && globalThis.__bukusupe.state.items.length === 25", 60000);
+  check(toSample && sampleRows === true && toChrome && labelOnChrome === "サンプルの宇宙で試す" && labelOnSample === "自分のブックマークに戻る",
+    "ⓘ の切り替えで、読み込み直してサンプルの宇宙へ移り（サンプルの星座が残っている）、また自分のブックマークに戻る",
+    `「${labelOnChrome}」→ サンプル ${toSample ? "OK" : "NG"}（星座 ${sampleRows ? "あり" : "なし"}）・「${labelOnSample}」→ 自分のブックマーク ${toChrome ? "OK" : "NG"}`);
+
   // 5. サンプルに戻すと、サンプルの星座と平均ベクトルがそのまま残っている
-  await send("Page.navigate", { url: `chrome-extension://${extId}/index.html?sample=1` }, sessionId);
+  await send("Page.navigate", { url: `chrome-extension://${extId}/index.html?sample=1&debug=1` }, sessionId);
   await waitUntil("globalThis.__bukusupe?.state.kind === 'sample' && document.body.dataset.phase === 'ready'", 60000);
   const backRow = JSON.parse((await tryEval(`JSON.stringify(globalThis.__bukusupe.constellationState().rows
     .find((row) => row.id === ${JSON.stringify(sampleRow?.id)}) ?? null)`)) ?? "null");
@@ -1276,6 +1306,13 @@ try {
     ? Math.max(...sampleMean.map((v, i) => Math.abs(v - backMean[i]))) : Infinity;
   check(backGap < 1e-6, "サンプルの平均ベクトルが実ブックマークのもので上書きされない",
     Number.isFinite(backGap) ? `差 最大 ${backGap.toExponential(1)}` : "測れない");
+
+  // ?debug=1 を付けずに開くと、確認用の窓口 __bukusupe は無い（M6）
+  await send("Page.navigate", { url: `chrome-extension://${extId}/index.html` }, sessionId);
+  const plainReady = await waitUntil("document.body.dataset.phase === 'ready'", 60000);
+  const exposed = await tryEval("typeof globalThis.__bukusupe");
+  check(plainReady && exposed === "undefined", "?debug=1 を付けずに開くと、確認用の窓口 __bukusupe が無い",
+    `準備 ${plainReady ? "完了" : "未完"}・__bukusupe ${exposed}`);
 
   if (SHOT) {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);

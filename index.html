@@ -108,6 +108,39 @@
         color: var(--ink);
       }
       .hud-line { color: var(--ink); }
+      .hud-switch, #sample-hint button {
+        pointer-events: auto;
+        padding: 3px 12px;
+        border: 1px solid var(--hairline);
+        border-radius: 999px;
+        background: none;
+        color: var(--ink);
+        font: inherit;
+        font-size: 11.5px;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+      }
+      .hud-switch { margin-top: 10px; }
+      .hud-switch:hover, #sample-hint button:hover { border-color: rgba(214, 205, 180, 0.6); }
+      /* ブックマークが少ないときの案内（初回だけ。控えめに左下） */
+      #sample-hint {
+        position: fixed;
+        left: 22px;
+        bottom: 56px;
+        z-index: 3;
+        max-width: min(360px, calc(100vw - 44px));
+        padding: 10px 14px;
+        border: 1px solid var(--faint);
+        border-radius: 6px;
+        background: rgba(7, 10, 24, 0.82);
+        color: var(--dim);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      #sample-hint[hidden] { display: none; }
+      #sample-hint .sample-hint-actions { margin-top: 6px; display: flex; gap: 8px; }
+      #sample-hint #sample-hint-close { border-color: transparent; color: var(--dim); }
+      body.is-flying #sample-hint { display: none; }
       .hud-key {
         display: inline-block;
         min-width: 4.8em;
@@ -321,6 +354,15 @@
         letter-spacing: 0.04em;
       }
       #search-input:focus { border-color: rgba(214, 205, 180, 0.55); }
+      /* Web のデモ：モデルを裏で読み込んでいる間の、控えめな知らせ */
+      #model-status {
+        margin: 6px 18px 0;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        color: var(--dim);
+        opacity: 0.8;
+      }
+      #model-status[hidden] { display: none; }
       #search-input::placeholder { color: var(--dim); letter-spacing: 0.2em; }
       #constellation-rename, #constellation-delete {
         padding: 6px 10px; border: none; border-radius: 4px; background: none; cursor: pointer; text-align: left;
@@ -408,6 +450,28 @@
       #star-card-open:hover { border-color: rgba(214, 205, 180, 0.6); }
 
       #hud.is-collapsed { display: none; }
+
+      /* タッチの端末（スマホ）：地図と検索はタッチで使う。飛行モードはキーボードとマウスが要るので、ボタンを隠して案内だけ出す */
+      .for-touch, #touch-note { display: none; }
+      @media (hover: none) and (pointer: coarse) {
+        .for-pointer { display: none; }
+        .for-touch { display: inline; }
+        #flight-toggle, #flight-help { display: none !important; }
+        #touch-note {
+          display: block;
+          position: fixed;
+          left: 16px;
+          bottom: 18px;
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          color: var(--dim);
+          opacity: 0.8;
+          pointer-events: none;
+        }
+        #search-box { width: calc(100vw - 112px); }
+        /* 下端は左に案内、右に「再配置」。操作の説明はその一段上に */
+        #hint { bottom: 48px; padding: 0 16px; }
+      }
       body.is-demo #hud,
       body.is-demo #hud-toggle { display: none; }
 
@@ -433,6 +497,7 @@
     <div id="flight-flash"></div>
     <div id="search-box">
       <input id="search-input" type="search" autocomplete="off" placeholder="星を探す" aria-label="ブックマークを検索" />
+      <div id="model-status" hidden>意味の検索を準備している（それまでは文字の一致で探す）</div>
       <button id="constellation-create" hidden>星座にする</button>
       <div id="constellation-editor" hidden>
         <p>星をクリックして加える・外す</p>
@@ -461,8 +526,13 @@
       <span><kbd>Esc</kbd> 地図へ戻る</span>
       <p>星に近づくと名前が見え、星の芯に入るとそのページが開く</p>
     </div>
+    <div id="sample-hint" hidden>
+      ブックマークが少ないので、星空がまだまばらです。156 個の星が並ぶサンプルの宇宙でも試せます（ⓘ からいつでも切り替えられます）。
+      <div class="sample-hint-actions"><button id="sample-hint-try" type="button">サンプルの宇宙で試す</button><button id="sample-hint-close" type="button">閉じる</button></div>
+    </div>
     <div id="loading">星を数えている…</div>
-    <div id="hint">ドラッグで移動・ホイールで拡大縮小　操作の一覧は ⓘ</div>
+    <div id="hint"><span class="for-pointer">ドラッグで移動・ホイールで拡大縮小　操作の一覧は ⓘ</span><span class="for-touch">ドラッグで移動・ピンチで拡大縮小・タップで選ぶ</span></div>
+    <div id="touch-note">飛行モードは PC で試せます</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

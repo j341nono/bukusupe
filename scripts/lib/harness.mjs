@@ -16,7 +16,11 @@ const CHROME = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Conte
 const SEND_TIMEOUT_MS = 60_000;
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function launchExtension(dist, { width = 1280, height = 800 } = {}) {
+/**
+ * dist を拡張機能として読み込み、専用ページ（index.html?{query}）を開く。
+ * dist を null にすると拡張機能を読み込まず、url のページ（Web のデモなど）を開く。
+ */
+export async function launchExtension(dist, { width = 1280, height = 800, query = "debug=1", url = null, beforeOpen = null } = {}) {
   const profile = mkdtempSync(join(tmpdir(), "bukusupe-"));
   const child = spawn(CHROME, [
     "--headless=new", "--disable-gpu", "--use-gl=swiftshader", "--enable-unsafe-swiftshader",
@@ -56,8 +60,9 @@ export async function launchExtension(dist, { width = 1280, height = 800 } = {})
   });
 
   await sleep(2500);
-  const { id: extId } = await send("Extensions.loadUnpacked", { path: dist });
-  const { targetId } = await send("Target.createTarget", { url: `chrome-extension://${extId}/index.html` });
+  const extId = dist ? (await send("Extensions.loadUnpacked", { path: dist })).id : null;
+  // 開く前に仕掛けたいもの（通信の差し止めなど）があれば、空のページで先に行う
+  const { targetId } = await send("Target.createTarget", { url: beforeOpen ? "about:blank" : (url ?? `chrome-extension://${extId}/index.html?${query}`) });
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   for (const domain of ["Runtime", "Log", "Page", "Network"]) await send(`${domain}.enable`, {}, sessionId);
   listeners.push((m) => {
@@ -65,6 +70,10 @@ export async function launchExtension(dist, { width = 1280, height = 800 } = {})
     for (const domain of ["Runtime", "Log", "Network"]) send(`${domain}.enable`, {}, m.params.sessionId).catch(() => {});
   });
   await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sessionId);
+  if (beforeOpen) {
+    await beforeOpen({ send, sessionId });
+    await send("Page.navigate", { url: url ?? `chrome-extension://${extId}/index.html?${query}` }, sessionId);
+  }
 
   /** ページで式を評価して値を返す。例外は Error にして投げる。 */
   const evalIn = async (expression) => {

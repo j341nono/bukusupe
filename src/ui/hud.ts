@@ -31,6 +31,20 @@ const HELP = `
     <li>星をクリック　カード（ダブルクリックで開く）</li>
   </ul>`;
 
+/** ⓘ のパネルの「サンプルの宇宙で試す／自分のブックマークに戻る」。null なら出さない（Web のデモ、ブックマークが無いとき） */
+let sourceSwitch: BookmarkSourceKind | null = null;
+let onSourceSwitch: ((to: BookmarkSourceKind) => void) | null = null;
+
+export function setSourceSwitch(to: BookmarkSourceKind | null, handler: (to: BookmarkSourceKind) => void): void {
+  sourceSwitch = to;
+  onSourceSwitch = handler;
+}
+
+const SWITCH_LABEL: Record<BookmarkSourceKind, string> = {
+  sample: "サンプルの宇宙で試す",
+  chrome: "自分のブックマークに戻る",
+};
+
 const escape = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -47,6 +61,7 @@ export function renderHud(state: HudState): void {
     <div class="hud-line"><span class="hud-key">星</span>${state.count}</div>
     <div class="hud-line"><span class="hud-key">データ源</span>${SOURCE_LABEL[state.kind]}</div>
     ${state.status ? `<div class="hud-status">${escape(state.status)}</div>${bar}` : ""}
+    ${sourceSwitch ? `<button id="source-toggle" class="hud-switch" type="button">${SWITCH_LABEL[sourceSwitch]}</button>` : ""}
     ${HELP}
   `;
 }
@@ -68,6 +83,10 @@ export function setupHudControls(): void {
     document.body.classList.add("is-demo");
     return;
   }
+  // パネルは描き直されるので、切り替えのボタンは親で受ける
+  document.getElementById("hud")?.addEventListener("click", (event) => {
+    if ((event.target as HTMLElement | null)?.id === "source-toggle" && sourceSwitch) onSourceSwitch?.(sourceSwitch);
+  });
   document.getElementById("hud-toggle")?.addEventListener("click", () => {
     userToggled = true;
     document.getElementById("hud")?.classList.toggle("is-collapsed");

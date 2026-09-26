@@ -1,3 +1,5 @@
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 
 /**
@@ -16,18 +18,32 @@ function dropDuplicateOrtWasm(): Plugin {
   };
 }
 
+/**
+ * Web のデモ（`--mode web`）には拡張機能のマニフェストを置かない（public/ から写されたものを消す）。
+ */
+function dropManifest(): Plugin {
+  return {
+    name: "drop-extension-manifest",
+    apply: "build",
+    closeBundle() {
+      rmSync(resolve("dist-web/manifest.json"), { force: true });
+    },
+  };
+}
+
 // 素の Vite で MV3 を組む。プラグインを使わないのは、CSP と
 // ONNX Runtime の補助ファイル（M1 で同梱）の配置を自分で握るため。
-export default defineConfig({
+// `--mode web` は Web のデモ（M6）：サンプルだけで動く版を dist-web/ に出す（service worker もマニフェストも無い）。
+export default defineConfig(({ mode }) => ({
   base: "./",
-  plugins: [dropDuplicateOrtWasm()],
+  plugins: mode === "web" ? [dropDuplicateOrtWasm(), dropManifest()] : [dropDuplicateOrtWasm()],
   build: {
     target: "es2022",
-    outDir: "dist",
+    outDir: mode === "web" ? "dist-web" : "dist",
     emptyOutDir: true,
     rollupOptions: {
       // パスは root（プロジェクト直下）からの相対
-      input: {
+      input: mode === "web" ? { index: "index.html" } as Record<string, string> : {
         index: "index.html",
         background: "src/background.ts",
       },
@@ -43,4 +59,4 @@ export default defineConfig({
     // MV3 では classic worker が使えないので ES モジュールで出す（M1 で使う）。
     format: "es",
   },
-});
+}));

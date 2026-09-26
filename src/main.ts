@@ -1,5 +1,6 @@
-import { loadBookmarks, type BookmarkItem, type BookmarkSourceKind } from "./bookmarks";
-import { WorkerEmbedder, type Embedder } from "./embed/embedder";
+import { loadBookmarks, setPreferSample, type BookmarkItem, type BookmarkSourceKind } from "./bookmarks";
+import { MODEL_ID, WorkerEmbedder, type Embedder } from "./embed/embedder";
+import { decodeSampleCache, encodeSampleCache, type SampleCacheFile } from "./data/sample-cache";
 import { ensureEmbeddings } from "./embed/ensure";
 import { passageText, queryText } from "./embed/text";
 import { generalityScores, standardize } from "./layout/vector";
@@ -19,7 +20,7 @@ import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
 import { lastTouched, touchAppearance } from "./render/magnitude";
 import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
-import { renderHud, renderHudMessage, settleHud, setupHudControls } from "./ui/hud";
+import { renderHud, renderHudMessage, setSourceSwitch, settleHud, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
 
 const META_MEAN = "mean-vector";
@@ -42,7 +43,11 @@ type AppState = {
 const state: AppState = {
   kind: "sample", items: [], vectors: new Map(), mean: null, generality: new Map(), layout: null,
 };
+/** Web のデモ（`npm run build:web`）。サンプルだけで動き、計算済みの配置で開いた瞬間に星空を出す（M6） */
+const WEB = import.meta.env.MODE === "web";
 let embedder: Embedder | null = null;
+/** 意味の検索に使えるか。Web のデモでは、裏で読み込んでいるモデルが揃うまで文字一致の検索だけにする */
+let modelReady = !WEB;
 let view: SpaceView | null = null;
 let hits: SearchHit[] = [];
 let selectedIndex = 0;
@@ -112,27 +117,109 @@ async function main(): Promise<void> {
   const snapshot = await loadBookmarks();
   state.kind = snapshot.kind;
   state.items = snapshot.items;
+  // サンプル⇄自分のブックマーク（ⓘ のパネル）。自分のブックマークが 1 件も無ければ、戻る先が無いので出さない
+  setSourceSwitch(state.kind === "chrome" ? "sample" : snapshot.chromeCount > 0 ? "chrome" : null, switchSource);
   // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）
   useDataSource(state.kind);
   onDbBlocked(() => renderHudMessage("ほかのブクスペのタブを閉じると続きを始める"));
 
-  // 埋め込みが揃うまでは仮の配置で「星が生まれる」ところを見せる
-  show(provisionalLayout(state.items), false);
-  renderHud({ count: state.items.length, kind: state.kind, status: "星を読み解いている…", phase: "embed" });
-  document.getElementById("loading")?.remove();
+  if (WEB && (await startFromSampleCache())) {
+    document.getElementById("loading")?.remove();
+    loadModelInBackground();
+  } else {
+    // 埋め込みが揃うまでは仮の配置で「星が生まれる」ところを見せる
+    show(provisionalLayout(state.items), false);
+    renderHud({ count: state.items.length, kind: state.kind, status: "星を読み解いている…", phase: "embed" });
+    document.getElementById("loading")?.remove();
 
-  embedder = new WorkerEmbedder();
-  await computeEmbeddings();
-  await placeStars();
+    embedder = new WorkerEmbedder();
+    await computeEmbeddings();
+    await placeStars();
+  }
   constellations = await readConstellations<Constellation>();
   await reconcileConstellations();
   refreshConstellations();
   setupSearch(canvas);
   setupConstellations();
   await restoreReturnState();
+  offerSample();
 
   watchBookmarks();
   document.getElementById("relayout")?.addEventListener("click", () => void enqueue(relayout));
+}
+
+/**
+ * Web のデモ：同梱した計算済みの埋め込みと配置で、すぐに星空を出す。
+ * 今のサンプル・配置の版・モデルと合わなければ使わず、通常の計算に戻る（`npm run sample:precompute` で作り直す）。
+ */
+async function startFromSampleCache(): Promise<boolean> {
+  const file = (await import("./data/sample-precomputed.json")).default as unknown as SampleCacheFile;
+  const cache = decodeSampleCache(file, state.items, MODEL_ID);
+  if (!cache) {
+    console.warn("[ブクスペ] 同梱した計算済みのサンプルが古い（npm run sample:precompute で作り直す）");
+    return false;
+  }
+  state.vectors = cache.vectors;
+  state.mean = cache.mean;
+  state.generality = cache.generality;
+  show(cache.layout);
+  renderHud({ count: state.items.length, kind: state.kind,
+    status: `${cache.layout.clusters.filter((c) => c.count > 0).length} つの星団`, phase: "ready" });
+  settleHud();
+  return true;
+}
+
+/**
+ * Web のデモ：モデルを裏で読み込む。揃うまでは文字一致の検索で動かし、検索欄の下に控えめに知らせる。
+ * 揃ったら、入力中の検索を意味の検索でやり直す。
+ */
+function loadModelInBackground(): void {
+  const status = document.getElementById("model-status");
+  document.body.dataset.model = "loading";
+  if (status) status.hidden = false;
+  embedder = new WorkerEmbedder();
+  embedder.onDownload = (_file, percent) => {
+    if (status) status.textContent = `意味の検索を準備している ${percent.toFixed(0)}%（それまでは文字の一致で探す）`;
+  };
+  embedder.ready().then(() => {
+    modelReady = true;
+    document.body.dataset.model = "ready";
+    if (status) status.hidden = true;
+    const input = document.getElementById("search-input") as HTMLInputElement | null;
+    if (input?.value.trim()) input.dispatchEvent(new Event("input"));
+  }).catch((err) => {
+    console.error("[ブクスペ] モデルを読み込めなかった", err);
+    document.body.dataset.model = "error";
+    if (status) status.textContent = "意味の検索を準備できなかった（文字の一致で探す）";
+  });
+}
+
+/**
+ * データ源を切り替えて読み込み直す（DB はデータ源ごとに分かれているので、星座や配置は混ざらない）。
+ * `?sample=1` で開いていたら、自分のブックマークに戻るときに外す。
+ */
+function switchSource(to: BookmarkSourceKind): void {
+  setPreferSample(to === "sample");
+  const url = new URL(location.href);
+  if (to === "chrome" && url.searchParams.has("sample")) {
+    url.searchParams.delete("sample");
+    location.replace(url);
+  } else location.reload();
+}
+
+/** 自分のブックマークが 20 件未満なら、初回だけサンプルの宇宙を控えめに勧める（ⓘ からいつでも切り替えられる）。 */
+const SAMPLE_HINT_KEY = "bukusupe:sample-hint-shown";
+const FEW_BOOKMARKS = 20;
+function offerSample(): void {
+  const hint = document.getElementById("sample-hint");
+  if (!hint || state.kind !== "chrome" || state.items.length >= FEW_BOOKMARKS) return;
+  try {
+    if (localStorage.getItem(SAMPLE_HINT_KEY)) return;
+    localStorage.setItem(SAMPLE_HINT_KEY, "1");
+  } catch { return; }
+  hint.hidden = false;
+  document.getElementById("sample-hint-try")?.addEventListener("click", () => switchSource("sample"));
+  document.getElementById("sample-hint-close")?.addEventListener("click", () => { hint.hidden = true; });
 }
 
 /**
@@ -334,7 +421,7 @@ async function saveConstellation(): Promise<void> {
   if (!editing) return;
   const name = (document.getElementById("constellation-name-input") as HTMLInputElement).value.trim() || editing.query;
   const members = currentEditMembers().filter((id) => state.items.some((item) => item.id === id));
-  const queryVector = embedder ? Array.from((await embedder.embed([queryText(editing.query)]))[0]) : undefined;
+  const queryVector = embedder && modelReady ? Array.from((await embedder.embed([queryText(editing.query)]))[0]) : undefined;
   const row: Constellation = {
     id: crypto.randomUUID(), name, source: "search", query: editing.query, queryVector,
     pinned: [...editing.pinned], excluded: [...editing.excluded], lastMembers: members, createdAt: Date.now(),
@@ -503,7 +590,7 @@ function setupConstellations(): void {
 
 async function searchResults(text: string, coefficient = GENERALITY_PENALTY,
   priorCoefficient = CLUSTER_PRIOR): Promise<SearchHit[]> {
-  if (!embedder || !state.mean || text.trim().length < 2) return rankSearch(state.items, text);
+  if (!embedder || !modelReady || !state.mean || text.trim().length < 2) return rankSearch(state.items, text);
   const [query] = await embedder.embed([queryText(text)]);
   const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality,
     coefficient, state.layout, priorCoefficient);
@@ -724,7 +811,7 @@ function watchBookmarks(): void {
   chrome.bookmarks.onMoved.addListener(refresh);   // フォルダのパスが入力文に入るため
 }
 
-// --- 開発と自動確認のための窓口（M3 以降は画面から使う） ---
+// --- 開発と自動確認のための窓口。URL に ?debug=1 があるときだけ公開する（M6） ---
 
 const plain = (layout: Layout) => ({
   spacing: layout.spacing,
@@ -749,7 +836,7 @@ const plain = (layout: Layout) => ({
 
 let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: Layout | null } | null = null;
 
-(globalThis as unknown as { __bukusupe: unknown }).__bukusupe = {
+const debugApi = {
   state,
   frames: () => view?.frames ?? 0,
   layout: () => (state.layout ? plain(state.layout) : null),
@@ -898,7 +985,14 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   toggleEditMember: handleStarClick,
   recallConstellation: toggleConstellation,
   mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
+  /** Web のデモに同梱する計算済みのサンプル（`npm run sample:precompute` が使う） */
+  exportSampleCache: () => (state.kind === "sample" && state.layout && state.mean ? encodeSampleCache(state.items, MODEL_ID,
+    { vectors: state.vectors, mean: state.mean, generality: state.generality, layout: state.layout }) : null),
+  modelReady: () => modelReady,
 };
+if (new URLSearchParams(location.search).get("debug") === "1") {
+  (globalThis as unknown as { __bukusupe: typeof debugApi }).__bukusupe = debugApi;
+}
 
 main().catch((err) => {
   console.error(err);

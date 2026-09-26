@@ -4,5 +4,6 @@ export function ortBaseUrl(): string {
   if (typeof chrome !== "undefined" && chrome.runtime?.getURL) {
     return chrome.runtime.getURL("ort/");
   }
-  return new URL("/ort/", location.origin).href;
+  // 開発サーバーと Web のデモ。GitHub Pages のようにサブパス（/bukusupe/）に置かれても、ページと同じ場所の ort/ を指す
+  return new URL("./ort/", location.href).href;
 }

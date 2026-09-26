@@ -7,13 +7,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:web": "tsc --noEmit && vite build --mode web",
+    "prebuild:web": "node scripts/copy-ort.mjs",
+    "sample:precompute": "npm run build && node scripts/precompute-sample.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/gen-icons.mjs",
-    "check:ext": "node scripts/check-extension.mjs; e=$?; node scripts/check-flight.mjs; f=$?; exit $((e | f))",
+    "check:ext": "node scripts/check-dist.mjs; d=$?; node scripts/check-fresh.mjs; c=$?; node scripts/check-extension.mjs; e=$?; node scripts/check-flight.mjs; f=$?; npm run build:web >/dev/null && node scripts/check-web.mjs; w=$?; exit $((d | c | e | f | w))",
     "prebuild": "node scripts/copy-ort.mjs",
     "predev": "node scripts/copy-ort.mjs",
-    "check:flight": "node scripts/check-flight.mjs"
+    "check:flight": "node scripts/check-flight.mjs",
+    "check:web": "npm run build:web && node scripts/check-web.mjs",
+    "check:dist": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
