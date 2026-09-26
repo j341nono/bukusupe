@@ -8,6 +8,43 @@
 
 ## 0. いまの状態と、残りのタスク（最初に読む）
 
+### M6（提出の準備）— 2026-09-26（Claude）
+
+使う人の指示で `docs/PLAN.md` の M6 を「提出の準備」に変えた（新しい機能は足さない。配布用の zip は作らない。デモ録画は外れた）。
+審査員には GitHub のリポジトリの URL を渡し、clone した `dist/` をデベロッパーモードで読み込んでもらう。あわせて Web のデモを GitHub Pages に置く。
+
+| 小段階 | 入れたもの | 確認（規則 8：修正前に NG を確認） |
+|---|---|---|
+| デバッグ用の窓口 | `__bukusupe` は `?debug=1` のときだけ公開（`src/main.ts` の末尾）。確認スクリプトはすべて `?debug=1` で開く（`harness.mjs` の `query`）。`exportSampleCache()`・`modelReady()` を足した | 「?debug=1 を付けずに開くと __bukusupe が無い」（修正前：object で NG） |
+| サンプルへの切り替え | ⓘ のパネルに `#source-toggle`（「サンプルの宇宙で試す」／「自分のブックマークに戻る」）。選択は `localStorage` の `bukusupe:prefer-sample` に覚え、`location.reload()`（DB はデータ源ごとに分かれているので混ざらない）。`?sample=1` で開いていたら、戻るときに外す。自分のブックマークが 1 件も無いときは戻り先が無いので出さない。ブックマークが 20 件未満なら、初回だけ左下に `#sample-hint` を控えめに出す（`bukusupe:sample-hint-shown`） | 20 件では出ず、19 件の初回に出て、2 回目は出ない／切り替えで読み込み直してサンプルへ（サンプルの星座が残る）→ 戻る（修正前：どちらも NG） |
+| アイコン | `scripts/gen-icons.mjs` を作り直した（藍の角丸・観測円・しおりの形の星座。16・32・48・128px。`docs/DESIGN.md`）。manifest の名前「ブクスペ — ブックマークの宇宙」と説明文、32px を追加 | 見た目の確認（自動確認なし） |
+| Web のデモ | `npm run build:web`（`vite build --mode web` → `dist-web/`。background とマニフェストなし）。`import.meta.env.MODE === "web"` のとき、`src/data/sample-precomputed.json`（計算済みの埋め込み・平均・汎用度・配置）で開いた瞬間に星空を出し、モデルは裏で読み込む（揃うまでは文字一致の検索、検索欄の下に `#model-status`、`body[data-model]`）。計算済みはサンプル・入力文の要約・配置の版・モデルが一致しなければ使わず、警告を出して通常の計算に戻る。作り直しは `npm run sample:precompute`（拡張機能のビルドを Chrome で開き、本物と同じ経路で計算して書き出す）。拡張機能の束には入らない（静的に消える分岐の中の動的 import）。ORT の場所はページからの相対（`./ort/`）にしてサブパスでも動く。スマホ：`MapControls.touches` を 1 本指で移動・2 本指で拡大縮小。`(hover: none) and (pointer: coarse)` で飛行ボタンと説明を隠し、`#touch-note`「飛行モードは PC で試せます」。GitHub Pages の公開は `.github/workflows/pages.yml` | `scripts/check-web.mjs`（下） |
+| `dist/` をリポジトリに | `.gitignore` から `dist/` を外した（27MB の ORT の WASM を含む）。`scripts/check-dist.mjs` が一時フォルダへビルドし直し、git の **index** の `dist/` と一覧・中身を比べる | 修正前：除外されていて NG。動作が変わる変更をソースに入れると「中身が違う background.js」で NG になることも確かめた（コメントだけの変更は圧縮で消えるので差が出ない） |
+| README・THIRD_PARTY_NOTICES | `README.md`（一文とスクリーンショット 3 枚、Web のデモの URL、導入、使い方とキー操作、警告の説明、プライバシー、既知の制限、開発と公開の手順）。`THIRD_PARTY_NOTICES` は `scripts/gen-notices.mjs` で作る。同梱物は sourcemap で洗い出した：three、Transformers.js（中に @huggingface/tokenizers と @huggingface/jinja）、onnxruntime-web / -common、Vite の modulepreload の補助。モデル（intfloat/multilingual-e5-small、Xenova の ONNX 変換版）も載せた。ORT の WASM が静的に取り込むライブラリは、同梱版のコミットの `ThirdPartyNotices.txt` を `licenses/` に置いて参照 | — |
+| 最終確認 | `scripts/check-fresh.mjs`：`git checkout-index` でコミットされる内容だけを書き出し、その `dist/` をまっさらなプロファイルに `?debug=1` なしで読み込む。モデル取得 → 埋め込み → 星空、外部通信は Hugging Face だけ、コンソールにエラー・警告なし（`Runtime.consoleAPICalled` の warn も見る） | 修正前：`dist/` が index に無く NG |
+
+**`check:ext` の中身（順に）**：`check-dist` → `check-fresh` → `check-extension` → `check-flight` → `build:web` と `check-web`。
+
+**`check-web.mjs` が見ているもの**：dist-web を手元のサーバーのサブパス `/bukusupe/` に置いて開く。Hugging Face への通信をブラウザ全体の
+`Fetch` で差し止めたまま、開いて 0.4 秒ほどで 156 個の星空が出ること・読み込み中の知らせ・文字一致の検索。差し止めを解いてモデルが
+揃うと意味の検索になり知らせが消える。Enter で通常のページ遷移（移動先は Fetch で空ページに差し替え）→「戻る」で検索語と結果が戻る。
+飛行中の窓はすべて頭文字の紋章。スマホ（390×844、タッチのエミュレーション）で、飛行ボタンが無く案内が出る・ドラッグで移動・ピンチで拡大・
+タップでカード・検索で軌道。外部から読むのはモデルの重みだけ。PC とスマホでエラー・警告なし。スクリーンショット `web-initial.png` / `web-mobile.png`。
+
+**手順が変わった点**：ソースを直したら `npm run build` → `git add dist` → `npm run check:ext` → コミット（`CLAUDE.md` / `AGENTS.md` の規則 4）。
+サンプル・入力文（`src/embed/text.ts`）・配置の計算・`LAYOUT_VERSION`・モデルを変えたら `npm run sample:precompute` も。
+依存を足したり版を上げたら `node scripts/gen-notices.mjs`（ORT の版が変わったら `licenses/` も取り直す）。
+
+**Web のデモの URL**：README には `https://j341nono.github.io/bukusupe/` と書いた。**公開はまだ**（使う人が Settings → Pages で
+Source を GitHub Actions にし、main に push すると公開される）。
+
+**今回の実行結果**：`check-dist`・`check-fresh`（初回起動 17 秒）・`check-extension`（新しい 3 項目を含め全件）・`check-web` は OK。
+`check-flight` は **「2000 件で、飛行中も 60 コマ/秒」だけが NG**（47・47・54・52 コマ/秒。しきい値 55）。
+この項目は作業の前のビルド（bf30d4f）でも 51・50・55 と揺れており、同じ負荷のもとで続けて測ると前 55・後 54 でほぼ同じ。
+測った間のマシンの負荷平均は 8.5〜13.8（他のアプリが動いていた）。今回の変更は飛行中の描画に触れていない
+（地図のタッチ設定・CSS・起動の分岐だけ）ので、環境の揺れと判断してコミットした。**負荷の低いときに `npm run check:flight` で測り直すこと。**
+
+
 ### デブリと加速リング／同じタブで開いて「戻る」で再開／検索を星座より前面に（2026-09-26）
 
 使う人からの依頼（要点）。**各小段階ごとにコミットし、このファイルを更新する。** 規則 8 に従い、確認は先に書いてある。
@@ -261,8 +298,7 @@ Ctrl/⌘ を押した場合だけ `chrome.tabs.create`。検索中の星座作�
 3. **3a：飛行モード（基本）**（**完了。上の節**） — F キー／「飛行」ボタンで入り Esc で出る、星が立ち上がる、近づいた星の窓（`_favicon`・最大 6 個）、
    芯に入るとページを開く、W・S・A・D・マウス・Space・Shift の操作、オリジナルの宇宙船、星座の線を立体で。
 4. **3b：飛行モード（ブラックホールの重力、飛行中の検索）** — 前方のブラックホール、傾きの違う 3 つの軌道面、上限付きの重力。
-5. **M6** — 配布物、README、`THIRD_PARTY_NOTICES`、サンプルへの切り替えボタン、`__bukusupe` を `?debug=1` のときだけ公開
-   （`check:ext` も `?debug=1` で開くよう直す）、デモ録画。
+5. ~~**M6**~~ **提出の準備として完了（2026-09-26。上の「M6（提出の準備）」）**。デモ録画は計画から外れた。
 6. **時間があれば** — ブックマークの削除（確認、元に戻す、塵の演出）、検索候補 3 つ、フォルダの自動星座（淡い銀色）、
    `docs/DESIGN.md` の案 4・5。
    - **ブックマークの削除は、SPEC 4 章と CLAUDE.md / AGENTS.md の規則 3（削除・変更する処理を書かない）に反する。
@@ -663,7 +699,8 @@ npm install
 npm run dev        # http://localhost:5173（サンプル 156 件）
 npm run build      # tsc --noEmit && vite build → dist/
 npm run typecheck
-npm run check:ext  # dist/ を実際の Chrome に読み込んで通しで確認（数分かかる）
+npm run check:ext  # dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → Web のデモ（20 分ほど）
+npm run build:web  # Web のデモ → dist-web/
 npm run icons      # アイコン PNG を作り直す
 ```
 
@@ -672,7 +709,7 @@ npm run icons      # アイコン PNG を作り直す
 - 拡張機能として：`npm run build` → `chrome://extensions` → デベロッパーモード →
   「パッケージ化されていない拡張機能を読み込む」で `dist/` → ツールバーのアイコン。
 - `?sample=1` でサンプルデータに強制切り替え、`?demo=1` で左上のパネルを隠す。
-- 画面のコンソールから `__bukusupe` が触れる（`search` / `layout` / `computeAgain` /
+- `?debug=1` を付けて開くと、画面のコンソールから `__bukusupe` が触れる（`search` / `layout` / `computeAgain` /
   `simulateAdd` / `benchmark` / `restore` / `setZoomTier` / `setTopDown` / `relayout` / `frames`）。
 
 ### `check:ext` が見ている項目

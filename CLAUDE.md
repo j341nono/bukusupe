@@ -36,6 +36,9 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ```
 .
 ├── CLAUDE.md / AGENTS.md    # 同じ内容（エージェント向けの作業規則）
+├── README.md                # 審査員・使う人向け（導入手順、使い方、権限、プライバシー）
+├── THIRD_PARTY_NOTICES      # 第三者のライセンス（scripts/gen-notices.mjs で作る）。licenses/ に ONNX Runtime の表示
+├── .github/workflows/pages.yml  # Web のデモを GitHub Pages に公開
 ├── docs/
 │   ├── SPEC.md              # 仕様書（正典）
 │   ├── PLAN.md              # 実装計画・完了条件
@@ -45,13 +48,18 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
 ├── public/
 │   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる）
-│   ├── icons/               # 16 / 48 / 128 px
+│   ├── icons/               # 16 / 32 / 48 / 128 px（npm run icons で作る。しおりの形の星座）
 │   └── ort/                 # ONNX Runtime の .mjs / .wasm（生成物。git には入れない）
 ├── scripts/
 │   ├── gen-icons.mjs        # アイコン PNG の生成（依存なし）
 │   ├── copy-ort.mjs         # ONNX Runtime の補助ファイルを public/ort/ に同梱
 │   ├── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
 │   ├── check-flight.mjs     # 飛行モードの確認
+│   ├── check-dist.mjs       # コミットされる dist/ が今のソースのビルドと一致するか
+│   ├── check-fresh.mjs      # git の index の dist/ を、まっさらなプロファイルで初回起動
+│   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
+│   ├── precompute-sample.mjs  # Web のデモに同梱する計算済みのサンプルを作る
+│   ├── gen-notices.mjs      # THIRD_PARTY_NOTICES を作る
 │   └── lib/harness.mjs      # 確認スクリプトの共通の土台（CDP パイプ、ページ内のキー入力）
 ├── src/
 │   ├── main.ts              # 画面の入口（読み込み → 埋め込み → 配置 → 検索・星座）
@@ -64,8 +72,9 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── constellation/       # 星座の保存形式、メンバーの集合、決定的な最小全域木
 │   ├── render/              # three.js の描画（星・星雲・ブラックホール・星座の線）
 │   ├── ui/                  # HUD とラベルの重ね表示
-│   └── data/sample-bookmarks.json   # 開発・デモ用の 156 件
-└── dist/                    # ビルド成果物（拡張機能として読み込む）
+│   └── data/                # sample-bookmarks.json（156 件）、sample-precomputed.json（Web のデモ用の計算済み）
+├── dist/                    # ビルド成果物（拡張機能として読み込む）。**リポジトリに含める**（審査員はビルドしない）
+└── dist-web/                # Web のデモのビルド成果物（git には入れない。GitHub Actions が作って公開する）
 ```
 
 ## ビルドと確認の手順
@@ -75,15 +84,19 @@ npm install
 npm run dev        # http://localhost:5173 で画面を確認（サンプルデータ）
 npm run build      # dist/ を生成
 npm run typecheck  # tsc --noEmit
-npm run check:ext    # dist/ を実際の Chrome に読み込み、通しで自動確認（既存 94 項目＋飛行 21 項目。15 分ほど）
+npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
+npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → Web のデモ。20 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
+npm run check:web    # Web のデモの確認だけ
+npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す
 ```
 
 拡張機能としての確認：`npm run build` → `chrome://extensions` → デベロッパーモード ON →
 「パッケージ化されていない拡張機能を読み込む」で `dist/` を選択 → ツールバーのアイコンを押す。
 
 データ源は自動判定する（`chrome.bookmarks` に http(s) のブックマークがあれば Chrome、なければサンプル）。
-URL に `?sample=1` を付けると拡張機能内でも強制的にサンプルデータになる。`?demo=1` で左上のパネルを隠す。
+URL に `?sample=1` を付けると拡張機能内でも強制的にサンプルデータになる（ⓘ のパネルの「サンプルの宇宙で試す」でも切り替わる）。
+`?demo=1` で左上のパネルを隠す。確認用の窓口 `__bukusupe` は **`?debug=1` のときだけ**公開する（確認スクリプトは `?debug=1` で開く）。
 使っている途中でデータ源が変わったら（サンプル⇄実ブックマーク）、ページを読み込み直す。
 
 ## 守るべきルール
@@ -101,6 +114,8 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
    `remove` / `removeTree` / `update` / `create` / `move` は使わない
    （`check:ext` が使い捨てのプロファイルで使うのは確認スクリプトの側だけ）。
 4. **各段階の終わりに `npm run build` と `npm run check:ext` が通ることを確認してからコミットする。**
+   `dist/` はリポジトリに含めるので、手順は `npm run build` → `git add dist` → `npm run check:ext` → コミット
+   （`check:ext` の最初の確認が、git の index の `dist/` と今のソースのビルドを比べる）。
 5. コミットメッセージは `feat(scope): ...` のように prefix 付き・英語・簡潔に 1 行。
 6. **完成ライン（SPEC 4 章）を最優先し、範囲を広げない。** 仕様書にない判断が必要なら実装前に確認する。
    段階を終えるたびに `docs/HANDOFF.md` を更新する。
