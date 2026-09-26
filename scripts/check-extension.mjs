@@ -697,10 +697,11 @@ try {
     "検索中のタイトルもクリックでカードが開く", searchLabelCard?.title ?? "ラベルなし");
   await evalIn("document.getElementById('star-card').hidden = true");
   const beforeSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
-  await sleep(1000);
+  const searchFrameStart = performance.now();
+  await sleep(3000);
   const afterSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
-  check(afterSearchFrames - beforeSearchFrames >= 55, "検索中も 60 コマを保つ",
-    `${afterSearchFrames - beforeSearchFrames} コマ/秒`);
+  const searchFps = (afterSearchFrames - beforeSearchFrames) / ((performance.now() - searchFrameStart) / 1000);
+  check(searchFps >= 55, "検索中も 60 コマを保つ", `${searchFps.toFixed(1)} コマ/秒（3 秒平均）`);
   {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
     writeFileSync("docs/screens/search.png", Buffer.from(shot.data, "base64"));
@@ -739,15 +740,18 @@ try {
     retyped.map((r) => `${r.query}: ${r.shown} 件・内側 ${r.wrongSide}・重なり ${r.overlaps}`).join(" / "));
   await dragLabels("検索中");
   const opened = JSON.parse((await evalIn(`(async () => {
-    const before = (await chrome.tabs.query({})).map((tab) => tab.id);
+    const originalUpdate = chrome.tabs.update, originalCreate = chrome.tabs.create;
+    const switched = [], created = [];
+    chrome.tabs.update = (...args) => { switched.push(args.at(-1)?.url); return Promise.resolve({ id: -1 }); };
+    chrome.tabs.create = (options) => { created.push(options.url); return Promise.resolve({ id: -2 }); };
     document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 300));
-    const after = (await chrome.tabs.query({})).map((tab) => tab.id);
-    const added = after.filter((id) => !before.includes(id));
-    if (added.length) await chrome.tabs.remove(added);
-    return JSON.stringify({ before: before.length, after: after.length });
+    chrome.tabs.update = originalUpdate; chrome.tabs.create = originalCreate;
+    return JSON.stringify({ switched, created, selected: globalThis.__bukusupe.searchState().selected });
   })()`)) ?? "null");
-  check(opened.after === opened.before + 1, "Enter で選択中のページを新しいタブで開く");
+  const selectedUrl = await evalIn(`globalThis.__bukusupe.state.items.find((row) => row.id === ${JSON.stringify(opened.selected)})?.url`);
+  check(opened.switched.length === 1 && opened.switched[0] === selectedUrl && opened.created.length === 0,
+    "Enter で選択中のページへ同じタブを切り替える");
   await evalIn(`(() => document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))()`);
   await sleep(1200);
   const returned = JSON.parse((await evalIn(`JSON.stringify({
@@ -870,10 +874,10 @@ try {
   check(initialConstellationSearch.ids.length >= 3 &&
     await evalIn("!document.getElementById('constellation-create').hidden"),
   "検索中に星座にする操作が表示される");
-  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',ctrlKey:true,bubbles:true}))");
+  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',shiftKey:true,bubbles:true}))");
   const editStart = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().editing)")) ?? "null");
   check(editStart?.members.length === Math.min(12, initialConstellationSearch.ids.length),
-    "Ctrl+Enter で上位最大12件を編集状態へ入れる", `${editStart?.members.length ?? 0} 件`);
+    "Shift+Enter で上位最大12件を編集状態へ入れる", `${editStart?.members.length ?? 0} 件`);
   const removedId = editStart?.members[0];
   const firstCluster = layout.stars.find((s) => s.id === removedId)?.cluster;
   const addedId = layout.stars.find((s) => s.cluster === firstCluster &&
@@ -1123,7 +1127,7 @@ try {
   const saveConstellationNamed = async (query, name, pinTitles = []) => {
     await evalIn(`(async () => { await globalThis.__bukusupe.searchNow(${JSON.stringify(query)}); })()`);
     await sleep(600);
-    await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true}))");
+    await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',shiftKey:true,bubbles:true}))");
     // 線の照合が意味を持つよう、編集中に星を加えて星座を大きくする（加えた星は pinned に入る）
     await evalIn(`(() => {
       const want = new Set(${JSON.stringify(pinTitles)});

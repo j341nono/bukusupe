@@ -124,6 +124,22 @@ export class Flight {
     this.elapsed = 0;
   }
 
+  /** 「戻る」で再生成された画面では、出入りの移り変わりを飛ばして飛行を続ける。 */
+  resume(position: THREE.Vector3, yaw: number, pitch: number, speed: number,
+    camera: THREE.PerspectiveCamera, look: THREE.Vector3): void {
+    this.ship.position.copy(position);
+    this.ship.yaw = yaw;
+    this.ship.pitch = pitch;
+    this.ship.speed = Math.max(0, Math.min(this.maxSpeed, speed));
+    this.phase = "flying";
+    this.lift = 1;
+    this.elapsed = 0;
+    this.turnVelocity = 0;
+    this.climbVelocity = 0;
+    this.chasePose(camera.position, look);
+    camera.lookAt(look);
+  }
+
   /** 宇宙船を入った直後の位置と向きに戻し、止める。 */
   reset(): void {
     this.ship.position.copy(this.startPosition);

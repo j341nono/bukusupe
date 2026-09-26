@@ -53,6 +53,47 @@ let constellations: Constellation[] = [];
 let activeConstellationId: string | null = null;
 let editing: { query: string; automatic: string[]; pinned: Set<string>; excluded: Set<string> } | null = null;
 let savingAnimation = false;
+const RETURN_STATE_KEY = "bukusupe:return-state-v1";
+type ReturnState = {
+  source: BookmarkSourceKind;
+  flying: boolean;
+  ship: { x: number; y: number; z: number; yaw: number; pitch: number; speed: number } | null;
+  camera: { x: number; y: number; distance: number; tilt: number };
+  query: string;
+  constellationId: string | null;
+};
+let openModifierHeld = false;
+
+function saveReturnState(): void {
+  if (!view) return;
+  const flight = view.flightState();
+  const value: ReturnState = { source: state.kind, flying: flight.active,
+    ship: flight.active ? flight.ship : null, camera: view.navigationCamera(),
+    query: (document.getElementById("search-input") as HTMLInputElement | null)?.value ?? "",
+    constellationId: activeConstellationId };
+  sessionStorage.setItem(RETURN_STATE_KEY, JSON.stringify(value));
+}
+
+async function restoreReturnState(): Promise<void> {
+  const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  if (navigation?.type !== "back_forward") return;
+  const raw = sessionStorage.getItem(RETURN_STATE_KEY);
+  if (!raw || !view) return;
+  sessionStorage.removeItem(RETURN_STATE_KEY);
+  let saved: ReturnState;
+  try { saved = JSON.parse(raw) as ReturnState; } catch { return; }
+  if (saved.source !== state.kind || !saved.camera) return;
+  if (saved.constellationId && constellations.some((row) => row.id === saved.constellationId)) {
+    await toggleConstellation(saved.constellationId);
+  }
+  view.restoreNavigationCamera(saved.camera);
+  if (saved.query) {
+    const input = document.getElementById("search-input") as HTMLInputElement;
+    input.value = saved.query;
+    applySearch(await searchResults(saved.query));
+  }
+  if (saved.flying && saved.ship) view.resumeFlight(saved.ship);
+}
 
 async function main(): Promise<void> {
   const canvas = document.getElementById("space") as HTMLCanvasElement | null;
@@ -88,6 +129,7 @@ async function main(): Promise<void> {
   refreshConstellations();
   setupSearch(canvas);
   setupConstellations();
+  await restoreReturnState();
 
   watchBookmarks();
   document.getElementById("relayout")?.addEventListener("click", () => void enqueue(relayout));
@@ -468,11 +510,18 @@ async function searchResults(text: string, coefficient = GENERALITY_PENALTY,
   return rankSearch(state.items, text, semantic);
 }
 
-function openBookmark(id: string): void {
+function openBookmark(id: string, newTab = false): void {
   const item = state.items.find((row) => row.id === id);
   if (!item) return;
-  if (typeof chrome !== "undefined" && chrome.tabs?.create) void chrome.tabs.create({ url: item.url });
-  else window.open(item.url, "_blank", "noopener");
+  if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+    if (newTab) { void chrome.tabs.create({ url: item.url }); return; }
+    saveReturnState();
+    void chrome.tabs.getCurrent().then((tab) => {
+      if (tab?.id != null) return chrome.tabs.update(tab.id, { url: item.url });
+      location.href = item.url;
+    });
+  } else if (newTab) window.open(item.url, "_blank", "noopener");
+  else { saveReturnState(); location.href = item.url; }
 }
 
 function showCard(id: string): void {
@@ -530,7 +579,7 @@ function setupSearch(canvas: HTMLCanvasElement): void {
     }, 300);
   });
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && event.ctrlKey) {
+    if (event.key === "Enter" && event.shiftKey) {
       beginConstellation();
       event.preventDefault();
     } else if (event.key === "Escape") {
@@ -553,7 +602,7 @@ function setupSearch(canvas: HTMLCanvasElement): void {
       view?.selectSearch(hits[selectedIndex].id);
       event.preventDefault();
     } else if (event.key === "Enter" && hits[selectedIndex]) {
-      openBookmark(hits[selectedIndex].id);
+      openBookmark(hits[selectedIndex].id, event.ctrlKey || event.metaKey);
       event.preventDefault();
     }
   });
@@ -571,9 +620,11 @@ function setupSearch(canvas: HTMLCanvasElement): void {
     if (view?.inFlight) return;
     if (editing) return;
     const id = view?.pickStar(event.clientX, event.clientY);
-    if (id) openBookmark(id);
+    if (id) openBookmark(id, event.ctrlKey || event.metaKey);
   });
-  document.getElementById("star-card-open")?.addEventListener("click", () => { if (cardId) openBookmark(cardId); });
+  document.getElementById("star-card-open")?.addEventListener("click", (event) => {
+    if (cardId) openBookmark(cardId, (event as MouseEvent).ctrlKey || (event as MouseEvent).metaKey);
+  });
 }
 
 /**
@@ -595,8 +646,8 @@ function setupFlight(): void {
     view.enterFlight();
   };
   const leave = () => { view?.exitFlight(); };
-  // 星の芯に入ったら、そのページを新しいタブで開く（突入の演出の後。SpaceView が押し戻しと反応しない時間を持つ）
-  view!.onEnterStar = (id) => openBookmark(id);
+  // 星の芯に入ったら同じタブで開く。Ctrl/⌘ を押していれば新しいタブにする。
+  view!.onEnterStar = (id) => openBookmark(id, openModifierHeld);
   // 操作の説明は、入ってすぐは大きく出し、約 10 秒で薄く小さくして左下へ寄せる（窓や星に重ならないように）
   const help = document.getElementById("flight-help");
   let helpTimer: number | undefined;
@@ -611,6 +662,13 @@ function setupFlight(): void {
     }
   };
   button?.addEventListener("click", () => (view?.inFlight ? leave() : enter()));
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Control" || event.key === "Meta") openModifierHeld = true;
+  }, { capture: true });
+  window.addEventListener("keyup", (event) => {
+    if (event.key === "Control" || event.key === "Meta") openModifierHeld = false;
+  }, { capture: true });
+  window.addEventListener("blur", () => { openModifierHeld = false; });
   // 取り込み段階（capture）で受け、飛行中の Esc が検索を消したり星座の選択を解いたりしないようにする
   window.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -816,6 +874,8 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   clusterPriorCoefficient: CLUSTER_PRIOR,
   attractRatio: ATTRACT_RATIO,
   searchGeometry: () => view?.searchGeometry(),
+  searchHole: () => view?.searchHole() ?? null,
+  setConstellationLinesVisible: (visible: boolean) => view?.setConstellationLinesVisible(visible),
   starScreen: (id: string) => view?.starScreen(id),
   starPosition: (id: string) => view?.starPosition(id),
   starVisual: (id: string) => view?.starVisual(id),

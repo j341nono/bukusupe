@@ -105,7 +105,9 @@ export async function launchExtension(dist, { width = 1280, height = 800 } = {})
     try { rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* 無視 */ }
   };
 
-  return { send, evalIn, tryEval, waitUntil, key, press, screenshot, close, events, extId, sessionId };
+  /** CDP のイベントを受ける（Fetch.requestPaused など） */
+  const onEvent = (fn) => listeners.push(fn);
+  return { send, evalIn, tryEval, waitUntil, key, press, screenshot, close, events, extId, sessionId, onEvent };
 }
 
 /** 確認の結果を集めて出す。 */
@@ -116,4 +118,50 @@ export function createChecker() {
     if (!ok) problems.push(label);
   };
   return { check, problems };
+}
+
+/**
+ * PNG を読む（確認用。依存なし）。CDP のスクリーンショット（8 bit の RGB / RGBA、インターレースなし）に対応。
+ * 戻り値 { width, height, data }（data は RGBA）。
+ */
+import { inflateSync } from "node:zlib";
+export function decodePng(buffer) {
+  let pos = 8, width = 0, height = 0, colorType = 6;
+  const idat = [];
+  while (pos < buffer.length) {
+    const len = buffer.readUInt32BE(pos);
+    const type = buffer.toString("ascii", pos + 4, pos + 8);
+    const data = buffer.subarray(pos + 8, pos + 8 + len);
+    if (type === "IHDR") { width = data.readUInt32BE(0); height = data.readUInt32BE(4); colorType = data[9]; }
+    if (type === "IDAT") idat.push(data);
+    if (type === "IEND") break;
+    pos += 12 + len;
+  }
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const out = Buffer.alloc(width * height * 4);
+  const prev = Buffer.alloc(stride);
+  const line = Buffer.alloc(stride);
+  for (let y = 0; y < height; y++) {
+    const f = raw[y * (stride + 1)];
+    raw.copy(line, 0, y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? line[x - bpp] : 0, b = prev[x], c = x >= bpp ? prev[x - bpp] : 0;
+      let v = line[x];
+      if (f === 1) v += a;
+      else if (f === 2) v += b;
+      else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      line[x] = v & 255;
+    }
+    line.copy(prev);
+    for (let x = 0; x < width; x++) {
+      out[(y * width + x) * 4] = line[x * bpp];
+      out[(y * width + x) * 4 + 1] = line[x * bpp + 1];
+      out[(y * width + x) * 4 + 2] = line[x * bpp + 2];
+      out[(y * width + x) * 4 + 3] = bpp === 4 ? line[x * bpp + 3] : 255;
+    }
+  }
+  return { width, height, data: out };
 }

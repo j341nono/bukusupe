@@ -6,19 +6,56 @@ export type DrawnConstellation = { id: string; name: string; points: Constellati
 type Entry = { data: DrawnConstellation; edges: ReturnType<typeof minimumSpanningTree>; line: THREE.LineSegments;
   glints: THREE.Points };
 
+/**
+ * 星座の線は、検索の要素（ブラックホール・軌道・引き寄せた星・光の尾）より先に描く（renderOrder を負にする）。
+ * 線は深度を書かないので、後から描く検索の要素が常に手前に見える。
+ */
+const LINE_ORDER = -1;
+
+/**
+ * 星座の線の材質。検索中はブラックホールの周り（uHoleRadius の球の中）の線を描かない。
+ * 地図では線もブラックホールも平面の上にあるので円に、飛行中の検索（段階 3b）では球になる。
+ */
+function lineMaterial(color: number, opacity: number): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uHoleCenter: { value: new THREE.Vector3() },
+      uHoleRadius: { value: 0 },
+    },
+    vertexShader: `varying vec3 vWorld;
+      void main() {
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vWorld = world.xyz;
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; uniform vec3 uHoleCenter; uniform float uHoleRadius;
+      varying vec3 vWorld;
+      void main() {
+        if (uHoleRadius > 0.0 && distance(vWorld, uHoleCenter) < uHoleRadius) discard;
+        gl_FragColor = vec4(uColor, uOpacity);
+      }`,
+  });
+}
+
+const opacityOf = (material: THREE.Material) => (material as THREE.ShaderMaterial).uniforms.uOpacity.value as number;
+
 /** 地図座標で結んだ星座。通常は淡く、選択中だけ明るくする。 */
 export class ConstellationLayer {
   readonly object = new THREE.Group();
   private entries = new Map<string, Entry>();
   private active: string | null = null;
   private drawing: { id: string; elapsed: number } | null = null;
-  private readonly animated = new THREE.LineSegments(new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: 0xe6c88c, transparent: true, opacity: 0.95, depthWrite: false }));
+  private readonly animated = new THREE.LineSegments(new THREE.BufferGeometry(), lineMaterial(0xe6c88c, 0.95));
   private readonly rings = new THREE.Group();
   private ringIds: string[] = [];
 
   constructor() {
     this.animated.visible = false;
+    this.animated.renderOrder = LINE_ORDER;
+    this.rings.renderOrder = LINE_ORDER;
     this.object.add(this.animated, this.rings);
   }
 
@@ -41,17 +78,19 @@ export class ConstellationLayer {
       }
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-      const line = new THREE.LineSegments(geometry,
-        new THREE.LineBasicMaterial({ color: 0xd8b878, transparent: true, opacity: 0.15, depthWrite: false }));
+      const line = new THREE.LineSegments(geometry, lineMaterial(0xd8b878, 0.15));
+      line.renderOrder = LINE_ORDER;
       const glintGeometry = new THREE.BufferGeometry();
       glintGeometry.setAttribute("position", new THREE.Float32BufferAttribute(data.points.flatMap((p) => [p.x, 0.14, -p.y]), 3));
       const glints = new THREE.Points(glintGeometry,
         new THREE.PointsMaterial({ color: 0xe6c88c, size: 2.5, sizeAttenuation: false, transparent: true,
           opacity: 0.2, depthWrite: false }));
+      glints.renderOrder = LINE_ORDER;
       const entry = { data, edges, line, glints };
       this.entries.set(data.id, entry);
       this.object.add(line, glints);
       if (this.lift > 0) this.applyLift(entry);
+      this.applyHole(entry);
     }
     if (this.active && !this.entries.has(this.active)) this.active = null;
     this.style();
@@ -60,6 +99,8 @@ export class ConstellationLayer {
   select(id: string | null): void { this.active = id; this.style(); }
 
   private flying = false;
+  /** 検索中のブラックホールの周り（three の座標の中心と半径）。null なら検索していない */
+  private hole: { center: THREE.Vector3; radius: number } | null = null;
   private heightOf: (id: string) => number = () => 0;
   private lift = 0;
 
@@ -68,6 +109,26 @@ export class ConstellationLayer {
     this.flying = on;
     this.rings.visible = !on;
     this.style();
+  }
+
+  /**
+   * 検索中は検索を前面に出す：線をさらに薄くし、ブラックホールの周り（center から radius の内側）の線を描かない。
+   * 星の上の光点は検索中は出さない。null で検索前に戻す。center・radius は three の座標（この層の拡大率を掛けた後）。
+   */
+  setSearchHole(center: THREE.Vector3 | null, radius = 0): void {
+    this.hole = center ? { center: center.clone(), radius } : null;
+    for (const entry of this.entries.values()) this.applyHole(entry);
+    this.applyHoleTo(this.animated.material as THREE.ShaderMaterial);
+    this.style();
+  }
+
+  private applyHole(entry: Entry): void {
+    this.applyHoleTo(entry.line.material as THREE.ShaderMaterial);
+  }
+
+  private applyHoleTo(material: THREE.ShaderMaterial): void {
+    material.uniforms.uHoleCenter.value.copy(this.hole?.center ?? new THREE.Vector3());
+    material.uniforms.uHoleRadius.value = this.hole?.radius ?? 0;
   }
 
   /**
@@ -179,7 +240,7 @@ export class ConstellationLayer {
   geometry(): { id: string; members: string[]; edges: { a: string; b: string }[]; opacity: number }[] {
     return [...this.entries].map(([id, entry]) => ({ id,
       members: entry.data.points.map((point) => point.id), edges: entry.edges,
-      opacity: (entry.line.material as THREE.LineBasicMaterial).opacity }));
+      opacity: opacityOf(entry.line.material as THREE.Material) }));
   }
 
   points(id: string): ConstellationPoint[] { return this.entries.get(id)?.data.points ?? []; }
@@ -188,9 +249,12 @@ export class ConstellationLayer {
     for (const [id, entry] of this.entries) {
       const selected = id === this.active;
       const drawing = this.drawing?.id === id;
-      // 飛行中は、選んでいる星座も含めてかすかに（立体の星の間に、うっすら見える程度）
-      (entry.line.material as THREE.LineBasicMaterial).opacity = this.flying ? 0.22 : drawing ? 0 : selected ? 0.85 : 0.15;
+      // 飛行中は、選んでいる星座も含めてかすかに（立体の星の間に、うっすら見える程度）。検索中はさらに薄く
+      const searching = !!this.hole;
+      (entry.line.material as THREE.ShaderMaterial).uniforms.uOpacity.value =
+        drawing ? 0 : searching ? (this.flying ? 0.1 : 0.07) : this.flying ? 0.22 : selected ? 0.85 : 0.15;
       (entry.glints.material as THREE.PointsMaterial).opacity = this.flying ? 0.3 : drawing ? 0 : selected ? 0.9 : 0.2;
+      entry.glints.visible = !searching;
     }
   }
 }

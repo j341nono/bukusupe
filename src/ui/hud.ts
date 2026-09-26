@@ -25,8 +25,8 @@ const HELP = `
     <li><kbd>Space</kbd> 縮小　<kbd>Shift</kbd> 拡大（ホイールでも）</li>
     <li>右ドラッグの上下　傾き</li>
     <li><kbd>/</kbd> 検索欄へ　<kbd>Esc</kbd> 検索を消して抜ける</li>
-    <li><kbd>↑</kbd><kbd>↓</kbd> 候補を選ぶ　<kbd>Enter</kbd> 開く</li>
-    <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 検索結果を星座にする</li>
+    <li><kbd>↑</kbd><kbd>↓</kbd> 候補を選ぶ　<kbd>Enter</kbd> 同じタブで開く（<kbd>Ctrl</kbd>/<kbd>⌘</kbd> で新しいタブ）</li>
+    <li><kbd>Shift</kbd>+<kbd>Enter</kbd> 検索結果を星座にする</li>
     <li>星団名をクリック　その星団へ移動</li>
     <li>星をクリック　カード（ダブルクリックで開く）</li>
   </ul>`;

@@ -20,6 +20,8 @@ const DIVE_SECONDS = 0.45;
 const PUSH_BACK = 2.5 * FLIGHT_SCALE;
 const ENTRY_COOLDOWN_MS = 4000;
 const CAMERA_FOV = 50;
+/** 検索中に星座の線を描かない範囲：外側の軌道（半径 2.55）の少し外まで（検索の単位の倍数） */
+const SEARCH_HOLE = 2.55 * 1.2;
 
 /** 静止時のカメラの傾き（真上から 40 度。SPEC 7 章） */
 const TILT = THREE.MathUtils.degToRad(40);
@@ -485,6 +487,33 @@ export class SpaceView {
     return this.flight.active;
   }
 
+  /** タブを離れる直前に保存する地図の視点。飛行中は入る前の視点を返す。 */
+  navigationCamera(): { x: number; y: number; distance: number; tilt: number } {
+    return { x: this.controls.target.x, y: -this.controls.target.z,
+      distance: this.flight.active ? this.flight.returnDistance : this.camera.position.distanceTo(this.controls.target),
+      tilt: this.flight.active ? this.preferredTilt : this.tilt };
+  }
+
+  restoreNavigationCamera(saved: { x: number; y: number; distance: number; tilt: number }): void {
+    this.focus = null;
+    this.controls.target.set(saved.x, 0, -saved.y);
+    this.tilt = this.tiltTarget = this.preferredTilt = THREE.MathUtils.clamp(saved.tilt, 0, MAX_TILT);
+    this.setDistance(saved.distance);
+    this.labelsDirty = true;
+  }
+
+  /** 保存した船の位置から、突入アニメーションを挟まずに再開する。座標は地図の単位。 */
+  resumeFlight(saved: { x: number; y: number; z: number; yaw: number; pitch: number; speed: number }): void {
+    if (!this.enterFlight()) return;
+    this.flight.resume(new THREE.Vector3(saved.x * FLIGHT_SCALE, saved.z * FLIGHT_SCALE, -saved.y * FLIGHT_SCALE),
+      saved.yaw, saved.pitch, saved.speed, this.camera, this.flightLook);
+    this.field.setLift(1);
+    this.field.object.scale.setScalar(FLIGHT_SCALE);
+    this.constellations.object.scale.setScalar(FLIGHT_SCALE);
+    this.constellations.setLift((id) => this.heights.get(id) ?? 0, 1);
+    this.flightNebulae.setOpacity(1);
+  }
+
   /**
    * 飛行モードに入る（SPEC 13 章）。どの画面からでも入れる。
    * 入る前の検索は預けて軌道を解き（立体の星空では軌道を描かない。3b で飛行中の検索を作る）、出たら掛け直す。
@@ -495,6 +524,7 @@ export class SpaceView {
     this.flightSearch = this.searchIds.slice();
     this.searchIds = [];
     this.field.setSearch([], this.searchCenter, this.searchUnit);
+    this.constellations.setSearchHole(null);
     this.blackHole.visible = false;
     this.trace.visible = false;
     this.tails.visible = false;
@@ -634,12 +664,13 @@ export class SpaceView {
 
   flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[]; nebulae: number;
     diving: boolean; lastEntry: string | null; entryDistance: number | null; scale: number;
+    searchStashed: number;
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
       lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds, nebulae: this.flightNebulae.count,
       diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
-      scale: FLIGHT_SCALE,
+      scale: FLIGHT_SCALE, searchStashed: this.flightSearch?.length ?? 0,
       // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す
       ship: { x: ship.position.x / FLIGHT_SCALE, y: -ship.position.z / FLIGHT_SCALE, z: ship.position.y / FLIGHT_SCALE,
         speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
@@ -712,6 +743,7 @@ export class SpaceView {
     this.blackHole.scale.setScalar(unit);
     this.trace.visible = this.searchIds.length > 0;
     this.tails.visible = this.searchIds.length > 0;
+    this.constellations.setSearchHole(this.searchIds.length ? this.blackHole.position : null, SEARCH_HOLE * unit);
     this.hoveredId = null;
     this.labelsDirty = true;
     if (wasSearching !== searching) this.refreshEmphasis();
@@ -746,6 +778,35 @@ export class SpaceView {
         return point ? [{ id, ...point }] : [];
       }),
     };
+  }
+
+  /**
+   * 確認用：星座の線を描かない範囲の、画面上の中心と半径（px）。半径は円周上の 32 点の投影のうち最も近いもの
+   * から 2px 引いた値（傾いていても内側に収まる）。検索していなければ null。
+   */
+  searchHole(): { x: number; y: number; r: number } | null {
+    if (!this.searchIds.length) return null;
+    this.camera.updateMatrixWorld();
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const toScreen = (v: THREE.Vector3) => {
+      v.project(this.camera);
+      return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y };
+    };
+    const c = this.blackHole.position;
+    const center = toScreen(c.clone());
+    const radius = SEARCH_HOLE * this.searchUnit;
+    let r = Infinity;
+    for (let i = 0; i < 32; i++) {
+      const a = (i / 32) * Math.PI * 2;
+      const p = toScreen(new THREE.Vector3(c.x + Math.cos(a) * radius, 0.12, c.z + Math.sin(a) * radius));
+      r = Math.min(r, Math.hypot(p.x - center.x, p.y - center.y));
+    }
+    return { ...center, r: r - 2 };
+  }
+
+  /** 確認用：星座の線と光点を出す・消す（画素を比べるため） */
+  setConstellationLinesVisible(visible: boolean): void {
+    this.constellations.object.visible = visible;
   }
 
   starScreen(id: string): { x: number; y: number } | null {

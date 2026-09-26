@@ -14,11 +14,12 @@
  *  9. スクリーンショット：flight-overview.png / flight-near.png / flight-constellation.png
  *  （参考）favicon の権限でインストール時の警告が増えるか
  *
- * 新しいタブは確認スクリプト側で chrome.tabs.create を差し替えて数える（実際には開かない）。
+ * ページを開く処理は確認スクリプト側で chrome.tabs.update（同じタブ）と chrome.tabs.create（新しいタブ）を差し替えて数える。
+ * 「戻る」の確認だけは実際に移動する。移動先は CDP の Fetch で手元の空ページに差し替える（外部には通信しない）。
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createChecker, launchExtension, sleep } from "./lib/harness.mjs";
+import { createChecker, decodePng, launchExtension, sleep } from "./lib/harness.mjs";
 
 const DIST = resolve(process.argv[2] ?? "dist");
 const { check, problems } = createChecker();
@@ -250,29 +251,126 @@ try {
     console.log("  画面: docs/screens/flight-near.png");
   }
 
-  // --- 6. 星の芯に入ると、新しいタブを開く処理がちょうど 1 回。続けて入っても数秒は開かない ---
+  // --- デブリ：星雲の範囲の外にだけあり、同じデータなら毎回同じ位置 ---
+  // 小段階の途中では、まだ提供していない API の確認だけ保留する。実装後は必ず実行される。
+  if (await evalIn(`typeof ${b}.flightDebris === 'function'`)) {
+  const debris = await json(`${b}.flightDebris?.() ?? null`);
+  const debrisAgain = await json(`${b}.flightDebris?.(true) ?? null`);
+  const ranges = await json(`${b}.flightNebulaRanges?.() ?? null`);
+  const dist3 = (p, q) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+  const intruding = (debris ?? []).filter((d) => (ranges ?? []).some((c) => dist3(d, c) < c.radius + d.r));
+  check(debris && debris.length >= 20 && ranges?.length > 0 && intruding.length === 0 &&
+    JSON.stringify(debris) === JSON.stringify(debrisAgain),
+  "デブリは、どの星団の星雲の範囲にも入っておらず、同じデータなら毎回同じ位置",
+  debris ? `${debris.length} 個・星雲の範囲に入っている ${intruding.length} 個・計算し直しと ${JSON.stringify(debris) === JSON.stringify(debrisAgain) ? "一致" : "不一致"}` : "flightDebris が無い");
+
+  // --- デブリにぶつかると、減速して押し戻される ---
+  const rock = debris?.[0];
+  if (rock) await tryEval(`${b}.flightPlace(${rock.x}, ${rock.y}, ${rock.z + rock.r + 14}, ${rock.x}, ${rock.y}, ${rock.z})`);
+  await key("keydown", "KeyW", "w");
+  await waitUntil(`(${b}.flightState?.()?.bumps ?? 0) > 0`, 6000, 50);
+  await key("keyup", "KeyW", "w");
+  const bump = (await flight())?.lastBump;
+  check(bump && bump.speedAfter < bump.speedBefore && bump.distanceAfter >= bump.minDistance - 0.01,
+    "デブリにぶつかると、宇宙船が減速して押し戻される",
+    bump ? `速さ ${bump.speedBefore.toFixed(1)}→${bump.speedAfter.toFixed(1)}・ぶつかった後の距離 ${bump.distanceAfter.toFixed(1)}（最小 ${bump.minDistance.toFixed(1)}）` : "ぶつからない");
+  await press("KeyS", "s", 1200);
+
+  // --- 加速リング：くぐると一時的に速くなり、上限を超えない。しばらくすると元の最高速度に戻る ---
+  const rings = await json(`${b}.flightRings?.() ?? null`);
+  const ring = rings?.[0];
+  if (ring) await tryEval(`${b}.flightPlace(${ring.x - ring.nx * 22}, ${ring.y - ring.ny * 22}, ${ring.z - ring.nz * 22}, ${ring.x}, ${ring.y}, ${ring.z})`);
+  await key("keydown", "KeyW", "w");
+  let peak = 0, boostSeen = 0, cap = 0, normalMax = 0;
+  for (let i = 0; i < 40; i++) {
+    const st = await flight();
+    peak = Math.max(peak, st?.ship?.speed ?? 0);
+    boostSeen = Math.max(boostSeen, st?.boosts ?? 0);
+    cap = st?.boostCap ?? cap;
+    normalMax = st?.maxSpeed ?? normalMax;
+    await sleep(80);
+  }
+  await key("keyup", "KeyW", "w");
+  await sleep(2500);
+  const settled = await flight();
+  check(rings && rings.length > 0 && boostSeen > 0 && peak > normalMax * 1.05 && peak <= cap + 1e-6 &&
+    (settled?.ship?.speed ?? Infinity) <= normalMax + 1e-6,
+  "加速リングをくぐると一時的に速くなり、上限を超えず、しばらくすると元の最高速度に戻る",
+  rings ? `リング ${rings.length} 個・くぐった回数 ${boostSeen}・最高 ${peak.toFixed(1)}（ふだんの最高 ${normalMax.toFixed(1)}・上限 ${cap.toFixed(1)}）・後で ${settled?.ship?.speed?.toFixed(1)}` : "flightRings が無い");
+  if (ring) {
+    await tryEval(`${b}.flightPlace(${ring.x - ring.nx * 60}, ${ring.y - ring.ny * 60 + 6}, ${ring.z - ring.nz * 60}, ${ring.x}, ${ring.y}, ${ring.z})`);
+    await sleep(500);
+    writeFileSync("docs/screens/flight-debris.png", await screenshot());
+    console.log("  画面: docs/screens/flight-debris.png");
+  }
+  }
+
+  // --- 遠くの星の名前：窓より遠い星にも、名前だけを小さく出す（上限あり、重ならない） ---
+  if (await evalIn(`typeof ${b}.flightState?.()?.farLabelLimit === 'number'`)) {
+  await tryEval(`${b}.flightReset?.()`);
+  await sleep(800);
+  const far = await json(`(() => {
+    const st = ${b}.flightState?.();
+    const els = [...document.querySelectorAll('.flight-far-label')].filter((el) => el.style.display !== 'none' && el.style.opacity !== '0');
+    const boxes = els.map((el) => el.getBoundingClientRect());
+    let overlaps = 0;
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], c = boxes[j];
+      if (a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom) overlaps++;
+    }
+    const nearIds = new Set(st?.windows ?? []);
+    return { count: els.length, limit: st?.farLabelLimit ?? 0, overlaps, dupes: els.filter((el) => nearIds.has(el.dataset.key)).length,
+      windows: nearIds.size };
+  })()`);
+  check(far && far.count > 6 && far.count <= far.limit && far.overlaps === 0 && far.dupes === 0,
+    "飛行中、窓より遠い星にも名前が出る（上限あり、重ならない、窓と重複しない）",
+    far ? `遠くの名前 ${far.count} 個（上限 ${far.limit}）・窓 ${far.windows} 個・重なり ${far.overlaps}` : "測れない");
+  }
+
+  // --- 6. 星の芯に入ると、同じタブの切り替えがちょうど 1 回（新しいタブは開かない）。続けて入っても数秒は開かない ---
   await evalIn(`(() => {
-    window.__opened = [];
+    window.__opened = []; window.__switched = [];
+    window.__origCreate = chrome.tabs.create; window.__origUpdate = chrome.tabs.update;
     chrome.tabs.create = (options) => { window.__opened.push(options.url); return Promise.resolve({ id: -1 }); };
+    chrome.tabs.update = (...args) => { const o = args.find((a) => a && typeof a === 'object'); window.__switched.push(o?.url);
+      return Promise.resolve({ id: -1 }); };
   })()`);
   const targetUrl = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target?.id)})?.url ?? ''`);
-  // 1 回目：星を正面に置いて W。開いたらすぐ離す（その後の押し戻しで止まる）
+  // 1 回目：星を正面に置いて W。切り替えたらすぐ離す（その後の押し戻しで止まる）
   if (target) await teleport(target.id, 6 * S);
   await key("keydown", "KeyW", "w");
-  await waitUntil("window.__opened.length > 0", 4000, 50);
+  await waitUntil("window.__switched.length + window.__opened.length > 0", 4000, 50);
   await key("keyup", "KeyW", "w");
   await sleep(900);
+  const firstSwitch = await json("window.__switched");
   const firstOpen = await json("window.__opened");
   const afterPush = await flight();
   // 2 回目：同じ星へすぐにもう一度入る。数秒間は同じ星を開かない（奥の別の星に入るのは仕様どおり）
   if (target) await teleport(target.id, 4 * S);
   await press("KeyW", "w", 1300);
   await press("KeyS", "s", 1200);
-  const secondOpen = await json("window.__opened");
-  const sameAgain = (secondOpen ?? []).filter((url) => url === targetUrl).length;
-  check(firstOpen?.length === 1 && firstOpen[0] === targetUrl && sameAgain === 1 && (afterPush?.entryDistance ?? 0) > 2 * S * 0.5,
-    "星の芯に入ると新しいタブを開く処理がちょうど 1 回。押し戻され、同じ星に続けて入っても数秒は開かない",
-    `1 回目 ${firstOpen?.length ?? "?"} 回（${firstOpen?.[0] === targetUrl ? "その星" : "別の星"}）・押し戻し後の距離 ${afterPush?.entryDistance?.toFixed?.(1) ?? "?"}・続けて入った後の同じ星 ${sameAgain} 回`);
+  const secondSwitch = await json("window.__switched");
+  const sameAgain = (secondSwitch ?? []).filter((url) => url === targetUrl).length;
+  check(firstSwitch?.length === 1 && firstSwitch[0] === targetUrl && firstOpen?.length === 0 && sameAgain === 1 &&
+    (afterPush?.entryDistance ?? 0) > 2 * S * 0.5,
+  "星の芯に入ると、新しいタブではなく同じタブの切り替えがちょうど 1 回。押し戻され、同じ星に続けて入っても数秒は開かない",
+  `切り替え ${firstSwitch?.length ?? "?"} 回（${firstSwitch?.[0] === targetUrl ? "その星" : "別の星"}）・新しいタブ ${firstOpen?.length ?? "?"} 回・押し戻し後の距離 ${afterPush?.entryDistance?.toFixed?.(1) ?? "?"}・続けて入った後の同じ星 ${sameAgain} 回`);
+  // Ctrl を押しながら入ると、新しいタブで開く（別の星団のいちばん外側の星で）
+  const target2 = layout?.stars.filter((st) => st.cluster === layout.clusters[1].index).sort((p, q) => q.rank - p.rank)[0];
+  const target2Url = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target2?.id)})?.url ?? ''`);
+  await key("keydown", "ControlLeft", "Control");
+  if (target2) await teleport(target2.id, 6 * S);
+  await key("keydown", "KeyW", "w");
+  await waitUntil("window.__opened.length > 0", 4000, 50);
+  await key("keyup", "KeyW", "w");
+  await key("keyup", "ControlLeft", "Control");
+  await sleep(900);
+  const ctrlOpen = await json("window.__opened");
+  const ctrlSwitch = await json("window.__switched");
+  check(ctrlOpen?.length === 1 && ctrlOpen[0] === target2Url && ctrlSwitch?.length === secondSwitch?.length,
+    "Ctrl を押しながら星に入ると、新しいタブで開く（同じタブは切り替えない）",
+    `新しいタブ ${ctrlOpen?.length ?? "?"} 回（${ctrlOpen?.[0] === target2Url ? "その星" : "別の星"}）・同じタブ ${ctrlSwitch?.length ?? "?"} 回`);
+  // 地図の画面でも：Enter で同じタブ、Ctrl+Enter で新しいタブ（確認は地図に戻ってから）
   // 動いた後に出ると、宇宙船がいた場所の真上から見た地図に、入る前の拡大率で戻る
   const shipAtExit = (await flight())?.ship;
   await key("keydown", "Escape", "Escape");
@@ -302,7 +400,7 @@ try {
   await evalIn(`${b}.resetCamera()`);
   await evalIn(`(async () => { await ${b}.searchNow('宇宙を感じたい'); })()`);
   await sleep(700);
-  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }))");
+  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }))");
   await evalIn("document.getElementById('constellation-name-input').value = '飛行の星座'");
   await evalIn("document.getElementById('constellation-save').click()");
   await waitUntil(`${b}.constellationState().rows.length === 1 && ${b}.constellationState().animation.phase === 'done'`, 8000);
@@ -334,6 +432,49 @@ try {
   await waitFlight(false);
   await sleep(900);
 
+  // --- 星座を選んだまま検索すると、ブラックホールの周り（外側の軌道の少し外まで）に星座の線を描かない ---
+  // 星座の線を出した画面と消した画面を撮り、違う画素がブラックホールの周りに無いこと（外にはあること）を見る
+  await evalIn(`(async () => { await ${b}.searchNow('パスタ'); })()`);
+  await sleep(2200);
+  const hole = await json(`${b}.searchHole?.() ?? null`);
+  const shotOnBuffer = await screenshot();
+  await tryEval(`${b}.setConstellationLinesVisible?.(false)`);
+  await sleep(300);
+  const shotOff = decodePng(await screenshot());
+  await tryEval(`${b}.setConstellationLinesVisible?.(true)`);
+  const shotOn = decodePng(shotOnBuffer);
+  let insideDiff = 0, outsideDiff = 0;
+  for (let y = 0; y < shotOn.height; y++) {
+    for (let x = 0; x < shotOn.width; x++) {
+      const i = (y * shotOn.width + x) * 4;
+      const d = Math.abs(shotOn.data[i] - shotOff.data[i]) + Math.abs(shotOn.data[i + 1] - shotOff.data[i + 1]) +
+        Math.abs(shotOn.data[i + 2] - shotOff.data[i + 2]);
+      if (d <= 6) continue;
+      if (hole && Math.hypot(x - hole.x, y - hole.y) < hole.r) insideDiff++;
+      else outsideDiff++;
+    }
+  }
+  // Chrome のソフトウェア描画では切り替え前後の少数の画素が揺れるため、5 画素だけ許容する。
+  // discard を外すと内側の線が数百画素以上になり、この判定は NG になる。
+  check(hole && hole.r > 20 && insideDiff <= 5 && outsideDiff > 0,
+    "星座を選んだまま検索すると、ブラックホールの周りに星座の線が描かれていない（外側には淡く残る）",
+    hole ? `半径 ${hole.r.toFixed(0)}px の内側で線の画素 ${insideDiff}・外側 ${outsideDiff}` : "searchHole が無い");
+  await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
+  await sleep(900);
+
+  // --- 地図でも：検索して Enter は同じタブ、Ctrl+Enter は新しいタブ、カードの「開く」も同じタブ ---
+  await evalIn(`(async () => { await ${b}.searchNow('パスタ'); })()`);
+  await sleep(1200);
+  const before = await json("{ switched: window.__switched.length, opened: window.__opened.length }");
+  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))");
+  await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }))");
+  const afterKeys = await json("{ switched: window.__switched.length, opened: window.__opened.length }");
+  check(afterKeys.switched === before.switched + 1 && afterKeys.opened === before.opened + 1,
+    "地図で Enter は同じタブ、Ctrl+Enter は新しいタブで開く",
+    `同じタブ +${afterKeys.switched - before.switched}・新しいタブ +${afterKeys.opened - before.opened}`);
+  await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
+  await sleep(900);
+
   // --- 2d. 検索中から（入力欄は使えないので「飛行」ボタンで） ---
   await evalIn(`${b}.recallConstellation(${JSON.stringify(constellationId)})`);   // 選択を解く
   await sleep(400);
@@ -361,6 +502,57 @@ try {
   helpFirst && helpLater ? `高さ ${helpFirst.h.toFixed(0)}→${helpLater.h.toFixed(0)}px・不透明度 ${helpFirst.opacity}→${helpLater.opacity}・左 ${helpLater.left.toFixed(0)}px` : "測れない");
   await key("keydown", "Escape", "Escape");
   await waitFlight(false);
+  await sleep(800);
+
+  // --- ページに切り替えて「戻る」で戻ると、飛行中の宇宙船の位置と検索語が元に戻る ---
+  // 移動先は Fetch で手元の空ページに差し替える（外部には通信しない）
+  app.onEvent((m) => {
+    if (m.method !== "Fetch.requestPaused") return;
+    app.send("Fetch.fulfillRequest", { requestId: m.params.requestId, responseCode: 200,
+      responseHeaders: [{ name: "Content-Type", value: "text/html; charset=utf-8" }],
+      body: Buffer.from("<!doctype html><title>page</title><p>page</p>").toString("base64") }, m.sessionId).catch(() => {});
+  });
+  await evalIn("chrome.tabs.update = window.__origUpdate; chrome.tabs.create = window.__origCreate;");
+  await evalIn(`(async () => { await ${b}.searchNow('宇宙'); })()`);
+  await sleep(1200);
+  await evalIn("document.getElementById('flight-toggle').click()");
+  await waitFlight(true);
+  if (target) await teleport(target.id, 6 * S);
+  // 切り替える直前の宇宙船の位置を、確認用にタブの中へ控える（アプリの保存とは別）
+  await evalIn(`(() => { const orig = chrome.tabs.update.bind(chrome.tabs);
+    chrome.tabs.update = (...args) => { sessionStorage.setItem('test:ship', JSON.stringify(${b}.flightState().ship)); return orig(...args); }; })()`);
+  await app.send("Fetch.enable", { patterns: [{ urlPattern: "http*://*" }] }, app.sessionId);
+  await key("keydown", "KeyW", "w");
+  const left = await waitUntil("location.protocol.startsWith('http')", 8000, 100);
+  await tryEval("history.back()");
+  const resumed = await waitUntil(`document.body.dataset.phase === 'ready' && ${b}?.flightState?.()?.active === true &&
+    !${b}.flightState().transitioning`, 60_000, 300);
+  await app.send("Fetch.disable", {}, app.sessionId).catch(() => {});
+  await sleep(500);
+  const back = await json(`(() => ({ saved: JSON.parse(sessionStorage.getItem('test:ship') ?? 'null'), now: ${b}.flightState().ship,
+    input: document.getElementById('search-input').value, stashed: ${b}.flightState().searchStashed ?? null }))()`);
+  const shipBack = back?.saved && back?.now && Math.hypot(back.saved.x - back.now.x, back.saved.y - back.now.y, back.saved.z - back.now.z) < 0.05 &&
+    Math.abs(back.saved.yaw - back.now.yaw) < 1e-3;
+  check(left && resumed && shipBack && back.input === "宇宙" && (back.stashed ?? 0) > 0,
+    "ページに切り替えて「戻る」で戻ると、飛行中の宇宙船の位置・向きと検索語が元に戻る",
+    `移動 ${left ? "した" : "しない"}・再開 ${resumed ? "した" : "しない"}・宇宙船 ${shipBack ? "同じ位置" : "違う位置"}・検索語「${back?.input ?? ""}」・預けた検索 ${back?.stashed ?? "?"} 件`);
+  // 新しく開いたときは、保存した状態を使わない
+  const fresh = await app.send("Target.createTarget", { url: `chrome-extension://${app.extId}/index.html` });
+  const freshSession = (await app.send("Target.attachToTarget", { targetId: fresh.targetId, flatten: true })).sessionId;
+  await app.send("Runtime.enable", {}, freshSession);
+  let freshState = null;
+  for (let i = 0; i < 60 && !freshState; i++) {
+    await sleep(1000);
+    const r = await app.send("Runtime.evaluate", { returnByValue: true, expression:
+      `document.body.dataset.phase === 'ready' ? JSON.stringify({ flight: globalThis.__bukusupe.flightState().active, input: document.getElementById('search-input').value }) : null` }, freshSession).catch(() => null);
+    freshState = r?.result?.value ? JSON.parse(r.result.value) : null;
+  }
+  await app.send("Target.closeTarget", { targetId: fresh.targetId }).catch(() => {});
+  check(freshState && freshState.flight === false && freshState.input === "",
+    "ブクスペを新しく開いたときは、保存した状態を使わない", freshState ? `飛行 ${freshState.flight}・検索語「${freshState.input}」` : "測れない");
+  await key("keydown", "Escape", "Escape");
+  await waitFlight(false);
+  await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
   await sleep(800);
 
   // --- 8. 2000 件で、飛行中も 60 コマ/秒 ---
