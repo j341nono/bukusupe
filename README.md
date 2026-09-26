@@ -3,6 +3,11 @@
 **Chrome のブックマークを星にして、意味の近さで並べた宇宙地図。** 検索すると星がブラックホールへ引き寄せられ、
 選んだ星を結んで星座として残せます。星の間を宇宙船で飛ぶこともできます。
 
+[HACK SONIC 2026 秋](https://www.dhw.co.jp/press-release/20260819_hacksonic5/) で開発したプロジェクトです。
+
+> [!NOTE]
+> 今後、Chrome ウェブストアで公開していく予定です。公開までは、下の「導入」の手順（デベロッパー モードで読み込む）でお使いください。
+
 **Web のデモ（サンプルの宇宙）：https://j341nono.github.io/bukusupe/**
 （インストールせずに試せます。ブックマークはサンプルだけ、飛行モードは PC のみ）
 
@@ -96,15 +101,8 @@ npm run check:ext        # 自動確認（dist/ の一致、初回起動、拡�
 npm run sample:precompute  # Web のデモに同梱する計算済みのサンプルを作り直す（サンプルや配置の計算を変えたとき）
 ```
 
-### Web のデモの公開（GitHub Pages）
-
-1. GitHub のリポジトリの「Settings → Pages」で、「Build and deployment」の Source を **GitHub Actions** にする
-2. `main` に push すると、`.github/workflows/pages.yml` が `npm run build:web` を実行し、`dist-web/` を公開する
-   （手元の `dist-web/` を任意の静的ホスティングに置いても動きます。サブパスに置いても構いません）
-3. 公開先は `https://<ユーザー名>.github.io/<リポジトリ名>/`
-
-設計と仕様は `docs/SPEC.md`、開発の経緯と判断は `docs/HANDOFF.md` にあります。
-
 ## ライセンス
+ブクスペのコードは [MIT License](LICENSE) です。
 
-第三者のソフトウェアとモデルのライセンスは [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) にあります。
+同梱している第三者のソフトウェアとモデルのライセンスは [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) にあります。
+
