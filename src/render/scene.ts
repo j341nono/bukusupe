@@ -334,6 +334,7 @@ export class SpaceView {
 
   setConstellations(rows: DrawnConstellation[]): void {
     this.constellations.set(rows);
+    this.constellations.setLift((id) => this.heights.get(id) ?? 0, this.flight.lift);
     this.refreshEmphasis();
   }
 
@@ -553,6 +554,11 @@ export class SpaceView {
       const p = this.field.position3(star.id);
       return p ? [{ id: star.id, ...p }] : [];
     });
+  }
+
+  /** 確認用：星座の線の辺と、両端の高さ（地図の座標の z）。 */
+  flightConstellationSegments(): { id: string; a: string; b: string; az: number; bz: number }[] {
+    return this.constellations.segments().map((seg) => ({ ...seg, az: seg.az - 0.12, bz: seg.bz - 0.12 }));
   }
 
   /** 確認用：宇宙船を入った直後の位置と向きに戻す。 */
@@ -1004,6 +1010,10 @@ export class SpaceView {
     if (this.dive) this.flight.ship.speed = 0;
     const previous = this.flight.ship.position.clone();
     const { finished } = this.flight.update(dt, this.camera, this.flightLook, input);
+    if (this.flight.transitioning || finished) {
+      // 立ち上がりの途中だけ、星座の線の高さを書き直す（飛んでいる間は変わらない）
+      this.constellations.setLift((id) => this.heights.get(id) ?? 0, this.flight.lift);
+    }
     if (this.flight.phase === "flying") {
       if (this.dive) this.advanceDive(dt);
       else {

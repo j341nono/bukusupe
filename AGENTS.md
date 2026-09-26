@@ -3,7 +3,7 @@
 > このファイルは `CLAUDE.md` と `AGENTS.md` で**同じ内容**にしている。片方を直したら、もう片方も同じにすること。
 
 Chrome のブックマークを「星」として意味的に配置し、検索で引き寄せ、自分で選んだ星を線で結んで「星座」として保存・再表示する Chrome 拡張機能（Manifest V3）。
-地図（平面）を見るだけでなく、星の間を飛ぶ「飛行モード」（SPEC 13 章）を作る予定。
+地図（平面）を見るだけでなく、星の間を飛ぶ「飛行モード」（SPEC 13 章）がある（3a 完了、3b は次）。
 
 ## はじめに必ず読むもの
 
@@ -26,7 +26,7 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 | 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄（入力中は無効、Ctrl は使わない） |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
 | 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
-| 権限 | `bookmarks`, `storage`, `unlimitedStorage`（重みの取得に `huggingface.co` / `*.hf.co` の host_permissions） |
+| 権限 | `bookmarks`, `storage`, `unlimitedStorage`, `favicon`（飛行モードの窓のアイコン。インストール時の警告が 1 つ増える）。重みの取得に `huggingface.co` / `*.hf.co` の host_permissions |
 
 CSP は `manifest.json` の `content_security_policy.extension_pages` に
 `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'` を指定している。**外してはいけない。**
@@ -50,7 +50,9 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ├── scripts/
 │   ├── gen-icons.mjs        # アイコン PNG の生成（依存なし）
 │   ├── copy-ort.mjs         # ONNX Runtime の補助ファイルを public/ort/ に同梱
-│   └── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
+│   ├── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
+│   ├── check-flight.mjs     # 飛行モードの確認
+│   └── lib/harness.mjs      # 確認スクリプトの共通の土台（CDP パイプ、ページ内のキー入力）
 ├── src/
 │   ├── main.ts              # 画面の入口（読み込み → 埋め込み → 配置 → 検索・星座）
 │   ├── background.ts        # service worker（アイコン → 専用タブ）
@@ -73,7 +75,8 @@ npm install
 npm run dev        # http://localhost:5173 で画面を確認（サンプルデータ）
 npm run build      # dist/ を生成
 npm run typecheck  # tsc --noEmit
-npm run check:ext  # dist/ を実際の Chrome に読み込み、通しで自動確認（10 分ほどかかる。91 項目）
+npm run check:ext    # dist/ を実際の Chrome に読み込み、通しで自動確認（既存 94 項目＋飛行 15 項目。15 分ほど）
+npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 ```
 
 拡張機能としての確認：`npm run build` → `chrome://extensions` → デベロッパーモード ON →

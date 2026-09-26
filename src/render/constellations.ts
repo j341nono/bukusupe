@@ -48,8 +48,10 @@ export class ConstellationLayer {
       const glints = new THREE.Points(glintGeometry,
         new THREE.PointsMaterial({ color: 0xe6c88c, size: 2.5, sizeAttenuation: false, transparent: true,
           opacity: 0.2, depthWrite: false }));
-      this.entries.set(data.id, { data, edges, line, glints });
+      const entry = { data, edges, line, glints };
+      this.entries.set(data.id, entry);
       this.object.add(line, glints);
+      if (this.lift > 0) this.applyLift(entry);
     }
     if (this.active && !this.entries.has(this.active)) this.active = null;
     this.style();
@@ -57,9 +59,46 @@ export class ConstellationLayer {
 
   select(id: string | null): void { this.active = id; this.style(); }
 
-  /** 飛行中は、地図の平面に置いた輪を隠す（星座の線は小段階 5 で立体の位置に描く）。 */
+  private flying = false;
+  private heightOf: (id: string) => number = () => 0;
+  private lift = 0;
+
+  /** 飛行中は、地図の平面に置いた輪を隠し、線はすべてかすかに描く（SPEC 13 章）。 */
   setFlight(on: boolean): void {
+    this.flying = on;
     this.rings.visible = !on;
+    this.style();
+  }
+
+  /**
+   * 線と光点を立体の位置へ持ち上げる。高さは星ごとの高さ × 立ち上がりの度合い（0：地図の平面、1：飛行モード）。
+   * 辺は平面の座標で求めた最小全域木のまま（SPEC 9 章）で、描く位置だけを変える。
+   */
+  setLift(heightOf: (id: string) => number, lift: number): void {
+    this.heightOf = heightOf;
+    this.lift = lift;
+    for (const entry of this.entries.values()) this.applyLift(entry);
+  }
+
+  private applyLift(entry: Entry): void {
+    const y = (id: string, base: number) => base + this.heightOf(id) * this.lift;
+    const line = entry.line.geometry.getAttribute("position") as THREE.BufferAttribute;
+    entry.edges.forEach((edge, i) => {
+      line.setY(i * 2, y(edge.a, 0.12));
+      line.setY(i * 2 + 1, y(edge.b, 0.12));
+    });
+    line.needsUpdate = true;
+    const glints = entry.glints.geometry.getAttribute("position") as THREE.BufferAttribute;
+    entry.data.points.forEach((point, i) => glints.setY(i, y(point.id, 0.14)));
+    glints.needsUpdate = true;
+  }
+
+  /** 確認用：描いている辺と、両端の高さ（three の y）。 */
+  segments(): { id: string; a: string; b: string; az: number; bz: number }[] {
+    return [...this.entries].flatMap(([id, entry]) => {
+      const line = entry.line.geometry.getAttribute("position") as THREE.BufferAttribute;
+      return entry.edges.map((edge, i) => ({ id, a: edge.a, b: edge.b, az: line.getY(i * 2), bz: line.getY(i * 2 + 1) }));
+    });
   }
 
   /**
@@ -149,8 +188,9 @@ export class ConstellationLayer {
     for (const [id, entry] of this.entries) {
       const selected = id === this.active;
       const drawing = this.drawing?.id === id;
-      (entry.line.material as THREE.LineBasicMaterial).opacity = drawing ? 0 : selected ? 0.85 : 0.15;
-      (entry.glints.material as THREE.PointsMaterial).opacity = drawing ? 0 : selected ? 0.9 : 0.2;
+      // 飛行中は、選んでいる星座も含めてかすかに（立体の星の間に、うっすら見える程度）
+      (entry.line.material as THREE.LineBasicMaterial).opacity = this.flying ? 0.22 : drawing ? 0 : selected ? 0.85 : 0.15;
+      (entry.glints.material as THREE.PointsMaterial).opacity = this.flying ? 0.3 : drawing ? 0 : selected ? 0.9 : 0.2;
     }
   }
 }
