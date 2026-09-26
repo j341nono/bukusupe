@@ -809,6 +809,14 @@ export class SpaceView {
     this.constellations.object.visible = visible;
   }
 
+  setConstellationTestOpacity(value: number | null): void {
+    this.constellations.setTestOpacity(value);
+  }
+  setConstellationTestLine(enabled: boolean): void {
+    this.constellations.setTestLine(enabled && this.searchIds.length ? this.blackHole.position : null,
+      SEARCH_HOLE * this.searchUnit);
+  }
+
   starScreen(id: string): { x: number; y: number } | null {
     const point = this.field.displayPosition(id);
     if (!point) return null;

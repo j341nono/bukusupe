@@ -876,6 +876,8 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   searchGeometry: () => view?.searchGeometry(),
   searchHole: () => view?.searchHole() ?? null,
   setConstellationLinesVisible: (visible: boolean) => view?.setConstellationLinesVisible(visible),
+  setConstellationTestOpacity: (value: number | null) => view?.setConstellationTestOpacity(value),
+  setConstellationTestLine: (enabled: boolean) => view?.setConstellationTestLine(enabled),
   starScreen: (id: string) => view?.starScreen(id),
   starPosition: (id: string) => view?.starPosition(id),
   starVisual: (id: string) => view?.starVisual(id),

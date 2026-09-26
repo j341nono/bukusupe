@@ -434,14 +434,19 @@ try {
 
   // --- 星座を選んだまま検索すると、ブラックホールの周り（外側の軌道の少し外まで）に星座の線を描かない ---
   // 星座の線を出した画面と消した画面を撮り、違う画素がブラックホールの周りに無いこと（外にはあること）を見る
-  await evalIn(`(async () => { await ${b}.searchNow('パスタ'); })()`);
+  await evalIn(`(async () => { await ${b}.searchNow('宇宙を感じたい'); })()`);
   await sleep(2200);
   const hole = await json(`${b}.searchHole?.() ?? null`);
+  await tryEval(`${b}.setConstellationTestLine?.(true)`);
+  await tryEval(`${b}.setConstellationTestOpacity?.(1)`);
+  await sleep(150);
   const shotOnBuffer = await screenshot();
   await tryEval(`${b}.setConstellationLinesVisible?.(false)`);
   await sleep(300);
   const shotOff = decodePng(await screenshot());
   await tryEval(`${b}.setConstellationLinesVisible?.(true)`);
+  await tryEval(`${b}.setConstellationTestOpacity?.(null)`);
+  await tryEval(`${b}.setConstellationTestLine?.(false)`);
   const shotOn = decodePng(shotOnBuffer);
   let insideDiff = 0, outsideDiff = 0;
   for (let y = 0; y < shotOn.height; y++) {

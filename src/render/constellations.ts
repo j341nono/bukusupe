@@ -103,6 +103,28 @@ export class ConstellationLayer {
   private hole: { center: THREE.Vector3; radius: number } | null = null;
   private heightOf: (id: string) => number = () => 0;
   private lift = 0;
+  private testOpacity: number | null = null;
+  private testLine: THREE.Line | null = null;
+
+  /** 確認用：検索の中心を横切る線を、通常の線と同じ材質で一時的に描く。 */
+  setTestLine(center: THREE.Vector3 | null, radius = 0): void {
+    if (this.testLine) this.object.remove(this.testLine);
+    this.testLine = null;
+    if (!center) return;
+    const points = [new THREE.Vector3(center.x - radius * 1.4, center.y, center.z),
+      new THREE.Vector3(center.x + radius * 1.4, center.y, center.z)];
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMaterial(0xffffff, 1));
+    line.renderOrder = -1;
+    this.applyHoleTo(line.material as THREE.ShaderMaterial);
+    this.testLine = line;
+    this.object.add(line);
+  }
+
+  /** 画素確認中だけ線を明るくし、切り抜きの有無を測れるようにする。 */
+  setTestOpacity(value: number | null): void {
+    this.testOpacity = value;
+    this.style();
+  }
 
   /** 飛行中は、地図の平面に置いた輪を隠し、線はすべてかすかに描く（SPEC 13 章）。 */
   setFlight(on: boolean): void {
@@ -251,8 +273,8 @@ export class ConstellationLayer {
       const drawing = this.drawing?.id === id;
       // 飛行中は、選んでいる星座も含めてかすかに（立体の星の間に、うっすら見える程度）。検索中はさらに薄く
       const searching = !!this.hole;
-      (entry.line.material as THREE.ShaderMaterial).uniforms.uOpacity.value =
-        drawing ? 0 : searching ? (this.flying ? 0.1 : 0.07) : this.flying ? 0.22 : selected ? 0.85 : 0.15;
+      (entry.line.material as THREE.ShaderMaterial).uniforms.uOpacity.value = this.testOpacity ??
+        (drawing ? 0 : searching ? (this.flying ? 0.1 : 0.07) : this.flying ? 0.22 : selected ? 0.85 : 0.15);
       (entry.glints.material as THREE.PointsMaterial).opacity = this.flying ? 0.3 : drawing ? 0 : selected ? 0.9 : 0.2;
       entry.glints.visible = !searching;
     }
