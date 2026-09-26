@@ -7,6 +7,7 @@ import { Nebulae } from "./nebula";
 import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
 import { Flight, type FlightInput } from "./flight";
 import { createShip } from "./ship";
+import { FlightWindows, WINDOW_RADIUS, type WindowStar } from "../ui/flight-windows";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
@@ -49,7 +50,7 @@ function boundsOf(stars: { x: number; y: number }[], fallback: number) {
 
 export type LabelSource = {
   clusters: { index: number; name: string; x: number; y: number; radius: number; count: number }[];
-  stars: { id: string; title: string; x: number; y: number; cluster: number; rank: number }[];
+  stars: { id: string; title: string; url: string; x: number; y: number; cluster: number; rank: number }[];
 };
 
 export class SpaceView {
@@ -96,6 +97,8 @@ export class SpaceView {
   private readonly flight = new Flight();
   private readonly flightLook = new THREE.Vector3();
   private readonly ship = createShip();
+  private readonly windows = new FlightWindows(document.getElementById("flight-windows") ?? document.body);
+  private windowStars: WindowStar[] = [];
   /** 飛行中のマウスの位置（画面中央からのずれ、-1〜1）。入った直後は 0（動かすまで機首は動かない） */
   private readonly flightMouse = new THREE.Vector2();
   private flightSearch: string[] | null = null;
@@ -306,6 +309,7 @@ export class SpaceView {
         .map((c) => ({ x: c.x, y: c.y, radius: c.radius, color: nebulaColor(c.index), seed: c.index })),
     );
     this.labelSource = source;
+    this.windowStars = source.stars.map((star) => ({ id: star.id, title: star.title, url: star.url }));
     this.extent = layoutExtent(layout);
     this.bounds = boundsOf(stars, this.extent);
     if (frame) this.frameAll();
@@ -502,6 +506,7 @@ export class SpaceView {
     this.controls.enabled = true;
     this.nebulae.object.visible = true;
     this.ship.group.visible = false;
+    this.windows.clear();
     this.constellations.setFlight(false);
     this.setFlightMaterial(false);
     const ids = this.flightSearch ?? [];
@@ -543,11 +548,11 @@ export class SpaceView {
     return this.field.placed.map((star) => ({ id: star.id, z: this.heights.get(star.id) ?? 0 }));
   }
 
-  flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number;
+  flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[];
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
-      lift: this.flight.lift,
+      lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds,
       ship: { x: ship.position.x, y: -ship.position.z, z: ship.position.y, speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
   }
 
@@ -974,12 +979,66 @@ export class SpaceView {
     this.ship.group.position.copy(ship.position);
     this.ship.group.rotation.set(ship.pitch, ship.yaw, 0);
     this.ship.setThrust(this.flight.thrustLevel);
+    this.camera.updateMatrixWorld();
+    if (this.flight.phase === "flying") this.updateWindows(dt);
+    else if (this.flight.phase === "leaving") this.windows.clear();
     this.field.setLift(this.flight.lift);
     this.field.update(dt);
     this.constellations.update(dt);
     this.camera.updateMatrixWorld();
     this.renderer.render(this.scene, this.camera);
     if (finished === "left") this.finishFlight();
+  }
+
+  /** 近づいた星の窓（近い順に最大 6 個）。選ぶのは間引き、位置は毎コマ。 */
+  private updateWindows(dt: number): void {
+    const shipPos = this.flight.ship.position;
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const v = new THREE.Vector3();
+    this.windows.update(dt, this.windowStars,
+      (id) => {
+        const p = this.field.position3(id);
+        return p ? Math.hypot(p.x - shipPos.x, p.z - shipPos.y, -p.y - shipPos.z) : Infinity;
+      },
+      (id) => {
+        const p = this.field.position3(id);
+        if (!p) return null;
+        v.set(p.x, p.z, -p.y).project(this.camera);
+        if (v.z > 1 || v.z < -1) return null;
+        const d = Math.hypot(p.x - shipPos.x, p.z - shipPos.y, -p.y - shipPos.z);
+        return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y,
+          near: THREE.MathUtils.clamp(1 - d / WINDOW_RADIUS, 0, 1) };
+      });
+  }
+
+  /**
+   * 確認用：宇宙船を星 id の前、距離 distance に置いて止める。星団の中心から見て外側に置き、星を正面に見る
+   * （途中に他の星が入りにくい）。
+   */
+  flightTeleport(id: string, distance: number): boolean {
+    const p = this.field.position3(id);
+    const star = this.labelSource.stars.find((s) => s.id === id);
+    const cluster = this.labelSource.clusters.find((c) => c.index === star?.cluster);
+    if (!p || !star || !this.flight.active) return false;
+    let dx = star.x - (cluster?.x ?? 0), dy = star.y - (cluster?.y ?? 0);
+    const len = Math.hypot(dx, dy) || 1;
+    if (Math.hypot(dx, dy) < 1e-6) { dx = 0; dy = -1; }
+    const point = new THREE.Vector3(p.x, p.z, -p.y);
+    const position = point.clone().add(new THREE.Vector3(dx / len, 0, -dy / len).multiplyScalar(distance));
+    this.flight.place(position, point);
+    return true;
+  }
+
+  /** 確認用：星 id の、画面上の大きさ（px）。シェーダーと同じ計算。 */
+  starScreenSize(id: string): number | null {
+    const p = this.field.position3(id);
+    const base = this.field.pointSize(id);
+    if (!p || base == null) return null;
+    this.camera.updateMatrixWorld();
+    const view = new THREE.Vector3(p.x, p.z, -p.y).applyMatrix4(this.camera.matrixWorldInverse);
+    const mat = this.field.object.material as THREE.ShaderMaterial;
+    const px = base * mat.uniforms.uSizeScale.value * mat.uniforms.uScale.value / Math.max(-view.z, 0.001);
+    return THREE.MathUtils.clamp(px, 2, mat.uniforms.uMaxSize.value);
   }
 
   private decideLabels(): void {

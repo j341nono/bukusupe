@@ -227,6 +227,18 @@
         border: 1px solid var(--hairline); border-radius: 3px; font: inherit; font-size: 11px; line-height: 1.6;
       }
       body.is-flying #flight-help { display: block; }
+      /* 近づいた星の窓：アイコン・タイトル・ドメイン（位置は毎コマ transform で動かす） */
+      #flight-windows { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
+      body.is-flying #flight-windows { display: block; }
+      .flight-window {
+        position: absolute; top: 0; left: 0; display: flex; gap: 8px; align-items: center;
+        max-width: 280px; padding: 6px 10px 6px 8px; border: 1px solid var(--faint); border-radius: 6px;
+        background: rgba(7, 10, 24, 0.78); will-change: transform, opacity; transition: opacity 160ms ease;
+      }
+      .flight-window img, .flight-window-glyph { flex: none; width: 16px; height: 16px; border-radius: 3px; }
+      .flight-window-glyph { display: grid; place-items: center; background: var(--faint); font-size: 10px; }
+      .flight-window-title { font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 230px; }
+      .flight-window-domain { font-size: 10.5px; color: var(--dim); letter-spacing: 0.04em; }
       body.is-flying #flight-toggle { right: 20px; }
       /* 飛行中は地図の部品を隠す（入る前の状態は保ったまま。出たら戻る） */
       body.is-flying #search-box, body.is-flying #constellation-list, body.is-flying #constellation-manage,
@@ -374,6 +386,7 @@
     <canvas id="space"></canvas>
     <div id="vignette"></div>
     <div id="labels"></div>
+    <div id="flight-windows"></div>
     <div id="search-box">
       <input id="search-input" type="search" autocomplete="off" placeholder="星を探す" aria-label="ブックマークを検索" />
       <button id="constellation-create" hidden>星座にする</button>

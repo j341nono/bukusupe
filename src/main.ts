@@ -766,6 +766,8 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   flightStars: () => view?.flightStars(),
   flightHeights: () => view?.flightHeights(),
   flightReset: () => view?.flightReset(),
+  flightTeleport: (id: string, distance: number) => view?.flightTeleport(id, distance),
+  starScreenSize: (id: string) => view?.starScreenSize(id),
   relayout,
 
   async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY, priorCoefficient = CLUSTER_PRIOR) {
