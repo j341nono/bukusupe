@@ -18,7 +18,8 @@ try {
   execFileSync("node", ["scripts/copy-ort.mjs"], { stdio: "ignore" });
   execFileSync("npx", ["vite", "build", "--outDir", out, "--emptyOutDir", "--logLevel", "error"], { stdio: ["ignore", "ignore", "inherit"] });
   const built = readdirSync(out, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
+    // macOS が public/ に作る .DS_Store は git が無視するので比べない
+    .filter((entry) => entry.isFile() && entry.name !== ".DS_Store")
     .map((entry) => relative(out, join(entry.parentPath ?? entry.path, entry.name)).split("\\").join("/"))
     .sort();
   const ignored = (() => {
