@@ -20,10 +20,17 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * dist を拡張機能として読み込み、専用ページ（index.html?{query}）を開く。
  * dist を null にすると拡張機能を読み込まず、url のページ（Web のデモなど）を開く。
  */
-export async function launchExtension(dist, { width = 1280, height = 800, query = "debug=1", url = null, beforeOpen = null } = {}) {
-  const profile = mkdtempSync(join(tmpdir(), "bukusupe-"));
+export async function launchExtension(dist, { width = 1280, height = 800, query = "debug=1", url = null, beforeOpen = null,
+  headless = true, profileDir = null, startPath = null } = {}) {
+  // profileDir を渡すと、そのプロファイルを使い、閉じても消さない（測定でモデルのキャッシュを使い回すため）
+  const profile = profileDir ?? mkdtempSync(join(tmpdir(), "bukusupe-"));
+  const display = headless
+    ? ["--headless=new", "--disable-gpu", "--use-gl=swiftshader", "--enable-unsafe-swiftshader"]
+    // 画面あり（GPU あり）：窓が隠れても描画を間引かないようにする（測定用）
+    : ["--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling",
+      "--no-first-run", "--no-default-browser-check", "--window-position=0,0"];
   const child = spawn(CHROME, [
-    "--headless=new", "--disable-gpu", "--use-gl=swiftshader", "--enable-unsafe-swiftshader",
+    ...display,
     "--enable-unsafe-extension-debugging", "--remote-debugging-pipe",
     `--user-data-dir=${profile}`, `--window-size=${width},${height}`, "about:blank",
   ], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
@@ -62,7 +69,7 @@ export async function launchExtension(dist, { width = 1280, height = 800, query 
   await sleep(2500);
   const extId = dist ? (await send("Extensions.loadUnpacked", { path: dist })).id : null;
   // 開く前に仕掛けたいもの（通信の差し止めなど）があれば、空のページで先に行う
-  const { targetId } = await send("Target.createTarget", { url: beforeOpen ? "about:blank" : (url ?? `chrome-extension://${extId}/index.html?${query}`) });
+  const { targetId } = await send("Target.createTarget", { url: beforeOpen ? "about:blank" : (url ?? `chrome-extension://${extId}/${startPath ?? `index.html?${query}`}`) });
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
   for (const domain of ["Runtime", "Log", "Page", "Network"]) await send(`${domain}.enable`, {}, sessionId);
   listeners.push((m) => {
@@ -72,7 +79,7 @@ export async function launchExtension(dist, { width = 1280, height = 800, query 
   await send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sessionId);
   if (beforeOpen) {
     await beforeOpen({ send, sessionId });
-    await send("Page.navigate", { url: url ?? `chrome-extension://${extId}/index.html?${query}` }, sessionId);
+    await send("Page.navigate", { url: url ?? `chrome-extension://${extId}/${startPath ?? `index.html?${query}`}` }, sessionId);
   }
 
   /** ページで式を評価して値を返す。例外は Error にして投げる。 */
@@ -111,12 +118,15 @@ export async function launchExtension(dist, { width = 1280, height = 800, query 
     await Promise.race([send("Browser.close").catch(() => {}), sleep(5000)]);
     child.kill("SIGKILL");
     await sleep(500);
-    try { rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* 無視 */ }
+    if (!profileDir) {
+      try { rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* 無視 */ }
+    }
   };
 
   /** CDP のイベントを受ける（Fetch.requestPaused など） */
   const onEvent = (fn) => listeners.push(fn);
-  return { send, evalIn, tryEval, waitUntil, key, press, screenshot, close, events, extId, sessionId, onEvent };
+  return { send, evalIn, tryEval, waitUntil, key, press, screenshot, close, events, extId, sessionId, onEvent,
+    pid: child.pid, profile, targetId };
 }
 
 /** 確認の結果を集めて出す。 */

@@ -18,7 +18,9 @@
     "predev": "node scripts/copy-ort.mjs",
     "check:flight": "node scripts/check-flight.mjs",
     "check:web": "npm run build:web && node scripts/check-web.mjs",
-    "check:dist": "node scripts/check-dist.mjs"
+    "check:dist": "node scripts/check-dist.mjs",
+    "bench": "node scripts/bench/index.mjs",
+    "bench:report": "node scripts/bench/report.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

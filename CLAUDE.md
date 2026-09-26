@@ -60,6 +60,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
 │   ├── precompute-sample.mjs  # Web のデモに同梱する計算済みのサンプルを作る
 │   ├── gen-notices.mjs      # THIRD_PARTY_NOTICES を作る
+│   ├── bench/               # 時間とメモリの測定（npm run bench → docs/bench/results/、npm run bench:report → docs/BENCHMARK.md）
 │   └── lib/harness.mjs      # 確認スクリプトの共通の土台（CDP パイプ、ページ内のキー入力）
 ├── src/
 │   ├── main.ts              # 画面の入口（読み込み → 埋め込み → 配置 → 検索・星座）
@@ -70,6 +71,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── layout/              # 配置（平均引き → k-means → 粒度そろえ → PCA → 押し広げ → 螺旋）、星団名
 │   ├── search/              # 文字一致＋意味検索（平均引き、汎用度の補正、z 値での正規化）
 │   ├── constellation/       # 星座の保存形式、メンバーの集合、決定的な最小全域木
+│   ├── debug/               # 測定用の時間の記録（?debug=1 のときだけ使う）
 │   ├── render/              # three.js の描画（星・星雲・ブラックホール・星座の線）
 │   ├── ui/                  # HUD とラベルの重ね表示
 │   └── data/                # sample-bookmarks.json（156 件）、sample-precomputed.json（Web のデモ用の計算済み）
@@ -89,6 +91,7 @@ npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 npm run check:web    # Web のデモの確認だけ
 npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す
+npm run bench        # 時間とメモリの測定（2〜3 時間。--only=run1 / run2 / <項目>）。npm run bench:report で報告書だけ作り直す
 ```
 
 拡張機能としての確認：`npm run build` → `chrome://extensions` → デベロッパーモード ON →

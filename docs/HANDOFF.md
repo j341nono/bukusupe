@@ -8,6 +8,31 @@
 
 ## 0. いまの状態と、残りのタスク（最初に読む）
 
+### 時間とメモリの測定（docs/BENCHMARK.md）— 準備まで（2026-09-27、Claude）
+
+使う人の依頼で、製品の動作を変えずに時間とメモリのコストを測る。計画は使う人が確認済み（2 回に分けて実行：1 回目＝描画以外、
+2 回目＝画面ありの描画。どちらも使う人が「始めて」と言ってから）。**この節の時点では、測定用の仕組みとスクリプトを作っただけで、本番の測定はまだ。**
+
+- **src に足したもの（すべて `?debug=1` のときだけ動く。ふだんの動作は変えない）**
+  1. 生成したブックマークの注入：`?debug=1&bench=<名前>` で、`chrome.storage.local` の `bench:<名前>` を読む（`src/bookmarks/index.ts`）。
+  2. 測定用の DB：`bukusupe-bench-<名前>`（`useDataSource(kind, bench)`）。サンプルの DB を汚さない。
+  3. 時間の計測点：配置の段ごと（`src/debug/timing.ts` の `timed()`。記録先が無いときは呼ぶだけ）、起動の節目（`__bukusupe.marks()`）、
+     1 コマの内訳（`SpaceView.setProfiling` / `takeProfile`：全体・重ね表示・描画）。
+  4. `renderer.info` の取り出し（`renderInfo()`）。
+  5. Worker の WebAssembly のメモリ（Worker の名前が `bukusupe-debug` のときだけ `WebAssembly.Memory` と `instantiate` を包んで控える。`wasmMemory()`）。
+  6. 描画のループの一時停止（`setLoopPaused`。何もしていないときの CPU 使用率の比較のためだけ）。
+  7. 量子化の切り替え（`?debug=1&dtype=fp16|fp32`。通常は q8）。
+- **スクリプト**：`scripts/bench/`（`npm run bench`、`--only=run1|run2|<項目>`、`--counts=`、`--allow-load`）。報告書は `npm run bench:report` が
+  `docs/bench/results/` から `docs/BENCHMARK.md` とグラフ（`docs/bench/*.png`。SVG をヘッドレスの Chrome で PNG にする。依存は足さない）を作る。
+  使い回すプロファイルは `$TMPDIR/bukusupe-bench-profile`（モデルのキャッシュと埋め込みを残す。リポジトリの外）。
+- **負荷の見張り**：計画では「1 分平均のロードアベレージ 4 超で中断」だったが、試運転でロードアベレージが測定そのもの（埋め込みの計算）で 5〜7 に
+  上がり、次の段が止まった。そこで判断は「このスクリプトと、それが起動した Chrome を除いたプロセスの CPU 使用率の合計が 150% 超」に変え、
+  ロードアベレージは参考として記録する。
+- **試運転で直したこと**：`requestAnimationFrame` の記録が前の記録に書き込む不具合（コマ数が 2 倍に見えた）／ドラッグが星のタイトル（押せる）の上から
+  始まり地図が動かなかった（押し始めを canvas の上に）／キーとドラッグの場面が元の位置に戻る動きで「動いたか」を判定できなかった／
+  モデルの取得は、本体の前に小さな範囲の要求（206）があるので、ファイルごとに合計する／グラフの文字化け（data URL に charset）／容量は 10 進の MB。
+- **わかっている限界**：ページの時刻は 0.1 ms 刻み（それより短い処理は「< 0.1 ms」）。GPU の処理時間は測れない。WebAssembly のメモリは確保量。
+
 ### M6（提出の準備）— 2026-09-26（Claude）
 
 使う人の指示で `docs/PLAN.md` の M6 を「提出の準備」に変えた（新しい機能は足さない。配布用の zip は作らない。デモ録画は外れた）。
