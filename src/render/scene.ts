@@ -89,6 +89,8 @@ export class SpaceView {
   private readonly keyPan = new THREE.Vector2();
   private keyZoom = 0;
   private editIds: string[] = [];
+  /** 星座を選んだまま検索を始めたときのカメラ。検索を消したらここへ戻す */
+  private searchStash: { target: THREE.Vector3; distance: number } | null = null;
   private emphasisIds = new Set<string>();
   private emphasisMode: EmphasisMode = "none";
   private searchIds: string[] = [];
@@ -297,10 +299,19 @@ export class SpaceView {
     this.refreshEmphasis();
   }
 
-  /** 星座の星を強調し、小さな輪を付け、タイトルを優先する。 */
+  /**
+   * 星座の星を強調し、小さな輪を付け、タイトルを優先する。
+   * 星座を選んだまま検索しているときは検索を前面に出す：星座の線を暗くし、強調・輪・タイトルの優先・名前を解く
+   * （編集中は、選んでいる星が見えないと困るので強調を残す）。
+   */
   private refreshEmphasis(): void {
-    const selected = this.constellationNameId ? this.constellations.points(this.constellationNameId) : [];
+    const searching = this.searchIds.length > 0;
+    const selected = this.constellationNameId && !searching ? this.constellations.points(this.constellationNameId) : [];
     const mode: EmphasisMode = this.editIds.length ? "edit" : selected.length ? "selected" : "none";
+    this.constellations.select(searching ? null : this.constellationNameId);
+    if (this.constellationName && !this.constellationNameWait) {
+      this.constellationName.classList.toggle("is-visible", !!this.constellationNameId && !searching);
+    }
     const ids = mode === "edit" ? this.editIds : selected.map((point) => point.id);
     this.emphasisIds = new Set(ids);
     this.emphasisMode = mode;
@@ -315,6 +326,7 @@ export class SpaceView {
   selectConstellation(id: string | null, name = ""): void {
     this.constellations.select(id);
     this.constellationNameId = id;
+    this.searchStash = null;   // 選び直したら、検索前のカメラには戻さない
     this.refreshEmphasis();
     this.constellationNameWait = false;
     if (this.constellationName) {
@@ -456,6 +468,19 @@ export class SpaceView {
 
   /** 画面中央の地図上の点を中心に、検索結果を軌道へ移す。 */
   setSearch(ids: string[]): void {
+    const wasSearching = this.searchIds.length > 0;
+    const searching = ids.length > 0;
+    if (!wasSearching && searching && this.constellationNameId) {
+      // 星座を選んだまま検索を始めた：いまのカメラ（星座に寄せた位置）を覚えておく
+      this.searchStash = { target: this.controls.target.clone(),
+        distance: this.camera.position.distanceTo(this.controls.target) };
+    } else if (wasSearching && !searching && this.searchStash && this.constellationNameId) {
+      // 検索を消した：星座を選んでいたときのカメラへ戻る
+      this.focus = { from: this.controls.target.clone(), to: this.searchStash.target,
+        fromDistance: this.camera.position.distanceTo(this.controls.target),
+        toDistance: this.searchStash.distance, elapsed: 0, duration: POINTS_FOCUS_SECONDS };
+    }
+    if (!searching) this.searchStash = null;
     this.searchIds = ids.slice(0, 21);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(0, 0), this.camera);
@@ -473,6 +498,7 @@ export class SpaceView {
     this.tails.visible = this.searchIds.length > 0;
     this.hoveredId = null;
     this.labelsDirty = true;
+    if (wasSearching !== searching) this.refreshEmphasis();
   }
 
   selectSearch(id: string | null): void {

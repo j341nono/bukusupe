@@ -242,11 +242,11 @@
       #search-input:focus { border-color: rgba(214, 205, 180, 0.55); }
       #search-input::placeholder { color: var(--dim); letter-spacing: 0.2em; }
       #constellation-rename, #constellation-delete {
-        padding: 2px 0; border: none; background: none; cursor: pointer;
-        font: inherit; font-size: 11px; letter-spacing: 0.06em; color: var(--dim);
-        text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px;
+        padding: 6px 10px; border: none; border-radius: 4px; background: none; cursor: pointer; text-align: left;
+        font: inherit; font-size: 12px; letter-spacing: 0.06em; color: var(--ink);
       }
-      #constellation-rename:hover, #constellation-delete:hover { color: var(--ink); }
+      #constellation-rename:hover, #constellation-delete:hover { background: rgba(214, 205, 180, 0.1); }
+      #constellation-delete { color: #d9a39a; }
       #constellation-create, #constellation-save, #constellation-cancel {
         padding: 6px 14px;
         border: 1px solid var(--gold-soft);
@@ -288,7 +288,17 @@
       }
       #constellation-list > button:hover { color: #f0dcb0; }
       #constellation-list > button.is-active { color: #f4e2b8; border-bottom-color: var(--gold); }
-      #constellation-manage { display: inline-flex; gap: 10px; margin-left: -8px; }
+      /* 選んでいる星座の横の「…」。押すと小さなメニュー（名前を変える／削除）が開く */
+      #constellation-more {
+        margin-left: -12px; padding: 2px 6px; border: none; border-radius: 4px; background: none; cursor: pointer;
+        color: var(--dim); font: inherit; font-size: 14px; line-height: 1; letter-spacing: 0.1em;
+      }
+      #constellation-more:hover, #constellation-more[aria-expanded="true"] { color: var(--ink); background: rgba(214, 205, 180, 0.08); }
+      #constellation-manage {
+        position: fixed; z-index: 6; display: flex; flex-direction: column; gap: 2px;
+        min-width: 116px; padding: 6px; border: 1px solid var(--faint); border-radius: 6px;
+        background: rgba(7, 10, 24, 0.96);
+      }
       #constellation-manage[hidden] { display: none; }
       #constellation-name {
         position: fixed; z-index: 3; left: 0; top: 0; pointer-events: none;
@@ -346,7 +356,8 @@
       </div>
     </div>
     <div id="constellation-name"></div>
-    <nav id="constellation-list" aria-label="保存した星座"><div id="constellation-manage" hidden><button id="constellation-rename">名前を変える</button><button id="constellation-delete">削除</button></div></nav>
+    <nav id="constellation-list" aria-label="保存した星座"></nav>
+    <div id="constellation-manage" role="menu" aria-label="星座の操作" hidden><button id="constellation-rename" role="menuitem">名前を変える</button><button id="constellation-delete" role="menuitem">削除</button></div>
     <aside id="star-card" hidden>
       <div id="star-card-title"></div>
       <div id="star-card-url"></div>

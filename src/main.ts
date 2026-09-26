@@ -353,30 +353,55 @@ async function toggleConstellation(id: string): Promise<void> {
   view?.focusPoints(pointsFor(state.layout, row.lastMembers));
 }
 
-/** 名前の変更・削除の操作。一覧を作り直しても同じ要素を使い回す（一覧の中へ移すため）。 */
-let manageBar: HTMLElement | null = null;
-
+/**
+ * 画面下の星座一覧。並べるのは星座の名前だけ。
+ * 「名前を変える」「削除」は、選んでいる星座の横の「…」を押すと開く小さなメニューに入れる。
+ */
 function renderConstellationList(): void {
   const list = document.getElementById("constellation-list");
   if (!list) return;
-  manageBar ??= document.getElementById("constellation-manage");
   document.body.classList.toggle("has-constellations", constellations.length > 0);
+  closeConstellationMenu();
   list.replaceChildren();
-  let active: HTMLElement | null = null;
   for (const row of constellations) {
     const button = document.createElement("button");
     button.textContent = row.name;
     button.classList.toggle("is-active", row.id === activeConstellationId);
     button.addEventListener("click", () => void toggleConstellation(row.id));
     list.append(button);
-    if (row.id === activeConstellationId) active = button;
+    if (row.id === activeConstellationId && !savingAnimation) {
+      const more = document.createElement("button");
+      more.id = "constellation-more";
+      more.textContent = "…";
+      more.title = "この星座の操作";
+      more.setAttribute("aria-label", `「${row.name}」の操作`);
+      more.setAttribute("aria-haspopup", "menu");
+      more.setAttribute("aria-expanded", "false");
+      more.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleConstellationMenu(more);
+      });
+      list.append(more);
+    }
   }
-  if (manageBar) {
-    manageBar.hidden = !activeConstellationId || savingAnimation;
-    // 選んでいる星座のすぐ横に、小さな文字リンクとして置く
-    if (active) active.after(manageBar);
-    else list.append(manageBar);
-  }
+}
+
+function toggleConstellationMenu(anchor: HTMLElement): void {
+  const menu = document.getElementById("constellation-manage");
+  if (!menu) return;
+  if (!menu.hidden) { closeConstellationMenu(); return; }
+  menu.hidden = false;
+  anchor.setAttribute("aria-expanded", "true");
+  // 「…」の真上に開く
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, rect.left + rect.width / 2 - menu.offsetWidth / 2))}px`;
+  menu.style.bottom = `${innerHeight - rect.top + 6}px`;
+}
+
+function closeConstellationMenu(): void {
+  const menu = document.getElementById("constellation-manage");
+  if (menu) menu.hidden = true;
+  document.getElementById("constellation-more")?.setAttribute("aria-expanded", "false");
 }
 
 function setupConstellations(): void {
@@ -387,7 +412,13 @@ function setupConstellations(): void {
     if ((event as KeyboardEvent).key === "Enter") { event.preventDefault(); void saveConstellation(); }
     if ((event as KeyboardEvent).key === "Escape") { event.preventDefault(); cancelConstellation(); }
   });
+  // メニューの外を押したら閉じる
+  document.addEventListener("click", (event) => {
+    const menu = document.getElementById("constellation-manage");
+    if (menu && !menu.hidden && !menu.contains(event.target as Node)) closeConstellationMenu();
+  });
   document.getElementById("constellation-rename")?.addEventListener("click", async () => {
+    closeConstellationMenu();
     const row = constellations.find((item) => item.id === activeConstellationId);
     if (!row) return;
     const name = window.prompt("星座の名前", row.name)?.trim();
@@ -398,6 +429,7 @@ function setupConstellations(): void {
     renderConstellationList();
   });
   document.getElementById("constellation-delete")?.addEventListener("click", async () => {
+    closeConstellationMenu();
     if (!activeConstellationId) return;
     const id = activeConstellationId;
     await deleteConstellation(id);
@@ -408,6 +440,8 @@ function setupConstellations(): void {
     refreshConstellations();
   });
   document.addEventListener("keydown", (event) => {
+    const menu = document.getElementById("constellation-manage");
+    if (event.key === "Escape" && menu && !menu.hidden) { closeConstellationMenu(); return; }
     if (event.key !== "Escape" || event.target === document.getElementById("search-input") ||
       event.target === document.getElementById("constellation-name-input")) return;
     if (editing) cancelConstellation();
