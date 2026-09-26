@@ -205,6 +205,21 @@
         border-bottom-color: var(--hairline);
       }
 
+      /* 飛行モード：入り口のボタン（「再配置」の左）と、飛行中の操作の説明 */
+      #flight-toggle {
+        position: fixed; right: 92px; bottom: 16px; z-index: 5;
+        padding: 6px 16px; border: 1px solid var(--hairline); border-radius: 999px;
+        background: rgba(7, 10, 24, 0.7); color: var(--ink); cursor: pointer;
+        font: inherit; font-size: 12px; letter-spacing: 0.16em;
+      }
+      #flight-toggle:hover { border-color: rgba(214, 205, 180, 0.6); }
+      #flight-help { display: none; }
+      body.is-flying #flight-toggle { right: 20px; }
+      /* 飛行中は地図の部品を隠す（入る前の状態は保ったまま。出たら戻る） */
+      body.is-flying #search-box, body.is-flying #constellation-list, body.is-flying #constellation-manage,
+      body.is-flying #star-card, body.is-flying #hint, body.is-flying #relayout, body.is-flying #labels,
+      body.is-flying #constellation-name { display: none !important; }
+
       #hint {
         position: fixed;
         bottom: 18px;
@@ -367,6 +382,8 @@
     <button id="hud-toggle" title="情報を開閉する" aria-label="情報">ⓘ</button>
     <div id="hud"></div>
     <button id="relayout" title="星団から並べ直す">再配置</button>
+    <button id="flight-toggle" title="星の間を飛ぶ（F）">飛行</button>
+    <div id="flight-help" aria-live="polite"></div>
     <div id="loading">星を数えている…</div>
     <div id="hint">ドラッグで移動・ホイールで拡大縮小　操作の一覧は ⓘ</div>
     <script type="module" src="/src/main.ts"></script>

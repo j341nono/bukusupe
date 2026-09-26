@@ -61,6 +61,7 @@ async function main(): Promise<void> {
   setupHudControls();
   view = new SpaceView(canvas, labels);
   view.onStarLabelClick = handleStarClick;
+  setupFlight();
   view.start();
 
   renderHudMessage("ブックマークを読み込んでいる…");
@@ -497,7 +498,7 @@ function setupSearch(canvas: HTMLCanvasElement): void {
   const card = document.getElementById("star-card") as HTMLElement;
   // 「/」で検索欄へ（文字を打っている最中は、そのまま文字として入れる）
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey || view?.inFlight) return;
     const active = document.activeElement;
     if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return;
     event.preventDefault();
@@ -554,18 +555,68 @@ function setupSearch(canvas: HTMLCanvasElement): void {
     }
   });
   canvas.addEventListener("click", (event) => {
+    if (view?.inFlight) return;
     const id = view?.pickStar(event.clientX, event.clientY);
     if (id) handleStarClick(id);
     else card.hidden = true;
   });
-  canvas.addEventListener("mousemove", (event) => view?.hoverStar(view.pickStar(event.clientX, event.clientY)));
+  canvas.addEventListener("mousemove", (event) => {
+    if (!view?.inFlight) view?.hoverStar(view.pickStar(event.clientX, event.clientY));
+  });
   canvas.addEventListener("mouseleave", () => view?.hoverStar(null));
   canvas.addEventListener("dblclick", (event) => {
+    if (view?.inFlight) return;
     if (editing) return;
     const id = view?.pickStar(event.clientX, event.clientY);
     if (id) openBookmark(id);
   });
   document.getElementById("star-card-open")?.addEventListener("click", () => { if (cardId) openBookmark(cardId); });
+}
+
+/**
+ * 飛行モード（SPEC 13 章）の出入り。「飛行」ボタンか F で入り、Esc で出る。
+ * 入る前の状態（検索語・検索結果・星座の選択）は main の側では何も変えない（SpaceView が表示だけを預かる）。
+ * 文字を打っている最中の F は文字として扱う。星座の編集中は入らない。
+ */
+function setupFlight(): void {
+  const button = document.getElementById("flight-toggle") as HTMLButtonElement | null;
+  const typingNow = () => {
+    const el = document.activeElement;
+    return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement | null)?.isContentEditable;
+  };
+  const enter = () => {
+    if (!view || editing || view.inFlight) return;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    (document.getElementById("star-card") as HTMLElement).hidden = true;
+    cardId = null;
+    view.enterFlight();
+  };
+  const leave = () => { view?.exitFlight(); };
+  view!.onFlightChange = (active) => {
+    document.body.classList.toggle("is-flying", active);
+    if (button) {
+      button.textContent = active ? "地図へ戻る" : "飛行";
+      button.title = active ? "地図へ戻る（Esc）" : "星の間を飛ぶ（F）";
+    }
+  };
+  button?.addEventListener("click", () => (view?.inFlight ? leave() : enter()));
+  // 取り込み段階（capture）で受け、飛行中の Esc が検索を消したり星座の選択を解いたりしないようにする
+  window.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (view?.inFlight) {
+      if (event.key === "Escape") leave();
+      // 飛行中は、地図の操作（/ で検索、Enter、矢印など）を届かせない。飛行の操作は SpaceView が見る
+      if (event.key === "Escape" || event.key === "/" || event.key === "Enter" || event.key.startsWith("Arrow")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
+    if (event.code === "KeyF" && !typingNow()) {
+      event.preventDefault();
+      enter();
+    }
+  }, { capture: true });
 }
 
 /**
@@ -708,6 +759,12 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   resetCamera: () => view?.resetCamera(),
   labelGeometry: () => view?.labelGeometry() ?? [],
   setTopDown: (on: boolean) => view?.setTopDown(on),
+  // 飛行モード（SPEC 13 章）の確認用
+  enterFlight: () => view?.enterFlight(),
+  exitFlight: () => view?.exitFlight(),
+  flightState: () => view?.flightState(),
+  flightStars: () => view?.flightStars(),
+  flightHeights: () => view?.flightHeights(),
   relayout,
 
   async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY, priorCoefficient = CLUSTER_PRIOR) {

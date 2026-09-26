@@ -4,7 +4,9 @@ import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
-import { StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
+import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
+import { Flight } from "./flight";
+import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
 
@@ -89,6 +91,13 @@ export class SpaceView {
   private readonly keyPan = new THREE.Vector2();
   private keyZoom = 0;
   private editIds: string[] = [];
+  /** 飛行モード（SPEC 13 章）。入る前の検索は flightSearch に預け、出たら掛け直す */
+  private readonly flight = new Flight();
+  private readonly flightLook = new THREE.Vector3();
+  private flightSearch: string[] | null = null;
+  private heights = new Map<string, number>();
+  /** 飛行モードに入った・出たときに呼ばれる（画面の部品の出し分けは main が行う） */
+  onFlightChange: ((active: boolean) => void) | null = null;
   /** 星座を選んだまま検索を始めたときのカメラ。検索を消したらここへ戻す */
   private searchStash: { target: THREE.Vector3; distance: number } | null = null;
   private emphasisIds = new Set<string>();
@@ -276,6 +285,11 @@ export class SpaceView {
   setLayout(layout: Layout, stars: RenderStar[], source: LabelSource, frame = true): void {
     this.field.setStars(stars);
     this.field.setEmphasis([...this.emphasisIds], this.emphasisMode);
+    // 飛行モードの高さ。配置が変わるたびに取り直す（地図の座標は変えない）
+    this.heights = flightHeights(layout);
+    this.field.setHeights(this.heights);
+    this.field.setLift(this.flight.lift);
+    if (this.flight.active) frame = false;   // 飛行中はカメラを宇宙船が持っている
     this.nebulae.set(
       source.clusters
         .filter((c) => c.count > 0)
@@ -429,6 +443,96 @@ export class SpaceView {
     return this.constellations.geometry();
   }
 
+  get inFlight(): boolean {
+    return this.flight.active;
+  }
+
+  /**
+   * 飛行モードに入る（SPEC 13 章）。どの画面からでも入れる。
+   * 入る前の検索は預けて軌道を解き（立体の星空では軌道を描かない。3b で飛行中の検索を作る）、出たら掛け直す。
+   * 星座の選択はそのまま（輪と名前だけ隠す）。
+   */
+  enterFlight(): boolean {
+    if (this.flight.active) return false;
+    this.flightSearch = this.searchIds.slice();
+    this.searchIds = [];
+    this.field.setSearch([], this.searchCenter, this.searchUnit);
+    this.blackHole.visible = false;
+    this.trace.visible = false;
+    this.tails.visible = false;
+    this.selectedHalo.visible = false;
+    this.focus = null;
+    this.keys.clear();
+    this.controls.enabled = false;
+    this.labels.clear();
+    this.nebulae.object.visible = false;   // 平面の星雲は、立体の星の雲には合わない
+    this.constellations.setFlight(true);
+    this.constellationName?.classList.remove("is-visible");
+    this.setFlightMaterial(true);
+    const distance = this.camera.position.distanceTo(this.controls.target);
+    this.flight.enter(this.camera, this.controls.target.clone(), distance, 3);
+    this.onFlightChange?.(true);
+    return true;
+  }
+
+  /** 飛行モードから出る。宇宙船がいた場所の真上から見た地図に、入る前の拡大率で戻る。 */
+  exitFlight(): boolean {
+    if (!this.flight.active || this.flight.phase === "leaving") return false;
+    this.flight.leave(this.camera, this.flightLook);
+    return true;
+  }
+
+  /** 出る移り変わりが終わった：地図の操作を戻し、預けていた検索と星座の表示を掛け直す。 */
+  private finishFlight(): void {
+    this.controls.target.copy(this.flight.mapTarget());
+    this.tilt = 0;
+    this.setDistance(this.flight.returnDistance);
+    this.controls.enabled = true;
+    this.nebulae.object.visible = true;
+    this.constellations.setFlight(false);
+    this.setFlightMaterial(false);
+    const ids = this.flightSearch ?? [];
+    this.flightSearch = null;
+    // 真上から見た地図に降りたあと、検索中でなければ使う人の傾きへ戻す
+    this.tiltTarget = ids.length ? 0 : this.preferredTilt;
+    this.tiltSpeed = Math.abs(this.tiltTarget - this.tilt) / TURN_SECONDS;
+    if (ids.length) {
+      this.setSearch(ids);
+      this.selectSearch(this.selectedId);
+    }
+    this.refreshEmphasis();
+    this.labelsDirty = true;
+    this.lastLabelTier = null;
+    this.onFlightChange?.(false);
+  }
+
+  private setFlightMaterial(on: boolean): void {
+    const mat = this.field.object.material as THREE.ShaderMaterial;
+    mat.uniforms.uMaxSize.value = on ? FLIGHT_MAX_POINT : MAP_MAX_POINT;
+    mat.uniforms.uFlight.value = on ? 1 : 0;
+    mat.uniforms.uSizeScale.value = on ? FLIGHT_SIZE_SCALE : 1;
+  }
+
+  /** 確認用：飛行中の星の 3 次元の位置と、配置から取り直した高さ。 */
+  flightStars(): { id: string; x: number; y: number; z: number }[] {
+    return this.field.placed.flatMap((star) => {
+      const p = this.field.position3(star.id);
+      return p ? [{ id: star.id, ...p }] : [];
+    });
+  }
+
+  flightHeights(): { id: string; z: number }[] {
+    return this.field.placed.map((star) => ({ id: star.id, z: this.heights.get(star.id) ?? 0 }));
+  }
+
+  flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number;
+    ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
+    const ship = this.flight.ship;
+    return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
+      lift: this.flight.lift,
+      ship: { x: ship.position.x, y: -ship.position.z, z: ship.position.y, speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
+  }
+
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
   setTopDown(topDown: boolean): void {
     this.tiltTarget = topDown ? 0 : this.preferredTilt;
@@ -436,7 +540,7 @@ export class SpaceView {
   }
 
   private readonly onTiltStart = (event: PointerEvent): void => {
-    if (event.button !== 2) return;
+    if (event.button !== 2 || this.flight.active) return;
     this.focus = null;
     this.tiltPointer = event.pointerId;
     this.tiltPointerY = event.clientY;
@@ -685,6 +789,10 @@ export class SpaceView {
   private readonly tick = (): void => {
     this.frames++;
     const dt = Math.min(0.05, this.clock.getDelta());
+    if (this.flight.active) {
+      this.flightTick(dt);
+      return;
+    }
     this.applyKeys(dt);
 
     if (this.focus) {
@@ -832,6 +940,17 @@ export class SpaceView {
     this.maxLabelPositionMs = Math.max(this.maxLabelPositionMs, performance.now() - labelStart);
     this.renderer.render(this.scene, this.camera);
   };
+
+  /** 飛行中の 1 コマ：宇宙船とカメラ、星の立ち上がり、星座の線。地図のラベルや操作は動かさない。 */
+  private flightTick(dt: number): void {
+    const { finished } = this.flight.update(dt, this.camera, this.flightLook);
+    this.field.setLift(this.flight.lift);
+    this.field.update(dt);
+    this.constellations.update(dt);
+    this.camera.updateMatrixWorld();
+    this.renderer.render(this.scene, this.camera);
+    if (finished === "left") this.finishFlight();
+  }
 
   private decideLabels(): void {
     const tier = this.zoomTier;

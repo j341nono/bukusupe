@@ -57,6 +57,11 @@ export class ConstellationLayer {
 
   select(id: string | null): void { this.active = id; this.style(); }
 
+  /** 飛行中は、地図の平面に置いた輪を隠す（星座の線は小段階 5 で立体の位置に描く）。 */
+  setFlight(on: boolean): void {
+    this.rings.visible = !on;
+  }
+
   /**
    * 星座の星に小さな輪を付ける。編集中（strong）は太く明るく、星座に入っているかどうかを
    * はっきり見分けられるようにする。描いているとき・選んでいるときは控えめにする。

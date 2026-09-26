@@ -3,6 +3,24 @@ import * as THREE from "three";
 /** 星座の星の強調。selected は描いている・選んでいるとき、edit は編集しているとき。 */
 export type EmphasisMode = "none" | "selected" | "edit";
 
+/**
+ * 星の見え方。星ごとの基準の大きさ（世界の単位）・明るさ（不透明度）・色。
+ * 地図でも飛行モードでも、この値が効く（飛行中の遠近法や検索の軌道は、この上に掛かる）。
+ * 段階 2（星の等級）は `StarField.setAppearance()` でこれを「最後に触れた日」から決める関数に差し替える。
+ */
+export type StarAppearance = { size: number; alpha: number; color: THREE.Color };
+export type AppearanceFn = (star: RenderStar) => StarAppearance;
+
+/** いまの見え方：明るさ（最終利用日時）と、螺旋の内側（代表）ほど少し大きく明るく。 */
+export const defaultAppearance: AppearanceFn = (s) => {
+  const lead = 1 / (1 + s.rank * 0.5);
+  return {
+    size: (0.95 + s.brightness * 1.25) * (1 + lead * 0.45),
+    alpha: Math.min(1, (0.45 + s.brightness * 0.55) * (1 + lead * 0.25)),
+    color: starColor(s.id, s.brightness),
+  };
+};
+
 export type RenderStar = {
   id: string;
   x: number;
@@ -15,7 +33,10 @@ export type RenderStar = {
 };
 
 const VERT = /* glsl */ `
-uniform float uScale;   // 画面の高さと画角から決まる、世界の大きさ→ピクセルの係数
+uniform float uScale;    // 画面の高さと画角から決まる、世界の大きさ→ピクセルの係数
+uniform float uMaxSize;  // 画面上の大きさの上限（地図 12px、飛行中は大きく）
+uniform float uFlight;   // 飛行中 1。近い（大きく写る）星ほど明るくする
+uniform float uSizeScale; // 大きさの係数。地図は遠くから見るので 1、飛行中は近くから見るので小さく
 attribute float aSize;
 attribute float aAlpha;
 attribute vec3 aColor;
@@ -23,12 +44,19 @@ varying float vAlpha;
 varying vec3 vColor;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = clamp(aSize * uScale / max(-mv.z, 0.001), 2.0, 12.0);
+  float px = aSize * uSizeScale * uScale / max(-mv.z, 0.001);
+  gl_PointSize = clamp(px, 2.0, uMaxSize);
   gl_Position = projectionMatrix * mv;
-  vAlpha = aAlpha;
+  vAlpha = aAlpha * (1.0 + uFlight * clamp((px - 8.0) / 40.0, 0.0, 1.0) * 0.8);
   vColor = aColor;
 }
 `;
+
+/** 地図での星の大きさの上限（px）。飛行中は FLIGHT_MAX_POINT まで大きくなる。 */
+export const MAP_MAX_POINT = 12;
+export const FLIGHT_MAX_POINT = 64;
+/** 飛行中の星の大きさの係数（地図の大きさの値を、近くから見る前提に縮める） */
+export const FLIGHT_SIZE_SCALE = 0.2;
 
 const FRAG = /* glsl */ `
 varying float vAlpha;
@@ -46,7 +74,7 @@ void main() {
 /** 星の材質。uScale は画面の大きさに追随させる（SpaceView が更新する）。 */
 export function createStarMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
-    uniforms: { uScale: { value: 800 } },
+    uniforms: { uScale: { value: 800 }, uMaxSize: { value: MAP_MAX_POINT }, uFlight: { value: 0 }, uSizeScale: { value: 1 } },
     vertexShader: VERT,
     fragmentShader: FRAG,
     transparent: true,
@@ -111,6 +139,58 @@ export class StarField {
   private searchAlpha = new Float32Array(0);
   private searching = false;
   private settling = false;
+  private colorAttr!: THREE.BufferAttribute;
+  private appearance: AppearanceFn = defaultAppearance;
+  /** 飛行モードの高さ（星ごと）と、立ち上がりの度合い（0：平面、1：立体） */
+  private heights = new Float32Array(0);
+  private lift = 0;
+  private liftDirty = false;
+
+  /** 星の見え方を差し替える（段階 2 の等級など）。地図と飛行モードの両方に効く。 */
+  setAppearance(fn: AppearanceFn): void {
+    this.appearance = fn;
+    const sizes = this.sizeAttr?.array as Float32Array | undefined;
+    const colors = this.colorAttr?.array as Float32Array | undefined;
+    if (!sizes || !colors) return;
+    this.stars.forEach((star, i) => {
+      const look = fn(star);
+      this.baseSize[i] = look.size;
+      this.targetAlpha[i] = look.alpha;
+      colors[i * 3] = look.color.r;
+      colors[i * 3 + 1] = look.color.g;
+      colors[i * 3 + 2] = look.color.b;
+    });
+    this.colorAttr.needsUpdate = true;
+    this.applyTargets();
+  }
+
+  /** 飛行モードの高さを星ごとに入れる（地図の座標は変えない）。 */
+  setHeights(heights: Map<string, number>): void {
+    this.heights = new Float32Array(this.stars.length);
+    this.stars.forEach((star, i) => { this.heights[i] = heights.get(star.id) ?? 0; });
+    this.liftDirty = true;
+  }
+
+  /** 立ち上がりの度合い（0：地図の平面、1：飛行モードの立体）。 */
+  setLift(value: number): void {
+    if (value === this.lift) return;
+    this.lift = value;
+    this.liftDirty = true;
+  }
+
+  /** いま描いている 3 次元の位置（地図の座標 x・y と高さ z）。 */
+  position3(id: string): { x: number; y: number; z: number } | null {
+    const i = this.index.get(id);
+    if (i == null) return null;
+    const pos = this.position.array as Float32Array;
+    return { x: pos[i * 3], y: -pos[i * 3 + 2], z: pos[i * 3 + 1] };
+  }
+
+  /** 星の基準の大きさ（世界の単位。画面上の大きさはこれを距離で割って決まる）。 */
+  pointSize(id: string): number | null {
+    const i = this.index.get(id);
+    return i == null ? null : (this.sizeAttr.array as Float32Array)[i];
+  }
   private lastSearch: { ids: string[]; center: { x: number; y: number }; unit: number } =
     { ids: [], center: { x: 0, y: 0 }, unit: 1 };
   private emphasis = new Set<string>();
@@ -181,16 +261,16 @@ export class StarField {
       pos[i * 3 + 1] = 0;
       pos[i * 3 + 2] = -fy;
 
-      // 螺旋の内側（その星団らしい星）ほど少し大きく、少し明るく
-      const lead = 1 / (1 + s.rank * 0.5);
-      size[i] = (0.95 + s.brightness * 1.25) * (1 + lead * 0.45);
+      // 見え方は差し替えられる関数から（既定は明るさ＋螺旋の内側ほど少し大きく明るく）
+      const look = this.appearance(s);
+      size[i] = look.size;
       this.baseSize[i] = this.searchSize[i] = size[i];
-      c.copy(starColor(s.id, s.brightness));
+      c.copy(look.color);
       color[i * 3] = c.r;
       color[i * 3 + 1] = c.g;
       color[i * 3 + 2] = c.b;
 
-      this.targetAlpha[i] = Math.min(1, (0.45 + s.brightness * 0.55) * (1 + lead * 0.25));
+      this.targetAlpha[i] = look.alpha;
       this.searchAlpha[i] = this.targetAlpha[i];
       // 初回は内側の星から順に生まれる演出。以降は新しい星だけ光らせる
       const born = staggered ? (i / Math.max(1, n)) * 1.6 : 0;
@@ -211,8 +291,11 @@ export class StarField {
     this.sizeAttr = new THREE.BufferAttribute(size, 1);
     this.geom.setAttribute("position", this.position);
     this.geom.setAttribute("aSize", this.sizeAttr);
-    this.geom.setAttribute("aColor", new THREE.BufferAttribute(color, 3));
+    this.colorAttr = new THREE.BufferAttribute(color, 3);
+    this.geom.setAttribute("aColor", this.colorAttr);
     this.geom.setAttribute("aAlpha", this.alphaAttr);
+    this.heights = new Float32Array(n);
+    this.liftDirty = true;
     this.object.geometry = this.geom;
   }
 
@@ -356,6 +439,12 @@ export class StarField {
       }
     }
     if (born) this.alphaAttr.needsUpdate = true;
+
+    if (this.liftDirty) {
+      for (let i = 0; i < this.stars.length; i++) pos[i * 3 + 1] = this.heights[i] * this.lift;
+      this.position.needsUpdate = true;
+      this.liftDirty = false;
+    }
     const sizes = this.sizeAttr.array as Float32Array;
     if (this.stars.some((_, i) => Math.abs(sizes[i] - this.searchSize[i]) > 0.001)) {
       for (let i = 0; i < this.stars.length; i++) {
