@@ -241,6 +241,13 @@
       /* 飛行中の星団名：遠くからも標識のように。明朝・広い字間（近づくと薄くなる） */
       #flight-signs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
       body.is-flying #flight-signs { display: block; }
+      body.is-flying.flight-boost::after {
+        content: ""; position: fixed; inset: 0; z-index: 3; pointer-events: none;
+        background: repeating-conic-gradient(from 0deg at 50% 50%, transparent 0deg 9deg, rgba(212, 226, 244, 0.16) 9.2deg 9.5deg, transparent 9.8deg 18deg);
+        mask-image: radial-gradient(circle, transparent 0 20%, #000 85%);
+        animation: boost-streak 450ms linear infinite;
+      }
+      @keyframes boost-streak { from { opacity: 0.2; transform: scale(0.8); } to { opacity: 0.65; transform: scale(1.2); } }
       .flight-sign {
         position: absolute; top: 0; left: 0; white-space: nowrap; will-change: transform, opacity;
         font-family: var(--font-name); font-size: 15px; letter-spacing: 0.3em; color: rgba(234, 224, 198, 0.95);

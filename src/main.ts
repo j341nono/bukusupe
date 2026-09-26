@@ -835,6 +835,11 @@ let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: 
   flightStars: () => view?.flightStars(),
   flightHeights: () => view?.flightHeights(),
   flightReset: () => view?.flightReset(),
+  flightDebris: (again = false) => view?.flightDebris(again),
+  flightNebulaRanges: () => view?.flightNebulaRanges(),
+  flightRings: () => view?.flightRings(),
+  flightPlace: (px: number, py: number, pz: number, lx: number, ly: number, lz: number) =>
+    view?.flightPlace(px, py, pz, lx, ly, lz),
   flightTeleport: (id: string, distance: number) => view?.flightTeleport(id, distance),
   starScreenSize: (id: string) => view?.starScreenSize(id),
   flightConstellationSegments: () => view?.flightConstellationSegments(),

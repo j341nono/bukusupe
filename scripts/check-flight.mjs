@@ -252,8 +252,6 @@ try {
   }
 
   // --- デブリ：星雲の範囲の外にだけあり、同じデータなら毎回同じ位置 ---
-  // 小段階の途中では、まだ提供していない API の確認だけ保留する。実装後は必ず実行される。
-  if (await evalIn(`typeof ${b}.flightDebris === 'function'`)) {
   const debris = await json(`${b}.flightDebris?.() ?? null`);
   const debrisAgain = await json(`${b}.flightDebris?.(true) ?? null`);
   const ranges = await json(`${b}.flightNebulaRanges?.() ?? null`);
@@ -303,7 +301,6 @@ try {
     writeFileSync("docs/screens/flight-debris.png", await screenshot());
     console.log("  画面: docs/screens/flight-debris.png");
   }
-  }
 
   // --- 遠くの星の名前：窓より遠い星にも、名前だけを小さく出す（上限あり、重ならない） ---
   if (await evalIn(`typeof ${b}.flightState?.()?.farLabelLimit === 'number'`)) {
@@ -325,6 +322,7 @@ try {
   check(far && far.count > 6 && far.count <= far.limit && far.overlaps === 0 && far.dupes === 0,
     "飛行中、窓より遠い星にも名前が出る（上限あり、重ならない、窓と重複しない）",
     far ? `遠くの名前 ${far.count} 個（上限 ${far.limit}）・窓 ${far.windows} 個・重なり ${far.overlaps}` : "測れない");
+
   }
 
   // --- 6. 星の芯に入ると、同じタブの切り替えがちょうど 1 回（新しいタブは開かない）。続けて入っても数秒は開かない ---
@@ -568,7 +566,7 @@ try {
   await key("keydown", "KeyW", "w");
   const f0 = await evalIn(`${b}.frames()`);
   const t0 = Date.now();
-  await sleep(1500);
+  await sleep(3000);
   const fps = ((await evalIn(`${b}.frames()`)) - f0) / ((Date.now() - t0) / 1000);
   await key("keyup", "KeyW", "w");
   check(fps >= 55, "2000 件で、飛行中も 60 コマ/秒を保つ", `${fps.toFixed(0)} コマ/秒`);

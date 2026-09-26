@@ -80,6 +80,8 @@ export class Flight {
   private climbVelocity = 0;
   /** 地図の広がりから決まる、最高速度と飛べる範囲 */
   private maxSpeed = 12;
+  private boostLeft = 0;
+  readonly boostMultiplier = 1.6;
   private bound = 120;
   private ceiling = 40;
   private readonly startPosition = new THREE.Vector3();
@@ -91,6 +93,14 @@ export class Flight {
 
   get active(): boolean {
     return this.phase !== "idle";
+  }
+
+  get normalMaxSpeed(): number { return this.maxSpeed; }
+  get boostCap(): number { return this.maxSpeed * this.boostMultiplier; }
+
+  boost(): void {
+    this.boostLeft = 1.5;
+    this.ship.speed = Math.min(this.boostCap, Math.max(this.ship.speed * 1.35, this.maxSpeed * 1.2));
   }
 
   get transitioning(): boolean {
@@ -148,6 +158,7 @@ export class Flight {
     this.ship.speed = 0;
     this.turnVelocity = 0;
     this.climbVelocity = 0;
+    this.boostLeft = 0;
   }
 
   /** 宇宙船を、点 point を正面に見る位置 position に置いて止める（確認用の瞬間移動にも使う）。 */
@@ -171,9 +182,11 @@ export class Flight {
     const ship = this.ship;
     // 加速・減速
     // 最高速度まで約 2 秒で加速し、約 1 秒で止まる
+    if (this.boostLeft > 0) this.boostLeft = Math.max(0, this.boostLeft - dt);
+    const currentMax = this.boostLeft > 0 ? this.boostCap : this.maxSpeed;
     if (input.thrust > 0) ship.speed += this.maxSpeed * 0.5 * dt;
     if (input.thrust < 0) ship.speed -= this.maxSpeed * 1.0 * dt;
-    ship.speed = THREE.MathUtils.clamp(ship.speed, 0, this.maxSpeed);
+    ship.speed = THREE.MathUtils.clamp(ship.speed, 0, currentMax);
     // 旋回：キーとマウスの左右を合わせ、上限を付けて、なめらかに
     const wanted = THREE.MathUtils.clamp(
       input.turn * KEY_TURN_RATE - deadZone(input.mouseX) * MOUSE_TURN_RATE, -MAX_TURN_RATE, MAX_TURN_RATE);

@@ -188,6 +188,15 @@ export class StarField {
     return { x: pos[i * 3], y: -pos[i * 3 + 2], z: pos[i * 3 + 1] };
   }
 
+  /** 飛行中の当たり判定向け。毎コマの小さなオブジェクト生成を避ける。 */
+  positionWorld(id: string, out: THREE.Vector3, scale: number): boolean {
+    const i = this.index.get(id);
+    if (i == null) return false;
+    const pos = this.position.array as Float32Array;
+    out.set(pos[i * 3] * scale, pos[i * 3 + 1] * scale, pos[i * 3 + 2] * scale);
+    return true;
+  }
+
   /** 星の基準の大きさ（世界の単位。画面上の大きさはこれを距離で割って決まる）。 */
   pointSize(id: string): number | null {
     const i = this.index.get(id);

@@ -8,6 +8,7 @@ import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBa
 import { FLIGHT_SCALE, Flight, type FlightInput } from "./flight";
 import { createShip } from "./ship";
 import { FlightNebulae, FlightSky } from "./sky";
+import { FlightObstacles } from "./flight-obstacles";
 import { FlightSigns, FlightWindows, WINDOW_RADIUS, type WindowStar } from "../ui/flight-windows";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
@@ -110,6 +111,14 @@ export class SpaceView {
   private readonly ship = createShip();
   private readonly sky = new FlightSky();
   private readonly flightNebulae = new FlightNebulae();
+  private readonly obstacles = new FlightObstacles();
+  private collisionStars: { id: string; x: number; y: number; z: number }[] | null = null;
+  private bumps = 0;
+  private boosts = 0;
+  private lastBump: { speedBefore: number; speedAfter: number; distanceAfter: number; minDistance: number } | null = null;
+  private ringCooldown = new Map<number, number>();
+  private shakeLeft = 0;
+  private boostVisualLeft = 0;
   private readonly signs = new FlightSigns(document.getElementById("flight-signs") ?? document.body);
   private readonly windows = new FlightWindows(document.getElementById("flight-windows") ?? document.body);
   private windowStars: WindowStar[] = [];
@@ -260,6 +269,9 @@ export class SpaceView {
     this.scene.add(this.ship.group);
     this.scene.add(this.sky.object);
     this.scene.add(this.flightNebulae.object);
+    this.scene.add(this.obstacles.object);
+    this.obstacles.object.visible = false;
+    document.body.classList.remove("flight-boost");
     window.addEventListener("mousemove", (event: MouseEvent) => {
       if (!this.flight.active) return;
       this.flightMouse.set(event.clientX / innerWidth * 2 - 1, event.clientY / innerHeight * 2 - 1);
@@ -320,11 +332,13 @@ export class SpaceView {
   }
 
   setLayout(layout: Layout, stars: RenderStar[], source: LabelSource, frame = true): void {
+    this.collisionStars = null;
     this.field.setStars(stars);
     this.field.setEmphasis([...this.emphasisIds], this.emphasisMode);
     // 飛行モードの高さ。配置が変わるたびに取り直す（地図の座標は変えない）
     this.heights = flightHeights(layout);
     this.field.setHeights(this.heights);
+    this.extent = layoutExtent(layout);
     this.placeFlightClusters(layout, source);
     this.field.setLift(this.flight.lift);
     if (this.flight.active) frame = false;   // 飛行中はカメラを宇宙船が持っている
@@ -335,7 +349,6 @@ export class SpaceView {
     );
     this.labelSource = source;
     this.windowStars = source.stars.map((star) => ({ id: star.id, title: star.title, url: star.url }));
-    this.extent = layoutExtent(layout);
     this.bounds = boundsOf(stars, this.extent);
     if (frame) this.frameAll();
     this.resize();
@@ -522,6 +535,7 @@ export class SpaceView {
   enterFlight(): boolean {
     if (this.flight.active) return false;
     this.flightSearch = this.searchIds.slice();
+    this.collisionStars = null;
     this.searchIds = [];
     this.field.setSearch([], this.searchCenter, this.searchUnit);
     this.constellations.setSearchHole(null);
@@ -544,6 +558,7 @@ export class SpaceView {
     // 地図の遠景は広げた空間では近づけてしまうので、飛行中は触れられない背景の星空に替える
     this.sky.object.visible = true;
     this.flightNebulae.object.visible = true;
+    this.obstacles.object.visible = true;
     this.backdrop.visible = false;
     this.onFlightChange?.(true);
     return true;
@@ -569,6 +584,8 @@ export class SpaceView {
     this.ship.group.visible = false;
     this.sky.object.visible = false;
     this.flightNebulae.object.visible = false;
+    this.obstacles.object.visible = false;
+    document.body.classList.remove("flight-boost");
     this.backdrop.visible = true;
     this.windows.clear();
     this.signs.clear();
@@ -611,6 +628,7 @@ export class SpaceView {
       const h = row && row.n ? row.h / row.n : 0;
       return { x: c.x * FLIGHT_SCALE, y: h * FLIGHT_SCALE, z: -c.y * FLIGHT_SCALE, radius: c.radius * FLIGHT_SCALE };
     };
+    this.obstacles.set(live.map((c) => ({ ...at(c), radius: c.radius * FLIGHT_SCALE * 1.8 })), this.extent);
     this.flightNebulae.set(live.map((c) => ({ index: c.index, ...at(c), color: nebulaColor(c.index) })));
     this.signs.set(live.map((c) => ({ index: c.index, name: c.name, ...at(c) })));
   }
@@ -627,10 +645,7 @@ export class SpaceView {
 
   /** 星 id の、いま描いている位置（three の座標。空間の拡大率を掛けたもの）。 */
   private worldOf(id: string, out = new THREE.Vector3()): THREE.Vector3 | null {
-    const p = this.field.position3(id);
-    if (!p) return null;
-    const k = this.spaceScale;
-    return out.set(p.x * k, p.z * k, -p.y * k);
+    return this.field.positionWorld(id, out, this.spaceScale) ? out : null;
   }
 
   /** 確認用：飛行中の星の 3 次元の位置（地図の座標の向きで、広げた空間の単位）。 */
@@ -652,6 +667,16 @@ export class SpaceView {
     this.flight.reset();
   }
 
+  flightDebris(again = false) {
+    if (again) this.obstacles.set(this.obstacles.ranges.slice(), this.extent);
+    return this.obstacles.debris.map((p) => ({ ...p }));
+  }
+  flightNebulaRanges() { return this.obstacles.ranges.map((r) => ({ ...r })); }
+  flightRings() { return this.obstacles.rings.map((r) => ({ ...r })); }
+  flightPlace(px: number, py: number, pz: number, lx: number, ly: number, lz: number): void {
+    this.flight.place(new THREE.Vector3(px, py, pz), new THREE.Vector3(lx, ly, lz));
+  }
+
   flightHeights(): { id: string; z: number }[] {
     return this.field.placed.map((star) => ({ id: star.id, z: this.heights.get(star.id) ?? 0 }));
   }
@@ -664,13 +689,16 @@ export class SpaceView {
 
   flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[]; nebulae: number;
     diving: boolean; lastEntry: string | null; entryDistance: number | null; scale: number;
-    searchStashed: number;
+    searchStashed: number; bumps: number; boosts: number; boostCap: number; maxSpeed: number;
+    lastBump: { speedBefore: number; speedAfter: number; distanceAfter: number; minDistance: number } | null;
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
       lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds, nebulae: this.flightNebulae.count,
       diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
       scale: FLIGHT_SCALE, searchStashed: this.flightSearch?.length ?? 0,
+      bumps: this.bumps, boosts: this.boosts, boostCap: this.flight.boostCap,
+      maxSpeed: this.flight.normalMaxSpeed, lastBump: this.lastBump,
       // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す
       ship: { x: ship.position.x / FLIGHT_SCALE, y: -ship.position.z / FLIGHT_SCALE, z: ship.position.y / FLIGHT_SCALE,
         speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
@@ -1138,6 +1166,16 @@ export class SpaceView {
     if (this.dive) this.flight.ship.speed = 0;
     const previous = this.flight.ship.position.clone();
     const { finished } = this.flight.update(dt, this.camera, this.flightLook, input);
+    this.obstacles.update(dt);
+    if (this.boostVisualLeft > 0) {
+      this.boostVisualLeft = Math.max(0, this.boostVisualLeft - dt);
+      document.body.classList.toggle("flight-boost", this.boostVisualLeft > 0);
+    }
+    if (this.flight.phase === "flying" && !this.dive) this.checkObstacles(previous);
+    if (this.shakeLeft > 0) {
+      this.shakeLeft = Math.max(0, this.shakeLeft - dt);
+      this.camera.position.x += Math.sin(this.shakeLeft * 80) * this.shakeLeft * 0.12;
+    }
     this.field.object.scale.setScalar(this.spaceScale);
     this.constellations.object.scale.setScalar(this.spaceScale);
     this.sky.follow(this.camera);
@@ -1169,22 +1207,71 @@ export class SpaceView {
     if (finished === "left") this.finishFlight();
   }
 
+  private checkObstacles(previous: THREE.Vector3): void {
+    const ship = this.flight.ship;
+    const segment = ship.position.clone().sub(previous);
+    const length2 = segment.lengthSq();
+    const near = new THREE.Vector3();
+    for (const rock of this.obstacles.debris) {
+      const reach = rock.r + 2.5 + Math.sqrt(length2);
+      if (Math.abs(rock.x - ship.position.x) > reach ||
+        Math.abs(rock.y - ship.position.y) > reach || Math.abs(rock.z - ship.position.z) > reach) continue;
+      const center = new THREE.Vector3(rock.x, rock.y, rock.z);
+      const t = length2 ? THREE.MathUtils.clamp(center.clone().sub(previous).dot(segment) / length2, 0, 1) : 0;
+      near.copy(previous).addScaledVector(segment, t);
+      const minDistance = rock.r + 1.2;
+      if (near.distanceTo(center) >= minDistance) continue;
+      const speedBefore = ship.speed;
+      ship.speed *= 0.6;
+      const away = ship.position.clone().sub(center).normalize();
+      if (away.lengthSq() < 0.01) away.set(0, 0, 1);
+      ship.position.copy(center).addScaledVector(away, minDistance + 0.05);
+      this.lastBump = { speedBefore, speedAfter: ship.speed,
+        distanceAfter: ship.position.distanceTo(center), minDistance };
+      this.bumps++;
+      this.shakeLeft = 0.35;
+      break;
+    }
+    this.obstacles.rings.forEach((ring, index) => {
+      if ((this.ringCooldown.get(index) ?? 0) > performance.now()) return;
+      const normal = new THREE.Vector3(ring.nx, ring.ny, ring.nz);
+      const center = new THREE.Vector3(ring.x, ring.y, ring.z);
+      const a = previous.clone().sub(center).dot(normal), b = ship.position.clone().sub(center).dot(normal);
+      if (a * b > 0 || Math.abs(a - b) < 1e-6) return;
+      const point = previous.clone().lerp(ship.position, a / (a - b));
+      if (point.distanceTo(center) >= ring.radius) return;
+      this.flight.boost();
+      this.boosts++;
+      this.boostVisualLeft = 0.65;
+      document.body.classList.add("flight-boost");
+      this.ringCooldown.set(index, performance.now() + 2500);
+    });
+  }
+
   /**
    * 宇宙船がこのコマで通った線分（a → b）が、どれかの星の芯（半径 STAR_CORE_RADIUS）に触れたか。
    * 線分で見るので、速く飛んでも星をすり抜けない。反応しない時間の中にある星は除く。
    */
   private findStarHit(a: THREE.Vector3, b: THREE.Vector3): string | null {
     const now = performance.now();
-    const ab = b.clone().sub(a);
-    const len2 = ab.lengthSq();
-    const p = new THREE.Vector3();
+    if (!this.collisionStars) {
+      const position = new THREE.Vector3();
+      this.collisionStars = this.field.placed.flatMap((star) => {
+        const p = this.worldOf(star.id, position);
+        return p ? [{ id: star.id, x: p.x, y: p.y, z: p.z }] : [];
+      });
+    }
+    const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+    const len2 = abx * abx + aby * aby + abz * abz;
+    const reach = STAR_CORE_RADIUS + Math.sqrt(len2);
     let best: { id: string; t: number } | null = null;
-    for (const star of this.field.placed) {
+    for (const star of this.collisionStars) {
       if ((this.entryCooldown.get(star.id) ?? 0) > now) continue;
-      if (!this.worldOf(star.id, p)) continue;
-      const t = len2 > 0 ? THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / len2, 0, 1) : 0;
-      const d = a.clone().addScaledVector(ab, t).distanceTo(p);
-      if (d < STAR_CORE_RADIUS && (!best || t < best.t)) best = { id: star.id, t };
+      if (Math.abs(star.x - b.x) > reach || Math.abs(star.y - b.y) > reach || Math.abs(star.z - b.z) > reach) continue;
+      const t = len2 > 0 ? THREE.MathUtils.clamp(((star.x - a.x) * abx + (star.y - a.y) * aby + (star.z - a.z) * abz) / len2, 0, 1) : 0;
+      const dx = star.x - a.x - abx * t, dy = star.y - a.y - aby * t, dz = star.z - a.z - abz * t;
+      if (dx * dx + dy * dy + dz * dz < STAR_CORE_RADIUS * STAR_CORE_RADIUS && (!best || t < best.t))
+        best = { id: star.id, t };
     }
     return best?.id ?? null;
   }
@@ -1251,6 +1338,7 @@ export class SpaceView {
         return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y,
           near: THREE.MathUtils.clamp(1 - d / WINDOW_RADIUS, 0, 1) };
       });
+
   }
 
   /**
