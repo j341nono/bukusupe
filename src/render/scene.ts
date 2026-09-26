@@ -7,8 +7,8 @@ import { Nebulae } from "./nebula";
 import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
 import { FLIGHT_SCALE, Flight, type FlightInput } from "./flight";
 import { createShip } from "./ship";
-import { FlightSky } from "./sky";
-import { FlightWindows, WINDOW_RADIUS, type WindowStar } from "../ui/flight-windows";
+import { FlightNebulae, FlightSky } from "./sky";
+import { FlightSigns, FlightWindows, WINDOW_RADIUS, type WindowStar } from "../ui/flight-windows";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
@@ -107,6 +107,8 @@ export class SpaceView {
   private readonly flightLook = new THREE.Vector3();
   private readonly ship = createShip();
   private readonly sky = new FlightSky();
+  private readonly flightNebulae = new FlightNebulae();
+  private readonly signs = new FlightSigns(document.getElementById("flight-signs") ?? document.body);
   private readonly windows = new FlightWindows(document.getElementById("flight-windows") ?? document.body);
   private windowStars: WindowStar[] = [];
   /** 星に入る演出の途中。終わるとページを開き、宇宙船を押し戻す */
@@ -255,6 +257,7 @@ export class SpaceView {
     addEventListener("resize", this.resize);
     this.scene.add(this.ship.group);
     this.scene.add(this.sky.object);
+    this.scene.add(this.flightNebulae.object);
     window.addEventListener("mousemove", (event: MouseEvent) => {
       if (!this.flight.active) return;
       this.flightMouse.set(event.clientX / innerWidth * 2 - 1, event.clientY / innerHeight * 2 - 1);
@@ -320,6 +323,7 @@ export class SpaceView {
     // 飛行モードの高さ。配置が変わるたびに取り直す（地図の座標は変えない）
     this.heights = flightHeights(layout);
     this.field.setHeights(this.heights);
+    this.placeFlightClusters(layout, source);
     this.field.setLift(this.flight.lift);
     if (this.flight.active) frame = false;   // 飛行中はカメラを宇宙船が持っている
     this.nebulae.set(
@@ -509,6 +513,7 @@ export class SpaceView {
     this.ship.group.visible = true;
     // 地図の遠景は広げた空間では近づけてしまうので、飛行中は触れられない背景の星空に替える
     this.sky.object.visible = true;
+    this.flightNebulae.object.visible = true;
     this.backdrop.visible = false;
     this.onFlightChange?.(true);
     return true;
@@ -533,8 +538,10 @@ export class SpaceView {
     this.nebulae.object.visible = true;
     this.ship.group.visible = false;
     this.sky.object.visible = false;
+    this.flightNebulae.object.visible = false;
     this.backdrop.visible = true;
     this.windows.clear();
+    this.signs.clear();
     this.constellations.setFlight(false);
     this.setFlightMaterial(false);
     const ids = this.flightSearch ?? [];
@@ -557,6 +564,25 @@ export class SpaceView {
     mat.uniforms.uMaxSize.value = on ? FLIGHT_MAX_POINT : MAP_MAX_POINT;
     mat.uniforms.uFlight.value = on ? 1 : 0;
     mat.uniforms.uSizeScale.value = on ? FLIGHT_SIZE_SCALE : 1;
+  }
+
+  /** 飛行中の星雲の雲と星団名の標識を、星団ごとに置く（中心の高さはメンバーの高さの平均。広げた空間の座標） */
+  private placeFlightClusters(layout: Layout, source: LabelSource): void {
+    const sums = new Map<number, { h: number; n: number }>();
+    for (const star of layout.stars) {
+      const row = sums.get(star.cluster) ?? { h: 0, n: 0 };
+      row.h += this.heights.get(star.id) ?? 0;
+      row.n++;
+      sums.set(star.cluster, row);
+    }
+    const live = source.clusters.filter((c) => c.count > 0);
+    const at = (c: (typeof live)[number]) => {
+      const row = sums.get(c.index);
+      const h = row && row.n ? row.h / row.n : 0;
+      return { x: c.x * FLIGHT_SCALE, y: h * FLIGHT_SCALE, z: -c.y * FLIGHT_SCALE, radius: c.radius * FLIGHT_SCALE };
+    };
+    this.flightNebulae.set(live.map((c) => ({ index: c.index, ...at(c), color: nebulaColor(c.index) })));
+    this.signs.set(live.map((c) => ({ index: c.index, name: c.name, ...at(c) })));
   }
 
   /** いまの空間の拡大率（地図 1 → 飛行中 FLIGHT_SCALE。立ち上がりと一緒に変わる） */
@@ -601,12 +627,12 @@ export class SpaceView {
     return q ? this.flight.ship.position.distanceTo(q) : null;
   }
 
-  flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[];
+  flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[]; nebulae: number;
     diving: boolean; lastEntry: string | null; entryDistance: number | null; scale: number;
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
-      lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds,
+      lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds, nebulae: this.flightNebulae.count,
       diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
       scale: FLIGHT_SCALE,
       // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す
@@ -1041,6 +1067,7 @@ export class SpaceView {
     this.field.object.scale.setScalar(this.spaceScale);
     this.constellations.object.scale.setScalar(this.spaceScale);
     this.sky.follow(this.camera);
+    this.flightNebulae.setOpacity(this.flight.lift);
     if (this.flight.transitioning || finished) {
       // 立ち上がりの途中だけ、星座の線の高さを書き直す（飛んでいる間は変わらない）
       this.constellations.setLift((id) => this.heights.get(id) ?? 0, this.flight.lift);
@@ -1059,6 +1086,7 @@ export class SpaceView {
     this.camera.updateMatrixWorld();
     if (this.flight.phase === "flying") this.updateWindows(dt);
     else if (this.flight.phase === "leaving") this.windows.clear();
+    this.updateSigns();
     this.field.setLift(this.flight.lift);
     this.field.update(dt);
     this.constellations.update(dt);
@@ -1111,6 +1139,22 @@ export class SpaceView {
     this.flight.ship.position.addScaledVector(this.flight.forward(), -PUSH_BACK);
     this.flight.ship.speed = 0;
     this.onEnterStar?.(dive.id);
+  }
+
+  /** 星団名の標識：星雲の雲の上端の少し上。近づくと薄く、立ち上がりと一緒に現れる。 */
+  private updateSigns(): void {
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const v = new THREE.Vector3();
+    const ship = this.flight.ship.position;
+    this.signs.update(
+      (x, y, z) => {
+        v.set(x, y, z).project(this.camera);
+        if (v.z > 1 || v.z < -1) return null;
+        return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y };
+      },
+      (spec) => Math.hypot(spec.x - ship.x, spec.y - ship.y, spec.z - ship.z),
+      this.flight.phase === "leaving" ? 0 : this.flight.lift,
+    );
   }
 
   /** 近づいた星の窓（近い順に最大 6 個）。選ぶのは間引き、位置は毎コマ。 */

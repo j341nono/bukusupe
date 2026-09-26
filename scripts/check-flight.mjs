@@ -233,6 +233,18 @@ try {
   check(windows && windows.count > 0 && crests.length === windows.count,
     "既定のアイコン（地球儀）だった窓には、ドメインの頭文字の紋章が出る",
     windows ? `窓 ${windows.count} 個中 紋章 ${crests.length} 個（${(windows.items ?? []).map((w) => w.kind || '?').join(",")}）` : "測れない");
+  // 星雲と星団名：飛行中は星団の数だけ、淡い星雲の雲と星団名の標識。星団の中では、その星団の標識が薄くなる
+  const signs = await json(`(() => {
+    const list = [...document.querySelectorAll('.flight-sign')];
+    const home = list.find((el) => el.dataset.cluster === ${JSON.stringify(String(layout?.clusters[0]?.index))});
+    const others = list.filter((el) => el !== home && el.style.display !== 'none').map((el) => Number(el.style.opacity));
+    return { signs: list.length, clouds: ${b}.flightState?.()?.nebulae ?? 0,
+      home: home ? Number(home.style.opacity) : null, farthest: Math.max(0, ...others) };
+  })()`);
+  const liveClusters = (layout?.clusters ?? []).filter((c) => c.count > 0).length;
+  check(signs && signs.signs === liveClusters && signs.clouds === liveClusters && signs.home != null && signs.home < signs.farthest,
+    "飛行中、星団ごとに淡い星雲の雲と星団名の標識があり、星団の中ではその標識が薄くなる",
+    signs ? `標識 ${signs.signs}・雲 ${signs.clouds}（星団 ${liveClusters}）・中にいる星団の標識 ${signs.home?.toFixed?.(2) ?? "-"} / 遠くの標識 ${signs.farthest.toFixed(2)}` : "測れない");
   if (windows?.count) {
     writeFileSync("docs/screens/flight-near.png", await screenshot());
     console.log("  画面: docs/screens/flight-near.png");

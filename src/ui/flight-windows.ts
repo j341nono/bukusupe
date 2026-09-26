@@ -130,3 +130,49 @@ export class FlightWindows {
     return el;
   }
 }
+
+/**
+ * 飛行中の星団名（SPEC 13 章）：遠くからも標識のように見え、近づいたら薄くなる。明朝（`docs/DESIGN.md`）。
+ * 位置は毎コマ transform で動かす（星雲の雲の上端の少し上）。
+ */
+export type SignSpec = { index: number; name: string; x: number; y: number; z: number; radius: number };
+
+export class FlightSigns {
+  private signs: { spec: SignSpec; el: HTMLDivElement }[] = [];
+
+  constructor(private readonly container: HTMLElement) {}
+
+  set(specs: SignSpec[]): void {
+    for (const { el } of this.signs) el.remove();
+    this.signs = specs.map((spec) => {
+      const el = document.createElement("div");
+      el.className = "flight-sign";
+      el.dataset.cluster = String(spec.index);
+      el.textContent = spec.name;
+      el.style.opacity = "0";
+      this.container.appendChild(el);
+      return { spec, el };
+    });
+  }
+
+  /**
+   * project で画面の位置（写らなければ null）、distanceOf で宇宙船から星団の中心までの距離を得る。
+   * 星団の半径より外では 0.85、中へ入るほど 0.12 まで薄くなる。
+   */
+  update(project: (x: number, y: number, z: number) => { x: number; y: number } | null,
+    distanceOf: (spec: SignSpec) => number, level: number): void {
+    for (const { spec, el } of this.signs) {
+      const at = project(spec.x, spec.y + spec.radius * 0.9, spec.z);
+      if (!at || level <= 0) { el.style.display = "none"; continue; }
+      const d = distanceOf(spec);
+      const inside = Math.min(1, Math.max(0, (d - spec.radius * 0.4) / (spec.radius * 1.2)));
+      el.style.display = "";
+      el.style.opacity = String((0.12 + 0.73 * inside) * level);
+      el.style.transform = `translate3d(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+    }
+  }
+
+  clear(): void {
+    for (const { el } of this.signs) el.style.display = "none";
+  }
+}

@@ -66,3 +66,61 @@ export class FlightSky {
     for (const { points, follow } of this.layers) points.position.copy(camera.position).multiplyScalar(follow);
   }
 }
+
+/**
+ * 飛行中の星雲（SPEC 13 章・`docs/DESIGN.md`）：星団ごとに、淡い藍の雲を立体の星の雲に重ねる。
+ * 柔らかい光の板（Sprite）を星団ごとに 2 枚、星団の中心のまわりに少しずつずらして置く（位置は星団の番号から決まる）。
+ * 枚数と大きさは、塗る面積（重さ）を抑える上限。2000 件（20 星団）で 4 枚にすると 60 コマを割った。
+ * 色は `nebulaColor`（藍の 1 色相、明度だけ星団ごとに違う）。
+ */
+export type CloudSpec = { index: number; x: number; y: number; z: number; radius: number; color: THREE.Color };
+
+export class FlightNebulae {
+  readonly object = new THREE.Group();
+  private readonly texture: THREE.Texture;
+  private sprites: THREE.Sprite[] = [];
+  count = 0;
+
+  constructor() {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, "rgba(255,255,255,0.9)");
+      g.addColorStop(0.4, "rgba(255,255,255,0.35)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 128, 128);
+    }
+    this.texture = new THREE.CanvasTexture(canvas);
+    this.object.visible = false;
+  }
+
+  /** 星団の雲を置き直す（位置は広げた空間の座標）。 */
+  set(clouds: CloudSpec[]): void {
+    for (const sprite of this.sprites) {
+      this.object.remove(sprite);
+      (sprite.material as THREE.Material).dispose();
+    }
+    this.sprites = [];
+    for (const c of clouds) {
+      for (let k = 0; k < 2; k++) {
+        const a = c.index * 2.39 + k * 2.6;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.texture, color: c.color, transparent: true,
+          opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }));
+        sprite.position.set(c.x + Math.cos(a) * c.radius * 0.35, c.y + Math.sin(a * 1.3) * c.radius * 0.2,
+          c.z + Math.sin(a) * c.radius * 0.35);
+        sprite.scale.setScalar(c.radius * (1.35 + 0.2 * ((k + c.index) % 3)));
+        this.sprites.push(sprite);
+        this.object.add(sprite);
+      }
+    }
+    this.count = clouds.length;
+  }
+
+  /** 立ち上がりに合わせて現れる（0〜1） */
+  setOpacity(level: number): void {
+    for (const sprite of this.sprites) (sprite.material as THREE.SpriteMaterial).opacity = 0.2 * level;
+  }
+}
