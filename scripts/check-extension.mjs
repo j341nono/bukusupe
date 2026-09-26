@@ -1015,6 +1015,56 @@ try {
     writeFileSync("docs/screens/constellation-selected.png", Buffer.from(shot.data, "base64"));
     console.log("  画面: docs/screens/constellation-selected.png");
   }
+
+  // --- 星座を選んだまま検索すると、検索が前面に出る。検索を消すと星座の表示に戻る ---
+  const selectedCamera = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.cameraState())")) ?? "null");
+  const constellationView = (id) => `JSON.stringify((() => {
+    const b = globalThis.__bukusupe;
+    const s = b.constellationState();
+    const row = s.rows.find((r) => r.id === ${JSON.stringify(constellationId)});
+    const hits = new Set(b.searchState().ids);
+    const members = row.lastMembers.filter((m) => !hits.has(m));
+    const labels = [...document.querySelectorAll('.label-star')]
+      .filter((el) => members.includes(el.dataset.key) && el.style.opacity !== '0');
+    return {
+      active: s.active,
+      opacity: s.geometry.find((g) => g.id === row.id)?.opacity,
+      memberAlpha: Math.max(0, ...members.map((m) => b.starVisual(m)?.alpha ?? 0)),
+      memberLabels: labels.length,
+      brightLabels: labels.filter((el) => el.style.opacity === '1').length,
+      orbit: b.searchGeometry().stars.length,
+      tilt: b.cameraTilt(),
+      nameShown: document.getElementById('constellation-name').classList.contains('is-visible'),
+      camera: b.cameraState(),
+    };
+  })())`;
+  await evalIn("(async () => { await globalThis.__bukusupe.searchNow('パスタ'); })()");
+  await sleep(2200);
+  const duringSearch = JSON.parse((await evalIn(constellationView())) ?? "null");
+  check(duringSearch && duringSearch.orbit > 0 && duringSearch.opacity <= 0.15 && duringSearch.memberAlpha < 0.5 &&
+    duringSearch.memberLabels === 0 && !duringSearch.nameShown && duringSearch.tilt < 1,
+  "星座を選んだまま検索すると、星座の強調が解かれて検索の軌道が前面に出る",
+  duringSearch ? `軌道 ${duringSearch.orbit} 件・線 ${duringSearch.opacity}・星座の星の明るさ ${duringSearch.memberAlpha.toFixed(2)}・星座のタイトル ${duringSearch.memberLabels} 件・名前 ${duringSearch.nameShown ? "表示" : "非表示"}` : "測れない");
+  {
+    const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+    writeFileSync("docs/screens/constellation-search.png", Buffer.from(shot.data, "base64"));
+    console.log("  画面: docs/screens/constellation-search.png");
+  }
+  await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
+  await sleep(1600);
+  for (let i = 0; i < 20; i++) {
+    const back = JSON.parse((await evalIn(constellationView())) ?? "null");
+    if (back?.brightLabels > 0) break;
+    await sleep(150);
+  }
+  const afterSearch = JSON.parse((await evalIn(constellationView())) ?? "null");
+  const cameraBack = afterSearch && selectedCamera &&
+    Math.hypot(afterSearch.camera.x - selectedCamera.x, afterSearch.camera.y - selectedCamera.y) < 0.5 &&
+    Math.abs(afterSearch.camera.distance - selectedCamera.distance) / selectedCamera.distance < 0.02;
+  check(afterSearch && afterSearch.active === constellationId && afterSearch.opacity === 0.85 &&
+    afterSearch.memberAlpha > 0.6 && afterSearch.brightLabels > 0 && afterSearch.nameShown && cameraBack,
+  "検索を消すと、元の星座を選んだ状態（強調・カメラ位置）に戻る",
+  afterSearch ? `線 ${afterSearch.opacity}・星座の星の明るさ ${afterSearch.memberAlpha.toFixed(2)}・タイトル ${afterSearch.brightLabels} 件・カメラ ${cameraBack ? "元の位置" : "ずれた"}` : "測れない");
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
   check((await evalIn("globalThis.__bukusupe.constellationState().active")) === null,
     "もう一度選ぶと星座の強調を解除する");
@@ -1025,6 +1075,20 @@ try {
   check(!!newId && withNew.includes(newId), "検索に合うブックマークを追加して呼び出すとメンバーに入る",
     `${newId} / ${withNew.includes(newId) ? "含まれる" : "含まれない"}`);
   await evalIn("globalThis.__bukusupe.restore()");
+  // 画面下には名前だけ。「名前を変える」「削除」は、選んでいる星座の横の「…」から開く
+  const menu = JSON.parse((await evalIn(`JSON.stringify((() => {
+    const visible = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    const rename = document.getElementById('constellation-rename');
+    const remove = document.getElementById('constellation-delete');
+    const closed = !visible(rename) && !visible(remove);
+    const more = document.getElementById('constellation-more');
+    const beside = !!more && visible(more) && more.previousElementSibling?.classList.contains('is-active');
+    more?.click();
+    return { closed, beside, opened: visible(rename) && visible(remove) };
+  })())`)) ?? "null");
+  check(menu && menu.closed && menu.beside && menu.opened,
+    "画面下の一覧に「名前を変える」「削除」が常時は出ず、選んでいる星座の横の「…」から開ける",
+    menu ? `常時表示 ${menu.closed ? "なし" : "あり"}・「…」 ${menu.beside ? "あり" : "なし"}・開くと ${menu.opened ? "出る" : "出ない"}` : "測れない");
   await evalIn("window.prompt=()=> '宇宙の記録'; document.getElementById('constellation-rename').click()");
   await sleep(200);
   check((await evalIn("globalThis.__bukusupe.constellationState().rows[0].name")) === "宇宙の記録",
