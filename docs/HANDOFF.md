@@ -42,7 +42,7 @@
    案：窓の半径の外〜約 30×FLIGHT_SCALE、前方のみ、画面上で重ならないよう間引き、上限 24 個、選ぶのは約 0.2 秒ごと、位置は毎コマ。
    要素のクラスは `.flight-far-label`、`data-key` に星の id、`flightState()` に `farLabelLimit` を足す（確認がこれを見る）。
 
-**いまの作業ツリー（未コミット）**：
+**引き継ぎ時の作業ツリー（現在はコミット済み）**：
 - `scripts/lib/harness.mjs`：`decodePng`（依存なしの PNG 読み込み）と `onEvent`（CDP のイベントを受ける）を追加。
 - `scripts/check-flight.mjs`：新しい確認を追加済み（下）。星座を作る操作を Shift+Enter に変更。
 - `scripts/check-extension.mjs`：星座を作る操作を Shift+Enter に変更（2 か所）。
@@ -68,16 +68,16 @@
   `constellation-search.png` の撮り直しは `check-extension.mjs` 側で行う（`check-flight` では保存しない）。
 - 2000 件で飛行中 60 コマ（既存の確認。デブリとリングを足した後も保つこと）。
 
-**進め方の提案**：2（連鎖を解く）→ 3 の確認を通してコミット → 1 → 4。各小段階で `npm run build`・`npm run check:ext` を通してからコミット
-（メッセージは `feat(scope): ...` の英語 1 行。Co-Authored-By などの署名は付けない）。SPEC 13 章と `docs/DESIGN.md` に
-デブリ・リング・同じタブで開く動きを書き足すこと。
+**今回の実行結果**：`npm run build`・`npm run check:ext` ともに OK。デブリ 140 個（星雲との重複 0、再生成で一致）、
+接触で速度 11.7→7.0、加速リング 8 個（最高 18.2、上限 18.8）、遠くの名前 9 個（重なり 0、窓との重複 0）、
+2000 件の飛行は 58 コマ/秒。`docs/screens/flight-debris.png` と `docs/screens/constellation-search.png` を更新した。
 
 **Codex 引き継ぎ後・小段階「同じタブで開く」**：`openBookmark` は自分のタブを `chrome.tabs.update` で切り替え、
 Ctrl/⌘ を押した場合だけ `chrome.tabs.create`。検索中の星座作成は Shift+Enter に変更し、HUD と SPEC に反映した。
 切り替え直前に `sessionStorage` に船・地図カメラ・検索語・星座選択を保存し、`back_forward` で戻ったときだけ復元する。
 `Flight.resume()` が出入りの演出を飛ばして飛行を再開する。`check:flight` では実際の切り替えと「戻る」で船の位置・向き、
 検索語、預けた検索 11 件が一致した。新しいタブでは飛行と検索が空だった。
-後続のデブリ・遠距離ラベルの確認は API が実装されるまで保留する形にした（実装後は必ず走る）。
+後続のデブリ・遠距離ラベルの確認は API が実装されるまで一時保留し、完成後は必須の確認に戻した。
 旧仕様の「Enter で新規タブ」を見ていた `check-extension.mjs` も、同じタブへの切り替えを確認する形に直した。
 
 **小段階「検索を星座より前面に」**：画素比較は当初、星座の辺が検査する円を通らず、`discard` を外しても誤って OK になった。
@@ -88,6 +88,9 @@ Ctrl/⌘ を押した場合だけ `chrome.tabs.create`。検索中の星座作�
 星雲の範囲外だけに置き、接触は減速・押し戻し・小さな揺れ。星団間の 8 個の銀色リングは通常最高速度の 1.6 倍を上限に
 約 1.5 秒加速し、光の筋を出す。確認用 API は `flightDebris` / `flightNebulaRanges` / `flightPlace` / `flightRings` と
 `flightState` の bumps・lastBump・boosts・boostCap・maxSpeed。実装前に記録されていた NG が OK に変わった。
+
+**小段階「遠くの星の名前」**：`.flight-far-label` を窓の外側に最大 24 個まで表示する。約 0.2 秒ごとに候補を間引き、
+位置は毎コマ更新する。`flightState().farLabelLimit` は 24。近くの窓とは重ねない。
 
 
 ### 段階 3a（飛行モード・基本）の進み具合 — **完了（2026-09-26）**

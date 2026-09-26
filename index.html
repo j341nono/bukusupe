@@ -238,6 +238,14 @@
       #flight-help.is-compact p { display: none; }
       /* 近づいた星の窓：アイコン・タイトル・ドメイン（位置は毎コマ transform で動かす） */
       #flight-windows { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
+      #flight-far-labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
+      body.is-flying #flight-far-labels { display: block; }
+      .flight-far-label {
+        position: absolute; top: 0; left: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; font: 10px var(--font-text); letter-spacing: 0.03em;
+        color: rgba(219, 226, 241, 0.53); text-shadow: 0 0 5px #070a18;
+        will-change: transform; pointer-events: none;
+      }
       /* 飛行中の星団名：遠くからも標識のように。明朝・広い字間（近づくと薄くなる） */
       #flight-signs { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
       body.is-flying #flight-signs { display: block; }
@@ -420,6 +428,7 @@
     <div id="vignette"></div>
     <div id="labels"></div>
     <div id="flight-signs"></div>
+    <div id="flight-far-labels"></div>
     <div id="flight-windows"></div>
     <div id="flight-flash"></div>
     <div id="search-box">

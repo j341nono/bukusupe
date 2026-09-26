@@ -10,6 +10,7 @@ import { createShip } from "./ship";
 import { FlightNebulae, FlightSky } from "./sky";
 import { FlightObstacles } from "./flight-obstacles";
 import { FlightSigns, FlightWindows, WINDOW_RADIUS, type WindowStar } from "../ui/flight-windows";
+import { FlightFarLabels } from "../ui/flight-far-labels";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
@@ -121,6 +122,7 @@ export class SpaceView {
   private boostVisualLeft = 0;
   private readonly signs = new FlightSigns(document.getElementById("flight-signs") ?? document.body);
   private readonly windows = new FlightWindows(document.getElementById("flight-windows") ?? document.body);
+  private readonly farLabels = new FlightFarLabels(document.getElementById("flight-far-labels") ?? document.body);
   private windowStars: WindowStar[] = [];
   /** 星に入る演出の途中。終わるとページを開き、宇宙船を押し戻す */
   private dive: { id: string; elapsed: number } | null = null;
@@ -588,6 +590,7 @@ export class SpaceView {
     document.body.classList.remove("flight-boost");
     this.backdrop.visible = true;
     this.windows.clear();
+    this.farLabels.clear();
     this.signs.clear();
     this.constellations.setFlight(false);
     this.setFlightMaterial(false);
@@ -689,7 +692,7 @@ export class SpaceView {
 
   flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[]; nebulae: number;
     diving: boolean; lastEntry: string | null; entryDistance: number | null; scale: number;
-    searchStashed: number; bumps: number; boosts: number; boostCap: number; maxSpeed: number;
+    searchStashed: number; bumps: number; boosts: number; boostCap: number; maxSpeed: number; farLabelLimit: number;
     lastBump: { speedBefore: number; speedAfter: number; distanceAfter: number; minDistance: number } | null;
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
@@ -698,7 +701,7 @@ export class SpaceView {
       diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
       scale: FLIGHT_SCALE, searchStashed: this.flightSearch?.length ?? 0,
       bumps: this.bumps, boosts: this.boosts, boostCap: this.flight.boostCap,
-      maxSpeed: this.flight.normalMaxSpeed, lastBump: this.lastBump,
+      maxSpeed: this.flight.normalMaxSpeed, lastBump: this.lastBump, farLabelLimit: this.farLabels.limit,
       // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す
       ship: { x: ship.position.x / FLIGHT_SCALE, y: -ship.position.z / FLIGHT_SCALE, z: ship.position.y / FLIGHT_SCALE,
         speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
@@ -1197,7 +1200,7 @@ export class SpaceView {
     this.ship.setThrust(this.flight.thrustLevel);
     this.camera.updateMatrixWorld();
     if (this.flight.phase === "flying") this.updateWindows(dt);
-    else if (this.flight.phase === "leaving") this.windows.clear();
+    else if (this.flight.phase === "leaving") { this.windows.clear(); this.farLabels.clear(); }
     this.updateSigns();
     this.field.setLift(this.flight.lift);
     this.field.update(dt);
@@ -1338,7 +1341,15 @@ export class SpaceView {
         return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y,
           near: THREE.MathUtils.clamp(1 - d / WINDOW_RADIUS, 0, 1) };
       });
-
+    this.farLabels.update(dt, this.windowStars, this.windows.visibleIds,
+      (id) => this.worldOf(id, w)?.distanceTo(shipPos) ?? Infinity,
+      (id) => {
+        const p = this.worldOf(id, w);
+        if (!p) return null;
+        v.copy(p).project(this.camera);
+        if (v.z > 1 || v.z < -1) return null;
+        return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y };
+      });
   }
 
   /**

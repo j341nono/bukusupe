@@ -303,7 +303,6 @@ try {
   }
 
   // --- 遠くの星の名前：窓より遠い星にも、名前だけを小さく出す（上限あり、重ならない） ---
-  if (await evalIn(`typeof ${b}.flightState?.()?.farLabelLimit === 'number'`)) {
   await tryEval(`${b}.flightReset?.()`);
   await sleep(800);
   const far = await json(`(() => {
@@ -322,8 +321,6 @@ try {
   check(far && far.count > 6 && far.count <= far.limit && far.overlaps === 0 && far.dupes === 0,
     "飛行中、窓より遠い星にも名前が出る（上限あり、重ならない、窓と重複しない）",
     far ? `遠くの名前 ${far.count} 個（上限 ${far.limit}）・窓 ${far.windows} 個・重なり ${far.overlaps}` : "測れない");
-
-  }
 
   // --- 6. 星の芯に入ると、同じタブの切り替えがちょうど 1 回（新しいタブは開かない）。続けて入っても数秒は開かない ---
   await evalIn(`(() => {
