@@ -8,6 +8,71 @@
 
 ## 0. いまの状態と、残りのタスク（最初に読む）
 
+### 【作業中・未コミット】デブリと加速リング／同じタブで開いて「戻る」で再開／検索を星座より前面に（2026-09-26 着手・Claude の利用上限で中断）
+
+使う人からの依頼（要点）。**各小段階ごとにコミットし、このファイルを更新する。** 規則 8 に従い、確認は先に書いてある。
+
+1. **飛行モードのデブリと加速リング**
+   - 星団の間の空いた空間（**どの星団の星雲の範囲からも十分離れた場所**）に、ゆっくり回転しながら漂う小さな岩のかけら。
+     乱数の種を固定して決定的に。`InstancedMesh` で描き、2000 件でも 60 コマを保つ数に（目安 120〜160 個）。色は藍〜灰。
+   - ぶつかったら軽く跳ね返されて少し減速（強い罰にしない。案：めり込みを押し出し、速さ ×0.6）。画面がわずかに揺れる（約 0.35 秒）。
+   - 隣り合う星団の中心を結ぶ線（案：星団の中心の最小全域木の辺）の上に加速リングを数個ずつ。くぐると一時的に速くなり（上限あり。
+     案：最高速度 ×1.6 まで、約 1.5 秒で元の最高速度へ戻る）、光の筋が流れる演出（案：CSS の放射状の筋を重ねる）。
+     リングは航路の目印も兼ねる。色は淡い白〜銀。**金は使わない**（`docs/DESIGN.md`）。
+2. **ページを同じタブで開き、「戻る」で続きから**
+   - 飛行中に星に入ったとき・地図で Enter・カードの「開く」は、新しいタブではなく **ブクスペのタブをそのページに切り替える**
+     （`chrome.tabs.update` で自分のタブ、拡張機能の外では `location.href`）。
+   - **Ctrl（Mac は ⌘）を押しながら**の Enter・クリック・星への突入は、新しいタブで開く（`chrome.tabs.create`）。
+     飛行中は修飾キーの押下を `keydown`/`keyup` で覚えておく（`SpaceView.onKeyDown` は Ctrl 付きを無視するので main 側で持つ）。
+   - **これまで Ctrl+Enter は「星座を作る」だった。Shift+Enter に移すと決めた**（使う人に報告済み）。
+     `src/main.ts` の `setupSearch`、`src/ui/hud.ts` の操作の説明、`docs/SPEC.md` の該当箇所を直すこと。確認スクリプトは Shift+Enter に直してある。
+   - 切り替える直前に状態（飛行中か、宇宙船の位置と向き、地図のカメラの中心・距離・傾き、検索語、選んでいた星座）を
+     `sessionStorage` に保存。読み込み時、`performance.getEntriesByType('navigation')[0].type === 'back_forward'` のときだけ使う
+     （新しく開いたときは使わない。bfcache から戻る場合は `pageshow` の `persisted` で何もしなくてよい）。
+     飛行中から再開するときは、入る移り変わりを飛ばしてその位置から飛べる状態にする（`Flight` に「その場で飛行状態にする」入口が要る）。
+3. **星座を表示中の検索を、さらに前面に**（**実装済み・確認未了**）
+   - `src/render/constellations.ts`：線の材質を `ShaderMaterial` に替え、`setSearchHole(center, radius)` で
+     検索中はブラックホールの周り（外側の軌道 2.55 × 1.2 単位、`SEARCH_HOLE`）の線を `discard`。3 次元の距離で判定するので、
+     **飛行中の検索（3b）でも同じ関数で球の範囲を消せる**（3b ではブラックホールの位置と半径を渡すだけにする）。
+     線・光点・輪は `renderOrder = -1`（検索の要素より先に描く。線は深度を書かないので検索が常に手前）。
+     検索中の線は 0.07（飛行中 0.1）、光点は隠す。
+   - `src/render/scene.ts`：`setSearch` で `setSearchHole` を呼ぶ。`enterFlight` で解く。確認用 `searchHole()`・`setConstellationLinesVisible()`
+     （`__bukusupe` にも公開）。
+4. **追加の依頼：飛行中のラベルを増やす** — 窓（近い 6 個）より遠い星にも、タイトルだけの小さく淡い名前を出す。
+   案：窓の半径の外〜約 30×FLIGHT_SCALE、前方のみ、画面上で重ならないよう間引き、上限 24 個、選ぶのは約 0.2 秒ごと、位置は毎コマ。
+   要素のクラスは `.flight-far-label`、`data-key` に星の id、`flightState()` に `farLabelLimit` を足す（確認がこれを見る）。
+
+**いまの作業ツリー（未コミット）**：
+- `scripts/lib/harness.mjs`：`decodePng`（依存なしの PNG 読み込み）と `onEvent`（CDP のイベントを受ける）を追加。
+- `scripts/check-flight.mjs`：新しい確認を追加済み（下）。星座を作る操作を Shift+Enter に変更。
+- `scripts/check-extension.mjs`：星座を作る操作を Shift+Enter に変更（2 か所）。
+- `src/render/constellations.ts`・`src/render/scene.ts`・`src/main.ts`：上の 3 の実装。
+
+**新しい確認（`scripts/check-flight.mjs`）と、中断時点の結果**：修正前のコードで 17 件 NG を確認済み（規則 8）。
+多くは連鎖（星への突入の確認が同じタブの切り替えを待って時間切れになり、その後の往復の確認が飛行中のまま進む）。
+3 を入れた後の実行でも同じ 17 件 NG で、**線の確認も連鎖の影響を受けて NG（内側 51052 画素）**。2 を入れれば連鎖が解け、
+線の確認が正しく判定できるはず。**線の確認が本当に効いているかは、`discard` を外して内側の画素が 0 でないことも確かめること。**
+- デブリ：`flightDebris(again?)`（`[{x,y,z,r}]`、広げた空間の座標。引数 true で計算し直した結果）と `flightNebulaRanges()`（`[{x,y,z,radius}]`）。
+  全デブリが範囲の外、2 回の結果が一致。
+- ぶつかる：`flightPlace(px,py,pz, lx,ly,lz)`（位置と見る点に宇宙船を置いて止める）→ W。`flightState()` の `bumps`（回数）と
+  `lastBump: { speedBefore, speedAfter, distanceAfter, minDistance }`。
+- リング：`flightRings()`（`[{x,y,z,nx,ny,nz,radius}]`、n はリング面の法線）。`flightState()` の `boosts`（くぐった回数）・`boostCap`・`maxSpeed`。
+  最高の速さがふだんの最高 ×1.05 を超え、上限以下、2.5 秒後にはふだんの最高以下。スクリーンショット `docs/screens/flight-debris.png`。
+- 遠くの名前：`.flight-far-label` が 7 個以上・上限以下・重ならない・窓と重複しない。
+- 星への突入：`chrome.tabs.update` がちょうど 1 回（そのページの URL）、`create` は 0 回。Ctrl を押したまま（ページ内の `keydown` の
+  `Control`）なら `create` が 1 回。地図で Enter／Ctrl+Enter も同様。
+- 「戻る」：CDP の `Fetch.enable`（`http*://*`）で移動先を手元の空ページに差し替え（外部に通信しない）、実際に移動して `history.back()`。
+  飛行中・宇宙船の位置と向きが移動直前と一致（確認側が `sessionStorage['test:ship']` に控える）・検索語「宇宙」・`flightState().searchStashed`
+  （飛行中に預けている検索の件数）が 1 以上。新しいタブで開き直すと飛行でなく検索語も空。
+- 星座と検索：`searchHole()` の円の内側で、線あり／なしのスクリーンショットの差が 0 画素、外側は差がある。
+  `constellation-search.png` の撮り直しは `check-extension.mjs` 側で行う（`check-flight` では保存しない）。
+- 2000 件で飛行中 60 コマ（既存の確認。デブリとリングを足した後も保つこと）。
+
+**進め方の提案**：2（連鎖を解く）→ 3 の確認を通してコミット → 1 → 4。各小段階で `npm run build`・`npm run check:ext` を通してからコミット
+（メッセージは `feat(scope): ...` の英語 1 行。Co-Authored-By などの署名は付けない）。SPEC 13 章と `docs/DESIGN.md` に
+デブリ・リング・同じタブで開く動きを書き足すこと。
+
+
 ### 段階 3a（飛行モード・基本）の進み具合 — **完了（2026-09-26）**
 
 計画の順番を変え、**段階 2（星の等級）より先に 3a・3b を行う**（2026-09-26）。段階 2 以降は別の担当になる可能性がある。
