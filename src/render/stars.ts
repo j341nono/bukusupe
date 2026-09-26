@@ -56,10 +56,26 @@ export function createStarMaterial(): THREE.ShaderMaterial {
 }
 
 /** 星団ごとの色み。意味は持たせず、まとまりが見える程度の差にとどめる。 */
-const HUES = [0.58, 0.52, 0.09, 0.75, 0.13, 0.46, 0.86, 0.62, 0.02, 0.33];
+/**
+ * 星の色。星団ごとの色相の塗り分けはやめ、温かみのある白〜淡いクリームに収める（星図のパレット）。
+ * id から決まるごく僅かな色温度の揺らぎだけを残す。意味は持たせない。明るさは最終利用日時のまま。
+ */
+export function starColor(id: string, brightness: number): THREE.Color {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
+  const t = (h % 1000) / 1000;                       // 0：やや暖かい 〜 1：やや冷たい
+  const hue = t < 0.5 ? 0.11 : 0.6;
+  const saturation = 0.06 + Math.abs(t - 0.5) * 0.28;  // 最大でも 0.2
+  return new THREE.Color().setHSL(hue, saturation, 0.8 + brightness * 0.15);
+}
 
-export function clusterColor(cluster: number, lightness = 0.72): THREE.Color {
-  return new THREE.Color().setHSL(HUES[cluster % HUES.length], 0.35, lightness);
+/**
+ * 星雲の色。色相は藍の 1 系統に固定し、星団ごとの違いは明度（と nebula.ts の形）で付ける。
+ */
+export function nebulaColor(cluster: number): THREE.Color {
+  // 隣り合う番号で明暗が交互になるよう並べる（背景の藍に溶けない明るさにする）
+  const lightness = [0.46, 0.34, 0.54, 0.38, 0.5, 0.31, 0.57, 0.42][cluster % 8];
+  return new THREE.Color().setHSL(0.63, 0.3, lightness);
 }
 
 const MOVE_SECONDS = 0.9;
@@ -169,7 +185,7 @@ export class StarField {
       const lead = 1 / (1 + s.rank * 0.5);
       size[i] = (0.95 + s.brightness * 1.25) * (1 + lead * 0.45);
       this.baseSize[i] = this.searchSize[i] = size[i];
-      c.copy(clusterColor(s.cluster, 0.72 + s.brightness * 0.2));
+      c.copy(starColor(s.id, s.brightness));
       color[i * 3] = c.r;
       color[i * 3 + 1] = c.g;
       color[i * 3 + 2] = c.b;
@@ -382,10 +398,12 @@ export function createBackdrop(seed = 7): THREE.Points {
     pos[i * 3 + 1] = r * Math.cos(ph) * 0.55;
     pos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
     size[i] = 0.5 + rnd() * 1.1;
-    const tint = 0.72 + rnd() * 0.28;
+    // 遠景の星も同じ白〜淡いクリームの範囲に（青みを抑える）
+    const tint = 0.78 + rnd() * 0.22;
+    const warm = rnd() * 0.06;
     color[i * 3] = tint;
-    color[i * 3 + 1] = tint;
-    color[i * 3 + 2] = 1;
+    color[i * 3 + 1] = tint * (0.98 - warm * 0.3);
+    color[i * 3 + 2] = tint * (0.96 - warm);
     alpha[i] = 0.05 + rnd() * 0.16;
   }
 

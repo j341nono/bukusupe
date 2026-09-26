@@ -17,6 +17,8 @@ export type PlacedLabel = {
   x: number;
   y: number;
   centered?: boolean;
+  /** 文字の大きさ（px）。星団名は件数に応じて変える。無ければ種類の既定値 */
+  fontSize?: number;
   /** 星座を強調しているとき、星座以外のタイトルを暗くする */
   dim?: boolean;
 };
@@ -28,13 +30,16 @@ export type ScreenCircle = { cluster: number; sx: number; sy: number; rx: number
 const MAX_LABELS = 60;
 const FONT = { cluster: 13, star: 11 } as const;
 /** CSS の letter-spacing（em）。canvas の measureText には入らないので足す。 */
-const LETTER_SPACING = { cluster: 0.12, star: 0.02 } as const;
+const LETTER_SPACING = { cluster: 0.28, star: 0.02 } as const;
+/** 種類ごとの書体。CSS 変数（index.html の :root）と同じものを読む。星団名は明朝、タイトルはゴシック */
+const FONT_VAR = { cluster: "--font-name", star: "--font-text" } as const;
 
 /** 星から右へどれだけ離すか。 */
 const OFFSET_X = 8;
 /** 下地の左右の余白（CSS の padding と合わせる）。 */
 const PADDING_X = 5;
-const DOT_WIDTH = 10;
+/** 星からタイトルへの引き出し線（7px）とその余白（4px）。CSS と合わせる */
+const DOT_WIDTH = 11;
 
 /** 中距離で省略する長さ（全角を 1、半角を 0.5 として数える）。 */
 const MID_WIDTH = 18;
@@ -49,6 +54,11 @@ export function truncate(text: string, limit: number): string {
   }
   return text;
 }
+
+/** ラベルの文字の大きさ。検索中は軌道の内側ほど大きい。 */
+const sizeOf = (item: PlacedLabel): number =>
+  item.fontSize ?? (item.searchRank == null ? FONT[item.kind]
+    : item.searchRank < 3 ? 14 : item.searchRank < 9 ? 12 : 10);
 
 const overlaps = (a: Box, b: Box) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
 
@@ -67,7 +77,7 @@ export class LabelLayer {
   private readonly elements = new Map<string, HTMLDivElement>();
   /** 表示中のラベル。width は位置合わせに使う幅（ホバーで全文にしたときは広がる）。 */
   private active: { item: PlacedLabel; text: string; baseWidth: number; width: number; height: number }[] = [];
-  private fontFamily: string | null = null;
+  private readonly fontFamily: Partial<Record<PlacedLabel["kind"], string>> = {};
   private readonly measure = document.createElement("canvas").getContext("2d");
   private readonly fullText = new Map<string, string>();
   private hovered: string | null = null;
@@ -94,8 +104,7 @@ export class LabelLayer {
           ? truncate(full, MID_WIDTH)
           : full;
 
-      const size = item.searchRank == null ? FONT[item.kind]
-        : item.searchRank < 3 ? 14 : item.searchRank < 9 ? 12 : 10;
+      const size = sizeOf(item);
       const w = this.labelWidth(item, shortened, size);
       const h = size + 6;
       const t = item.sy - h / 2;
@@ -173,6 +182,7 @@ export class LabelLayer {
       el.dataset.side = item.side ?? "";
       el.dataset.kind = item.kind;
       el.style.textAlign = item.side === "left" ? "right" : "left";
+      el.style.fontSize = item.fontSize ? `${item.fontSize}px` : "";
       el.style.width = item.searchRank == null ? "" : `${(box.r - box.l).toFixed(1)}px`;
       el.style.boxSizing = item.searchRank == null ? "" : "border-box";
       el.style.setProperty("--cluster-color", item.color ?? "transparent");
@@ -197,8 +207,7 @@ export class LabelLayer {
     // 左側のタイトルは右端（星の側）を固定して、全文を左へ伸ばす。星の上にかぶらないように
     const entry = this.active.find(({ item }) => item.key === key);
     if (entry && entry.text !== full) {
-      const size = entry.item.searchRank == null ? FONT[entry.item.kind]
-        : entry.item.searchRank < 3 ? 14 : entry.item.searchRank < 9 ? 12 : 10;
+      const size = sizeOf(entry.item);
       entry.width = this.labelWidth(entry.item, full, size);
     }
   };
@@ -233,8 +242,10 @@ export class LabelLayer {
   private textWidth(text: string, size: number, kind: PlacedLabel["kind"]): number {
     const spacing = text.length * size * LETTER_SPACING[kind];
     if (!this.measure) return text.length * size * 0.9 + spacing;
-    this.fontFamily ??= getComputedStyle(this.container).fontFamily || "sans-serif";
-    this.measure.font = `${size}px ${this.fontFamily}`;
+    // 実際に表示している書体で測る（星団名＝明朝、タイトル＝ゴシック）
+    this.fontFamily[kind] ??= getComputedStyle(document.documentElement).getPropertyValue(FONT_VAR[kind]).trim() ||
+      getComputedStyle(this.container).fontFamily || "sans-serif";
+    this.measure.font = `${size}px ${this.fontFamily[kind]}`;
     return this.measure.measureText(text).width + spacing;
   }
 }

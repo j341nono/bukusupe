@@ -4,7 +4,7 @@ import type { Layout } from "../layout";
 import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
-import { StarField, clusterColor, createBackdrop, type EmphasisMode, type RenderStar } from "./stars";
+import { StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
 
@@ -128,7 +128,7 @@ export class SpaceView {
   constructor(private readonly canvas: HTMLCanvasElement, labelContainer: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    this.renderer.setClearColor(0x05060f, 1);
+    this.renderer.setClearColor(0x070a18, 1);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.5, 6000);
     this.camera.position.set(0, 90 * Math.cos(TILT), 90 * Math.sin(TILT));
@@ -277,7 +277,7 @@ export class SpaceView {
     this.nebulae.set(
       source.clusters
         .filter((c) => c.count > 0)
-        .map((c) => ({ x: c.x, y: c.y, radius: c.radius, color: clusterColor(c.index, 0.45) })),
+        .map((c) => ({ x: c.x, y: c.y, radius: c.radius, color: nebulaColor(c.index), seed: c.index })),
     );
     this.labelSource = source;
     this.extent = layoutExtent(layout);
@@ -840,6 +840,11 @@ export class SpaceView {
       if (rx > 0 && ry > 0) circles.push({ cluster: c.index, ...center, rx, ry });
     }
     this.screenCircles = circles;
+    // 星団名の大きさは件数に応じて 13〜17px（大きな星団ほど見出しとして大きく）
+    const counts = this.labelSource.clusters.filter((c) => c.count > 0).map((c) => c.count);
+    const minCount = Math.min(...counts), maxCount = Math.max(...counts);
+    const clusterSize = (count: number) =>
+      13 + (maxCount > minCount ? (count - minCount) / (maxCount - minCount) : 0.5) * 4;
     for (const c of this.labelSource.clusters) {
       if (c.count === 0) continue;
       // 遠くでは星雲の中心に重ねる。寄ったら円の上端の少し上へ
@@ -855,6 +860,8 @@ export class SpaceView {
         kind: "cluster",
         cluster: c.index,
         priority: -1000 + (1000 - c.count),   // 大きい星団ほど先に置く
+        // 遠くでは星団が小さく写るので、名前も 8 割にして星団からはみ出しにくくする
+        fontSize: Math.round(clusterSize(c.count) * (tier === "far" ? 0.8 : 1) * 2) / 2,
         dim: this.emphasisMode !== "none",
       });
     }
@@ -886,7 +893,6 @@ export class SpaceView {
           searchRank: this.searchIds.length ? searchRank.get(s.id) : undefined,
           cluster: s.cluster,
           side: this.searchIds.length ? (at.sx >= size.x / 2 ? "right" : "left") : !own || s.x >= own.x ? "right" : "left",
-          color: clusterColor(s.cluster).getStyle(),
         });
       }
     }

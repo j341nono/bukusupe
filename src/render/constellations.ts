@@ -13,7 +13,7 @@ export class ConstellationLayer {
   private active: string | null = null;
   private drawing: { id: string; elapsed: number } | null = null;
   private readonly animated = new THREE.LineSegments(new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: 0xffe8bc, transparent: true, opacity: 0.9, depthWrite: false }));
+    new THREE.LineBasicMaterial({ color: 0xe6c88c, transparent: true, opacity: 0.95, depthWrite: false }));
   private readonly rings = new THREE.Group();
   private ringIds: string[] = [];
 
@@ -42,11 +42,11 @@ export class ConstellationLayer {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
       const line = new THREE.LineSegments(geometry,
-        new THREE.LineBasicMaterial({ color: 0xfff0d2, transparent: true, opacity: 0.15, depthWrite: false }));
+        new THREE.LineBasicMaterial({ color: 0xd8b878, transparent: true, opacity: 0.15, depthWrite: false }));
       const glintGeometry = new THREE.BufferGeometry();
       glintGeometry.setAttribute("position", new THREE.Float32BufferAttribute(data.points.flatMap((p) => [p.x, 0.14, -p.y]), 3));
       const glints = new THREE.Points(glintGeometry,
-        new THREE.PointsMaterial({ color: 0xfff2d8, size: 2.5, sizeAttenuation: false, transparent: true,
+        new THREE.PointsMaterial({ color: 0xe6c88c, size: 2.5, sizeAttenuation: false, transparent: true,
           opacity: 0.2, depthWrite: false }));
       this.entries.set(data.id, { data, edges, line, glints });
       this.object.add(line, glints);
@@ -70,7 +70,7 @@ export class ConstellationLayer {
     }
     for (const point of points) {
       const ring = new THREE.Mesh(strong ? new THREE.RingGeometry(0.34, 0.52, 28) : new THREE.RingGeometry(0.36, 0.44, 28),
-        new THREE.MeshBasicMaterial({ color: strong ? 0xffe0a0 : 0xfff0d2, transparent: true,
+        new THREE.MeshBasicMaterial({ color: strong ? 0xe6c88c : 0xd8b878, transparent: true,
           opacity: strong ? 0.95 : 0.6, side: THREE.DoubleSide, depthWrite: false }));
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(point.x, 0.16, -point.y);
