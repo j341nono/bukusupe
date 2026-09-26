@@ -12,6 +12,13 @@ import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
 
+/** 星に入る（SPEC 13 章）：芯の半径、突入の演出の長さ、開いた後の押し戻しと、同じ星に反応しない時間 */
+const STAR_CORE_RADIUS = 0.7;
+const DIVE_SECONDS = 0.45;
+const PUSH_BACK = 4;
+const ENTRY_COOLDOWN_MS = 4000;
+const CAMERA_FOV = 50;
+
 /** 静止時のカメラの傾き（真上から 40 度。SPEC 7 章） */
 const TILT = THREE.MathUtils.degToRad(40);
 /** 右ドラッグで変えられる傾きの上限（真上から 60 度。水平方向には回さない） */
@@ -99,6 +106,14 @@ export class SpaceView {
   private readonly ship = createShip();
   private readonly windows = new FlightWindows(document.getElementById("flight-windows") ?? document.body);
   private windowStars: WindowStar[] = [];
+  /** 星に入る演出の途中。終わるとページを開き、宇宙船を押し戻す */
+  private dive: { id: string; elapsed: number } | null = null;
+  /** 星ごとの、次に反応してよい時刻（performance.now） */
+  private readonly entryCooldown = new Map<string, number>();
+  private lastEntry: string | null = null;
+  private readonly flash = document.getElementById("flight-flash");
+  /** 星の芯に入ったとき（突入の演出の後）に呼ばれる。main がそのページを新しいタブで開く */
+  onEnterStar: ((id: string) => void) | null = null;
   /** 飛行中のマウスの位置（画面中央からのずれ、-1〜1）。入った直後は 0（動かすまで機首は動かない） */
   private readonly flightMouse = new THREE.Vector2();
   private flightSearch: string[] | null = null;
@@ -494,6 +509,7 @@ export class SpaceView {
   /** 飛行モードから出る。宇宙船がいた場所の真上から見た地図に、入る前の拡大率で戻る。 */
   exitFlight(): boolean {
     if (!this.flight.active || this.flight.phase === "leaving") return false;
+    this.endDive(false);
     this.flight.leave(this.camera, this.flightLook);
     return true;
   }
@@ -548,11 +564,19 @@ export class SpaceView {
     return this.field.placed.map((star) => ({ id: star.id, z: this.heights.get(star.id) ?? 0 }));
   }
 
+  /** 最後に入った星と宇宙船の距離（確認用） */
+  private entryDistance(): number | null {
+    const q = this.lastEntry ? this.field.position3(this.lastEntry) : null;
+    return q ? this.flight.ship.position.distanceTo(new THREE.Vector3(q.x, q.z, -q.y)) : null;
+  }
+
   flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[];
+    diving: boolean; lastEntry: string | null; entryDistance: number | null;
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
       lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds,
+      diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
       ship: { x: ship.position.x, y: -ship.position.z, z: ship.position.y, speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
   }
 
@@ -967,14 +991,26 @@ export class SpaceView {
   /** 飛行中の 1 コマ：宇宙船とカメラ、星の立ち上がり、星座の線。地図のラベルや操作は動かさない。 */
   private flightTick(dt: number): void {
     if (typing()) this.keys.clear();
-    const input: FlightInput = {
-      thrust: (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0),
-      turn: (this.keys.has("KeyA") ? 1 : 0) - (this.keys.has("KeyD") ? 1 : 0),
-      climb: (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") ? 1 : 0),
-      mouseX: this.flightMouse.x,
-      mouseY: this.flightMouse.y,
-    };
+    // 突入の演出の間は操作を受け付けず、宇宙船を止めておく
+    const input: FlightInput = this.dive
+      ? { thrust: 0, turn: 0, climb: 0, mouseX: 0, mouseY: 0 }
+      : {
+        thrust: (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0),
+        turn: (this.keys.has("KeyA") ? 1 : 0) - (this.keys.has("KeyD") ? 1 : 0),
+        climb: (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") ? 1 : 0),
+        mouseX: this.flightMouse.x,
+        mouseY: this.flightMouse.y,
+      };
+    if (this.dive) this.flight.ship.speed = 0;
+    const previous = this.flight.ship.position.clone();
     const { finished } = this.flight.update(dt, this.camera, this.flightLook, input);
+    if (this.flight.phase === "flying") {
+      if (this.dive) this.advanceDive(dt);
+      else {
+        const hit = this.findStarHit(previous, this.flight.ship.position);
+        if (hit) this.dive = { id: hit, elapsed: 0 };
+      }
+    }
     const ship = this.flight.ship;
     this.ship.group.position.copy(ship.position);
     this.ship.group.rotation.set(ship.pitch, ship.yaw, 0);
@@ -988,6 +1024,54 @@ export class SpaceView {
     this.camera.updateMatrixWorld();
     this.renderer.render(this.scene, this.camera);
     if (finished === "left") this.finishFlight();
+  }
+
+  /**
+   * 宇宙船がこのコマで通った線分（a → b）が、どれかの星の芯（半径 STAR_CORE_RADIUS）に触れたか。
+   * 線分で見るので、速く飛んでも星をすり抜けない。反応しない時間の中にある星は除く。
+   */
+  private findStarHit(a: THREE.Vector3, b: THREE.Vector3): string | null {
+    const now = performance.now();
+    const ab = b.clone().sub(a);
+    const len2 = ab.lengthSq();
+    const p = new THREE.Vector3();
+    let best: { id: string; t: number } | null = null;
+    for (const star of this.field.placed) {
+      if ((this.entryCooldown.get(star.id) ?? 0) > now) continue;
+      const q = this.field.position3(star.id);
+      if (!q) continue;
+      p.set(q.x, q.z, -q.y);
+      const t = len2 > 0 ? THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / len2, 0, 1) : 0;
+      const d = a.clone().addScaledVector(ab, t).distanceTo(p);
+      if (d < STAR_CORE_RADIUS && (!best || t < best.t)) best = { id: star.id, t };
+    }
+    return best?.id ?? null;
+  }
+
+  /** 突入の演出：画角を少し狭め、淡い光を満ちさせてから引く。終わったらページを開いて押し戻す。 */
+  private advanceDive(dt: number): void {
+    if (!this.dive) return;
+    this.dive.elapsed += dt;
+    const t = Math.min(1, this.dive.elapsed / DIVE_SECONDS);
+    this.camera.fov = CAMERA_FOV - 16 * Math.sin(Math.PI * t);
+    this.camera.updateProjectionMatrix();
+    if (this.flash) this.flash.style.opacity = String(0.85 * Math.sin(Math.PI * t));
+    if (t >= 1) this.endDive(true);
+  }
+
+  private endDive(open: boolean): void {
+    const dive = this.dive;
+    this.dive = null;
+    this.camera.fov = CAMERA_FOV;
+    this.camera.updateProjectionMatrix();
+    if (this.flash) this.flash.style.opacity = "0";
+    if (!dive || !open) return;
+    this.entryCooldown.set(dive.id, performance.now() + ENTRY_COOLDOWN_MS);
+    this.lastEntry = dive.id;
+    // 開いた後は、来た方向へ少し押し戻して止める
+    this.flight.ship.position.addScaledVector(this.flight.forward(), -PUSH_BACK);
+    this.flight.ship.speed = 0;
+    this.onEnterStar?.(dive.id);
   }
 
   /** 近づいた星の窓（近い順に最大 6 個）。選ぶのは間引き、位置は毎コマ。 */

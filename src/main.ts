@@ -592,6 +592,8 @@ function setupFlight(): void {
     view.enterFlight();
   };
   const leave = () => { view?.exitFlight(); };
+  // 星の芯に入ったら、そのページを新しいタブで開く（突入の演出の後。SpaceView が押し戻しと反応しない時間を持つ）
+  view!.onEnterStar = (id) => openBookmark(id);
   view!.onFlightChange = (active) => {
     document.body.classList.toggle("is-flying", active);
     if (button) {

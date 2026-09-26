@@ -229,6 +229,11 @@
       body.is-flying #flight-help { display: block; }
       /* 近づいた星の窓：アイコン・タイトル・ドメイン（位置は毎コマ transform で動かす） */
       #flight-windows { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
+      /* 星に入る瞬間の、淡い光（白に近いクリーム。中心から満ちる） */
+      #flight-flash {
+        position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 4;
+        background: radial-gradient(circle at 50% 45%, rgba(255, 250, 236, 0.95), rgba(236, 230, 214, 0.35) 45%, rgba(7, 10, 24, 0) 75%);
+      }
       body.is-flying #flight-windows { display: block; }
       .flight-window {
         position: absolute; top: 0; left: 0; display: flex; gap: 8px; align-items: center;
@@ -387,6 +392,7 @@
     <div id="vignette"></div>
     <div id="labels"></div>
     <div id="flight-windows"></div>
+    <div id="flight-flash"></div>
     <div id="search-box">
       <input id="search-input" type="search" autocomplete="off" placeholder="星を探す" aria-label="ブックマークを検索" />
       <button id="constellation-create" hidden>星座にする</button>

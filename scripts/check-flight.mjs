@@ -202,19 +202,24 @@ try {
     window.__opened = [];
     chrome.tabs.create = (options) => { window.__opened.push(options.url); return Promise.resolve({ id: -1 }); };
   })()`);
+  const targetUrl = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target?.id)})?.url ?? ''`);
+  // 1 回目：星を正面に置いて W。開いたらすぐ離す（その後の押し戻しで止まる）
   if (target) await teleport(target.id, 6);
-  await press("KeyW", "w", 2500);
+  await key("keydown", "KeyW", "w");
+  await waitUntil("window.__opened.length > 0", 4000, 50);
+  await key("keyup", "KeyW", "w");
   await sleep(900);
   const firstOpen = await json("window.__opened");
   const afterPush = await flight();
+  // 2 回目：同じ星へすぐにもう一度入る。数秒間は同じ星を開かない（奥の別の星に入るのは仕様どおり）
   if (target) await teleport(target.id, 4);
-  await press("KeyW", "w", 1500);
-  await sleep(500);
+  await press("KeyW", "w", 1300);
+  await press("KeyS", "s", 1200);
   const secondOpen = await json("window.__opened");
-  const targetUrl = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target?.id)})?.url ?? ''`);
-  check(firstOpen?.length === 1 && firstOpen[0] === targetUrl && secondOpen?.length === 1,
-    "星の芯に入ると新しいタブを開く処理がちょうど 1 回。続けて入っても数秒は開かない",
-    `1 回目 ${firstOpen?.length ?? "?"} 回・続けて入った後 ${secondOpen?.length ?? "?"} 回・押し戻し後の距離 ${afterPush?.targetDistance?.toFixed?.(1) ?? "?"}`);
+  const sameAgain = (secondOpen ?? []).filter((url) => url === targetUrl).length;
+  check(firstOpen?.length === 1 && firstOpen[0] === targetUrl && sameAgain === 1 && (afterPush?.entryDistance ?? 0) > 2,
+    "星の芯に入ると新しいタブを開く処理がちょうど 1 回。押し戻され、同じ星に続けて入っても数秒は開かない",
+    `1 回目 ${firstOpen?.length ?? "?"} 回（${firstOpen?.[0] === targetUrl ? "その星" : "別の星"}）・押し戻し後の距離 ${afterPush?.entryDistance?.toFixed?.(1) ?? "?"}・続けて入った後の同じ星 ${sameAgain} 回`);
   // 動いた後に出ると、宇宙船がいた場所の真上から見た地図に、入る前の拡大率で戻る
   const shipAtExit = (await flight())?.ship;
   await key("keydown", "Escape", "Escape");
