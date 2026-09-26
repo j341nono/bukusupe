@@ -5,17 +5,19 @@ import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
 import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
-import { Flight, type FlightInput } from "./flight";
+import { FLIGHT_SCALE, Flight, type FlightInput } from "./flight";
 import { createShip } from "./ship";
+import { FlightSky } from "./sky";
 import { FlightWindows, WINDOW_RADIUS, type WindowStar } from "../ui/flight-windows";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
 
-/** 星に入る（SPEC 13 章）：芯の半径、突入の演出の長さ、開いた後の押し戻しと、同じ星に反応しない時間 */
-const STAR_CORE_RADIUS = 0.7;
+/** 星に入る（SPEC 13 章）：芯の半径、突入の演出の長さ、開いた後の押し戻しと、同じ星に反応しない時間。
+ *  半径と押し戻しは、広げた空間（FLIGHT_SCALE 倍）の単位 */
+const STAR_CORE_RADIUS = 0.45 * FLIGHT_SCALE;
 const DIVE_SECONDS = 0.45;
-const PUSH_BACK = 4;
+const PUSH_BACK = 2.5 * FLIGHT_SCALE;
 const ENTRY_COOLDOWN_MS = 4000;
 const CAMERA_FOV = 50;
 
@@ -104,6 +106,7 @@ export class SpaceView {
   private readonly flight = new Flight();
   private readonly flightLook = new THREE.Vector3();
   private readonly ship = createShip();
+  private readonly sky = new FlightSky();
   private readonly windows = new FlightWindows(document.getElementById("flight-windows") ?? document.body);
   private windowStars: WindowStar[] = [];
   /** 星に入る演出の途中。終わるとページを開き、宇宙船を押し戻す */
@@ -251,6 +254,7 @@ export class SpaceView {
 
     addEventListener("resize", this.resize);
     this.scene.add(this.ship.group);
+    this.scene.add(this.sky.object);
     window.addEventListener("mousemove", (event: MouseEvent) => {
       if (!this.flight.active) return;
       this.flightMouse.set(event.clientX / innerWidth * 2 - 1, event.clientY / innerHeight * 2 - 1);
@@ -503,6 +507,9 @@ export class SpaceView {
     this.flightMouse.set(0, 0);
     this.flight.enter(this.camera, this.controls.target.clone(), distance, 3, this.extent);
     this.ship.group.visible = true;
+    // 地図の遠景は広げた空間では近づけてしまうので、飛行中は触れられない背景の星空に替える
+    this.sky.object.visible = true;
+    this.backdrop.visible = false;
     this.onFlightChange?.(true);
     return true;
   }
@@ -517,12 +524,16 @@ export class SpaceView {
 
   /** 出る移り変わりが終わった：地図の操作を戻し、預けていた検索と星座の表示を掛け直す。 */
   private finishFlight(): void {
+    this.field.object.scale.setScalar(1);
+    this.constellations.object.scale.setScalar(1);
     this.controls.target.copy(this.flight.mapTarget());
     this.tilt = 0;
     this.setDistance(this.flight.returnDistance);
     this.controls.enabled = true;
     this.nebulae.object.visible = true;
     this.ship.group.visible = false;
+    this.sky.object.visible = false;
+    this.backdrop.visible = true;
     this.windows.clear();
     this.constellations.setFlight(false);
     this.setFlightMaterial(false);
@@ -548,11 +559,25 @@ export class SpaceView {
     mat.uniforms.uSizeScale.value = on ? FLIGHT_SIZE_SCALE : 1;
   }
 
-  /** 確認用：飛行中の星の 3 次元の位置と、配置から取り直した高さ。 */
+  /** いまの空間の拡大率（地図 1 → 飛行中 FLIGHT_SCALE。立ち上がりと一緒に変わる） */
+  private get spaceScale(): number {
+    return 1 + (FLIGHT_SCALE - 1) * this.flight.lift;
+  }
+
+  /** 星 id の、いま描いている位置（three の座標。空間の拡大率を掛けたもの）。 */
+  private worldOf(id: string, out = new THREE.Vector3()): THREE.Vector3 | null {
+    const p = this.field.position3(id);
+    if (!p) return null;
+    const k = this.spaceScale;
+    return out.set(p.x * k, p.z * k, -p.y * k);
+  }
+
+  /** 確認用：飛行中の星の 3 次元の位置（地図の座標の向きで、広げた空間の単位）。 */
   flightStars(): { id: string; x: number; y: number; z: number }[] {
+    const k = this.spaceScale;
     return this.field.placed.flatMap((star) => {
       const p = this.field.position3(star.id);
-      return p ? [{ id: star.id, ...p }] : [];
+      return p ? [{ id: star.id, x: p.x * k, y: p.y * k, z: p.z * k }] : [];
     });
   }
 
@@ -572,18 +597,21 @@ export class SpaceView {
 
   /** 最後に入った星と宇宙船の距離（確認用） */
   private entryDistance(): number | null {
-    const q = this.lastEntry ? this.field.position3(this.lastEntry) : null;
-    return q ? this.flight.ship.position.distanceTo(new THREE.Vector3(q.x, q.z, -q.y)) : null;
+    const q = this.lastEntry ? this.worldOf(this.lastEntry) : null;
+    return q ? this.flight.ship.position.distanceTo(q) : null;
   }
 
   flightState(): { active: boolean; phase: string; transitioning: boolean; lift: number; nearby: number; windows: string[];
-    diving: boolean; lastEntry: string | null; entryDistance: number | null;
+    diving: boolean; lastEntry: string | null; entryDistance: number | null; scale: number;
     ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
     const ship = this.flight.ship;
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
       lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds,
       diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
-      ship: { x: ship.position.x, y: -ship.position.z, z: ship.position.y, speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
+      scale: FLIGHT_SCALE,
+      // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す
+      ship: { x: ship.position.x / FLIGHT_SCALE, y: -ship.position.z / FLIGHT_SCALE, z: ship.position.y / FLIGHT_SCALE,
+        speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
   }
 
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
@@ -1010,6 +1038,9 @@ export class SpaceView {
     if (this.dive) this.flight.ship.speed = 0;
     const previous = this.flight.ship.position.clone();
     const { finished } = this.flight.update(dt, this.camera, this.flightLook, input);
+    this.field.object.scale.setScalar(this.spaceScale);
+    this.constellations.object.scale.setScalar(this.spaceScale);
+    this.sky.follow(this.camera);
     if (this.flight.transitioning || finished) {
       // 立ち上がりの途中だけ、星座の線の高さを書き直す（飛んでいる間は変わらない）
       this.constellations.setLift((id) => this.heights.get(id) ?? 0, this.flight.lift);
@@ -1048,9 +1079,7 @@ export class SpaceView {
     let best: { id: string; t: number } | null = null;
     for (const star of this.field.placed) {
       if ((this.entryCooldown.get(star.id) ?? 0) > now) continue;
-      const q = this.field.position3(star.id);
-      if (!q) continue;
-      p.set(q.x, q.z, -q.y);
+      if (!this.worldOf(star.id, p)) continue;
       const t = len2 > 0 ? THREE.MathUtils.clamp(p.clone().sub(a).dot(ab) / len2, 0, 1) : 0;
       const d = a.clone().addScaledVector(ab, t).distanceTo(p);
       if (d < STAR_CORE_RADIUS && (!best || t < best.t)) best = { id: star.id, t };
@@ -1089,17 +1118,18 @@ export class SpaceView {
     const shipPos = this.flight.ship.position;
     const size = this.renderer.getSize(new THREE.Vector2());
     const v = new THREE.Vector3();
+    const w = new THREE.Vector3();
     this.windows.update(dt, this.windowStars,
       (id) => {
-        const p = this.field.position3(id);
-        return p ? Math.hypot(p.x - shipPos.x, p.z - shipPos.y, -p.y - shipPos.z) : Infinity;
+        const p = this.worldOf(id, w);
+        return p ? p.distanceTo(shipPos) : Infinity;
       },
       (id) => {
-        const p = this.field.position3(id);
+        const p = this.worldOf(id, w);
         if (!p) return null;
-        v.set(p.x, p.z, -p.y).project(this.camera);
+        const d = p.distanceTo(shipPos);
+        v.copy(p).project(this.camera);
         if (v.z > 1 || v.z < -1) return null;
-        const d = Math.hypot(p.x - shipPos.x, p.z - shipPos.y, -p.y - shipPos.z);
         return { x: (v.x * 0.5 + 0.5) * size.x, y: (-v.y * 0.5 + 0.5) * size.y,
           near: THREE.MathUtils.clamp(1 - d / WINDOW_RADIUS, 0, 1) };
       });
@@ -1110,14 +1140,13 @@ export class SpaceView {
    * （途中に他の星が入りにくい）。
    */
   flightTeleport(id: string, distance: number): boolean {
-    const p = this.field.position3(id);
+    const point = this.worldOf(id);
     const star = this.labelSource.stars.find((s) => s.id === id);
     const cluster = this.labelSource.clusters.find((c) => c.index === star?.cluster);
-    if (!p || !star || !this.flight.active) return false;
+    if (!point || !star || !this.flight.active) return false;
     let dx = star.x - (cluster?.x ?? 0), dy = star.y - (cluster?.y ?? 0);
     const len = Math.hypot(dx, dy) || 1;
     if (Math.hypot(dx, dy) < 1e-6) { dx = 0; dy = -1; }
-    const point = new THREE.Vector3(p.x, p.z, -p.y);
     const position = point.clone().add(new THREE.Vector3(dx / len, 0, -dy / len).multiplyScalar(distance));
     this.flight.place(position, point);
     return true;
@@ -1125,11 +1154,12 @@ export class SpaceView {
 
   /** 確認用：星 id の、画面上の大きさ（px）。シェーダーと同じ計算。 */
   starScreenSize(id: string): number | null {
-    const p = this.field.position3(id);
+    const p = this.worldOf(id);
     const base = this.field.pointSize(id);
     if (!p || base == null) return null;
     this.camera.updateMatrixWorld();
-    const view = new THREE.Vector3(p.x, p.z, -p.y).applyMatrix4(this.camera.matrixWorldInverse);
+    // 空間の拡大率は星までの距離に効く（シェーダーの modelView に含まれる）。点の基準の大きさ aSize には掛からない
+    const view = p.applyMatrix4(this.camera.matrixWorldInverse);
     const mat = this.field.object.material as THREE.ShaderMaterial;
     const px = base * mat.uniforms.uSizeScale.value * mat.uniforms.uScale.value / Math.max(-view.z, 0.001);
     return THREE.MathUtils.clamp(px, 2, mat.uniforms.uMaxSize.value);
@@ -1245,6 +1275,7 @@ export class SpaceView {
   };
 
   private setPointScale(scale: number): void {
+    this.sky.setScale(scale);
     for (const obj of [this.backdrop, this.field.object]) {
       const mat = obj.material as THREE.ShaderMaterial;
       if (mat?.uniforms?.uScale) mat.uniforms.uScale.value = scale;

@@ -56,7 +56,7 @@ void main() {
 export const MAP_MAX_POINT = 12;
 export const FLIGHT_MAX_POINT = 64;
 /** 飛行中の星の大きさの係数（地図の大きさの値を、近くから見る前提に縮める） */
-export const FLIGHT_SIZE_SCALE = 0.2;
+export const FLIGHT_SIZE_SCALE = 0.55;
 
 const FRAG = /* glsl */ `
 varying float vAlpha;

@@ -8,6 +8,13 @@ import * as THREE from "three";
  * 機体を横に傾ける回転（ロール）は入れない（酔いにくくするため）。
  */
 
+/**
+ * 飛行モードの空間は、地図の座標（x・y と高さ）を FLIGHT_SCALE 倍に広げる（並びと高さの相対関係は保つ）。
+ * 星と星座の層は描画の拡大率で広げ、宇宙船とカメラはこの広げた空間（世界の座標）で動く。
+ * 地図に戻るときは FLIGHT_SCALE で割って、地図の座標に戻す。
+ */
+export const FLIGHT_SCALE = 4;
+
 /** 入る・出るの移り変わりにかける時間（星の立ち上がりとカメラの移動を同時に行う） */
 const ENTER_SECONDS = 1.4;
 const LEAVE_SECONDS = 1.2;
@@ -102,10 +109,12 @@ export class Flight {
    */
   enter(camera: THREE.PerspectiveCamera, mapTarget: THREE.Vector3, mapDistance: number, height: number, extent: number): void {
     this.mapDistance = mapDistance;
-    this.maxSpeed = THREE.MathUtils.clamp(extent * 0.2, 8, 30);
-    this.bound = extent * 2;
-    this.ceiling = Math.max(40, extent * 0.6);
-    this.ship.position.set(mapTarget.x, height, mapTarget.z);
+    // 目安：宇宙の端から端（広げた空間の直径）を 30 秒ほど、星団の中を数秒で抜ける速さ
+    const world = extent * FLIGHT_SCALE;
+    this.maxSpeed = THREE.MathUtils.clamp((world * 2) / 30, 10, 120);
+    this.bound = world * 1.5;
+    this.ceiling = Math.max(40, world * 0.5);
+    this.ship.position.set(mapTarget.x * FLIGHT_SCALE, height, mapTarget.z * FLIGHT_SCALE);
     this.startPosition.copy(this.ship.position);
     this.reset();
     this.fromPosition.copy(camera.position);
@@ -145,8 +154,9 @@ export class Flight {
   private steer(dt: number, input: FlightInput): void {
     const ship = this.ship;
     // 加速・減速
-    if (input.thrust > 0) ship.speed += this.maxSpeed * 0.8 * dt;
-    if (input.thrust < 0) ship.speed -= this.maxSpeed * 1.5 * dt;
+    // 最高速度まで約 2 秒で加速し、約 1 秒で止まる
+    if (input.thrust > 0) ship.speed += this.maxSpeed * 0.5 * dt;
+    if (input.thrust < 0) ship.speed -= this.maxSpeed * 1.0 * dt;
     ship.speed = THREE.MathUtils.clamp(ship.speed, 0, this.maxSpeed);
     // 旋回：キーとマウスの左右を合わせ、上限を付けて、なめらかに
     const wanted = THREE.MathUtils.clamp(
@@ -184,9 +194,9 @@ export class Flight {
     this.elapsed = 0;
   }
 
-  /** 出た後に地図が見る点（宇宙船の真下の、地図の平面上の点）と距離。 */
+  /** 出た後に地図が見る点（宇宙船の真下の、地図の平面上の点。地図の座標に戻す）。 */
   mapTarget(): THREE.Vector3 {
-    return new THREE.Vector3(this.ship.position.x, 0, this.ship.position.z);
+    return new THREE.Vector3(this.ship.position.x / FLIGHT_SCALE, 0, this.ship.position.z / FLIGHT_SCALE);
   }
 
   get returnDistance(): number {

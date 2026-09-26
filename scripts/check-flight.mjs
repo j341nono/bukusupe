@@ -83,6 +83,35 @@ try {
     ? `favicon の権限 ${warnings.hasFavicon ? "あり" : "なし"}・あり ${JSON.stringify(warnings.with)} / なし ${JSON.stringify(warnings.without)}`
     : "chrome.management が使えない");
 
+  // --- 見え方：最後に触れた日（最終利用日と追加日の新しいほう）で、色と明るさが決まる ---
+  const looks = await json(`(() => {
+    const f = ${b}.appearanceFor;
+    if (!f) return null;
+    const now = Date.now(), day = 864e5;
+    const recent = f({ id: 'a', dateLastUsed: now - 1 * day, dateAdded: now - 400 * day, rank: 5 });
+    const old = f({ id: 'b', dateLastUsed: now - 700 * day, dateAdded: now - 900 * day, rank: 5 });
+    const onlyAdded = f({ id: 'c', dateAdded: now - 2 * day, rank: 5 });
+    const same1 = f({ id: 'd', dateLastUsed: now - 40 * day, dateAdded: now - 90 * day, rank: 5 });
+    const same2 = f({ id: 'another-id', dateLastUsed: now - 40 * day, dateAdded: now - 90 * day, rank: 5 });
+    return { recent, old, onlyAdded, same: JSON.stringify(same1) === JSON.stringify(same2) };
+  })()`);
+  const bluish = (c) => c && c[2] > c[0];
+  const warm = (c) => c && c[0] > c[2];
+  check(looks && looks.recent.alpha > looks.old.alpha && looks.recent.size >= looks.old.size &&
+    bluish(looks.recent.color) && warm(looks.old.color) && bluish(looks.onlyAdded.color),
+  "最近触れた星ほど明るく青白く、長く触れていない星ほど暗く橙寄り（追加日も最後に触れた日に数える）",
+  looks ? `最近 明るさ ${looks.recent.alpha.toFixed(2)}・色 ${looks.recent.color.map((v) => v.toFixed(2)).join(",")} / 古い 明るさ ${looks.old.alpha.toFixed(2)}・色 ${looks.old.color.map((v) => v.toFixed(2)).join(",")}` : "appearanceFor が無い");
+  check(looks?.same === true, "最終利用日も追加日も同じ星なら、同じ見た目になる（id によらない）");
+  // 実際のサンプルの星でも：いちばん最近触れた星は、いちばん長く触れていない星より明るい（地図の表示）
+  const real = await json(`(() => {
+    const items = ${b}.state.items.map((i) => ({ id: i.id, t: Math.max(i.dateLastUsed ?? 0, i.dateAdded ?? 0) })).filter((i) => i.t > 0)
+      .sort((p, q) => q.t - p.t);
+    const newest = items[0], oldest = items.at(-1);
+    return { newest: ${b}.starVisual(newest.id), oldest: ${b}.starVisual(oldest.id) };
+  })()`);
+  check(real && real.newest.alpha > real.oldest.alpha, "地図でも、最近触れた星は長く触れていない星より明るい",
+    real ? `${real.newest.alpha.toFixed(2)} > ${real.oldest.alpha.toFixed(2)}` : "測れない");
+
   // --- 1. 入力欄に文字を打っているときの F では入らない ---
   await evalIn("document.getElementById('search-input').focus()");
   await key("keydown", "KeyF", "f", "document.getElementById('search-input')");
@@ -142,6 +171,8 @@ try {
   // --- 3. 飛行中も x・y は地図の座標と一致し、z は同じデータなら毎回同じ ---
   const stars = await json(`${b}.flightStars?.() ?? null`);
   const layout = await json(`${b}.layout()`);
+  // 飛行モードの空間は地図の座標の定数倍（scale）に広げている
+  const S = (await flight())?.scale ?? 1;
   const heightsA = await json(`${b}.flightHeights?.() ?? null`);
   const heightsB = await json(`${b}.flightHeights?.() ?? null`);
   const home = new Map((layout?.stars ?? []).map((s) => [s.id, s]));
@@ -149,20 +180,20 @@ try {
   let xyOff = 0, zOff = 0, zMin = Infinity, zMax = -Infinity;
   for (const s of stars ?? []) {
     const h = home.get(s.id);
-    if (!h || Math.abs(h.x - s.x) > 1e-3 || Math.abs(h.y - s.y) > 1e-3) xyOff++;
-    if (Math.abs((heightOf.get(s.id) ?? NaN) - s.z) > 1e-3 || Number.isNaN(heightOf.get(s.id))) zOff++;
+    if (!h || Math.abs(h.x * S - s.x) > 1e-2 || Math.abs(h.y * S - s.y) > 1e-2) xyOff++;
+    if (Math.abs((heightOf.get(s.id) ?? NaN) * S - s.z) > 1e-2 || Number.isNaN(heightOf.get(s.id))) zOff++;
     zMin = Math.min(zMin, s.z); zMax = Math.max(zMax, s.z);
   }
-  check(enteredMap && stars?.length === layout?.stars.length && xyOff === 0 && zOff === 0 &&
-    JSON.stringify(heightsA) === JSON.stringify(heightsB) && zMax - zMin > 5,
-  "飛行中も星の x・y は地図の座標と一致し、z は同じデータなら毎回同じ",
-  stars ? `${stars.length} 星・x・y のずれ ${xyOff}・z のずれ ${zOff}・高さの幅 ${(zMax - zMin).toFixed(1)}` : "flightStars が無い");
+  check(enteredMap && S >= 2 && stars?.length === layout?.stars.length && xyOff === 0 && zOff === 0 &&
+    JSON.stringify(heightsA) === JSON.stringify(heightsB) && zMax - zMin > 5 * S,
+  "飛行中の星の x・y・z は、地図の座標と高さを定数倍（空間を広げる）したものと一致し、同じデータなら毎回同じ",
+  stars ? `倍率 ${S}・${stars.length} 星・x・y のずれ ${xyOff}・z のずれ ${zOff}・高さの幅 ${(zMax - zMin).toFixed(1)}` : "flightStars が無い");
 
   // --- 4. 星に近づくと、画面上の星が大きくなる ---
   // 星団のいちばん外側の星を、星団の外から狙う（途中に他の星が入りにくい）
   const target = layout?.stars.filter((s) => s.cluster === layout.clusters[0].index).sort((p, q) => q.rank - p.rank)[0];
   const sizeAt = async (distance) => {
-    await teleport(target.id, distance);
+    await teleport(target.id, distance * S);
     await sleep(250);
     return tryEval(`${b}.starScreenSize(${JSON.stringify(target.id)})`);
   };
@@ -174,7 +205,7 @@ try {
 
   // --- 5. 窓：星団の中心の近くで、最大 6 個、_favicon のアイコン・タイトル・ドメイン ---
   const core = layout?.stars.filter((s) => s.cluster === layout.clusters[0].index).sort((p, q) => p.rank - q.rank)[0];
-  if (core) await teleport(core.id, 7);
+  if (core) await teleport(core.id, 4 * S);
   await sleep(600);
   await waitUntil(`[...document.querySelectorAll('.flight-window img')].every((img) => img.complete)`, 4000, 150);
   await sleep(300);
@@ -183,7 +214,10 @@ try {
     const list = [...document.querySelectorAll('.flight-window')].filter((el) => el.style.display !== 'none' && el.style.opacity !== '0');
     return { near, count: list.length, items: list.map((el) => {
       const img = el.querySelector('img');
+      const crest = el.querySelector('.flight-window-crest');
       return { icon: img?.getAttribute('src') ?? '', loaded: !!img && img.complete && img.naturalWidth > 0,
+        kind: el.dataset.icon ?? '', crest: !!crest && getComputedStyle(crest).display !== 'none' ? crest.textContent : '',
+        imgShown: !!img && getComputedStyle(img).display !== 'none',
         title: el.querySelector('.flight-window-title')?.textContent ?? '',
         domain: el.querySelector('.flight-window-domain')?.textContent ?? '' };
     }) };
@@ -192,6 +226,13 @@ try {
   check(windows && windows.count >= 1 && windows.count <= 6 && windows.near > 6 && goodWindows.length === windows.count,
     "近づいた星に窓が開く（最大 6 個、_favicon のアイコン・タイトル・ドメイン）",
     windows ? `範囲内の星 ${windows.near}・窓 ${windows.count} 個・アイコン読み込み済み ${goodWindows.length}` : "測れない");
+  // 新しいプロファイルではどのサイトのアイコンも未取得で、_favicon は既定の地球儀を返す。
+  // その窓は、地球儀ではなくドメインの頭文字の紋章を出す
+  const crests = (windows?.items ?? []).filter((w) => w.kind === 'crest' && w.crest && !w.imgShown &&
+    w.crest === (w.domain[0] ?? '').toUpperCase());
+  check(windows && windows.count > 0 && crests.length === windows.count,
+    "既定のアイコン（地球儀）だった窓には、ドメインの頭文字の紋章が出る",
+    windows ? `窓 ${windows.count} 個中 紋章 ${crests.length} 個（${(windows.items ?? []).map((w) => w.kind || '?').join(",")}）` : "測れない");
   if (windows?.count) {
     writeFileSync("docs/screens/flight-near.png", await screenshot());
     console.log("  画面: docs/screens/flight-near.png");
@@ -204,7 +245,7 @@ try {
   })()`);
   const targetUrl = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target?.id)})?.url ?? ''`);
   // 1 回目：星を正面に置いて W。開いたらすぐ離す（その後の押し戻しで止まる）
-  if (target) await teleport(target.id, 6);
+  if (target) await teleport(target.id, 6 * S);
   await key("keydown", "KeyW", "w");
   await waitUntil("window.__opened.length > 0", 4000, 50);
   await key("keyup", "KeyW", "w");
@@ -212,12 +253,12 @@ try {
   const firstOpen = await json("window.__opened");
   const afterPush = await flight();
   // 2 回目：同じ星へすぐにもう一度入る。数秒間は同じ星を開かない（奥の別の星に入るのは仕様どおり）
-  if (target) await teleport(target.id, 4);
+  if (target) await teleport(target.id, 4 * S);
   await press("KeyW", "w", 1300);
   await press("KeyS", "s", 1200);
   const secondOpen = await json("window.__opened");
   const sameAgain = (secondOpen ?? []).filter((url) => url === targetUrl).length;
-  check(firstOpen?.length === 1 && firstOpen[0] === targetUrl && sameAgain === 1 && (afterPush?.entryDistance ?? 0) > 2,
+  check(firstOpen?.length === 1 && firstOpen[0] === targetUrl && sameAgain === 1 && (afterPush?.entryDistance ?? 0) > 2 * S * 0.5,
     "星の芯に入ると新しいタブを開く処理がちょうど 1 回。押し戻され、同じ星に続けて入っても数秒は開かない",
     `1 回目 ${firstOpen?.length ?? "?"} 回（${firstOpen?.[0] === targetUrl ? "その星" : "別の星"}）・押し戻し後の距離 ${afterPush?.entryDistance?.toFixed?.(1) ?? "?"}・続けて入った後の同じ星 ${sameAgain} 回`);
   // 動いた後に出ると、宇宙船がいた場所の真上から見た地図に、入る前の拡大率で戻る
@@ -271,7 +312,7 @@ try {
     segments.some((seg) => Math.abs(seg.az - seg.bz) > 0.5),
   "保存済みの星座の線が、立体の位置で結ばれている", segments ? `${lifted.length}/${segments.length} 辺が星の高さで結ばれている` : "測れない");
   const member = await evalIn(`${b}.constellationState().rows[0]?.lastMembers[0] ?? null`);
-  if (member) await teleport(member, 26);
+  if (member) await teleport(member, 20 * S);
   await sleep(500);
   if (segments?.length) {
     writeFileSync("docs/screens/flight-constellation.png", await screenshot());

@@ -6,7 +6,10 @@
  * - アイコンは拡張機能の `_favicon`（`chrome-extension://…/_favicon/?pageUrl=…`）から得る。外部には取りに行かない。
  *   初めて窓を開くときに読み込み、読み込んだ要素は星ごとに使い回す。拡張機能の外（開発サーバー）ではドメインの頭文字で代える。
  */
-export const WINDOW_RADIUS = 9;
+import { FLIGHT_SCALE } from "../render/flight";
+
+/** 窓を開く距離（広げた空間の単位。地図の座標で 8 に当たる。星の間隔の約 4 つ分） */
+export const WINDOW_RADIUS = 8 * FLIGHT_SCALE;
 export const MAX_WINDOWS = 6;
 const DECIDE_SECONDS = 0.12;
 
