@@ -5,7 +5,8 @@ import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
 import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type EmphasisMode, type RenderStar } from "./stars";
-import { Flight } from "./flight";
+import { Flight, type FlightInput } from "./flight";
+import { createShip } from "./ship";
 import { flightHeights } from "../layout/lift";
 import { ConstellationLayer, type DrawnConstellation } from "./constellations";
 import type { ConstellationPoint } from "../constellation";
@@ -94,6 +95,9 @@ export class SpaceView {
   /** 飛行モード（SPEC 13 章）。入る前の検索は flightSearch に預け、出たら掛け直す */
   private readonly flight = new Flight();
   private readonly flightLook = new THREE.Vector3();
+  private readonly ship = createShip();
+  /** 飛行中のマウスの位置（画面中央からのずれ、-1〜1）。入った直後は 0（動かすまで機首は動かない） */
+  private readonly flightMouse = new THREE.Vector2();
   private flightSearch: string[] | null = null;
   private heights = new Map<string, number>();
   /** 飛行モードに入った・出たときに呼ばれる（画面の部品の出し分けは main が行う） */
@@ -228,6 +232,12 @@ export class SpaceView {
     this.labels.onClusterClick = (cluster) => this.focusCluster(cluster);
 
     addEventListener("resize", this.resize);
+    this.scene.add(this.ship.group);
+    window.addEventListener("mousemove", (event: MouseEvent) => {
+      if (!this.flight.active) return;
+      this.flightMouse.set(event.clientX / innerWidth * 2 - 1, event.clientY / innerHeight * 2 - 1);
+    });
+    document.addEventListener("mouseleave", () => this.flightMouse.set(0, 0));
     addEventListener("keydown", this.onKeyDown);
     addEventListener("keyup", this.onKeyUp);
     // ウィンドウからフォーカスが外れたら、押したままの状態をすべて解除する
@@ -470,7 +480,9 @@ export class SpaceView {
     this.constellationName?.classList.remove("is-visible");
     this.setFlightMaterial(true);
     const distance = this.camera.position.distanceTo(this.controls.target);
-    this.flight.enter(this.camera, this.controls.target.clone(), distance, 3);
+    this.flightMouse.set(0, 0);
+    this.flight.enter(this.camera, this.controls.target.clone(), distance, 3, this.extent);
+    this.ship.group.visible = true;
     this.onFlightChange?.(true);
     return true;
   }
@@ -489,6 +501,7 @@ export class SpaceView {
     this.setDistance(this.flight.returnDistance);
     this.controls.enabled = true;
     this.nebulae.object.visible = true;
+    this.ship.group.visible = false;
     this.constellations.setFlight(false);
     this.setFlightMaterial(false);
     const ids = this.flightSearch ?? [];
@@ -519,6 +532,11 @@ export class SpaceView {
       const p = this.field.position3(star.id);
       return p ? [{ id: star.id, ...p }] : [];
     });
+  }
+
+  /** 確認用：宇宙船を入った直後の位置と向きに戻す。 */
+  flightReset(): void {
+    this.flight.reset();
   }
 
   flightHeights(): { id: string; z: number }[] {
@@ -943,7 +961,19 @@ export class SpaceView {
 
   /** 飛行中の 1 コマ：宇宙船とカメラ、星の立ち上がり、星座の線。地図のラベルや操作は動かさない。 */
   private flightTick(dt: number): void {
-    const { finished } = this.flight.update(dt, this.camera, this.flightLook);
+    if (typing()) this.keys.clear();
+    const input: FlightInput = {
+      thrust: (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0),
+      turn: (this.keys.has("KeyA") ? 1 : 0) - (this.keys.has("KeyD") ? 1 : 0),
+      climb: (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") ? 1 : 0),
+      mouseX: this.flightMouse.x,
+      mouseY: this.flightMouse.y,
+    };
+    const { finished } = this.flight.update(dt, this.camera, this.flightLook, input);
+    const ship = this.flight.ship;
+    this.ship.group.position.copy(ship.position);
+    this.ship.group.rotation.set(ship.pitch, ship.yaw, 0);
+    this.ship.setThrust(this.flight.thrustLevel);
     this.field.setLift(this.flight.lift);
     this.field.update(dt);
     this.constellations.update(dt);

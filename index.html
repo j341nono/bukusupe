@@ -213,7 +213,20 @@
         font: inherit; font-size: 12px; letter-spacing: 0.16em;
       }
       #flight-toggle:hover { border-color: rgba(214, 205, 180, 0.6); }
-      #flight-help { display: none; }
+      /* 飛行中の操作の説明（初見で 10 秒以内に飛べるよう、飛んでいる間はずっと出しておく） */
+      #flight-help {
+        display: none; position: fixed; left: 50%; bottom: 18px; z-index: 5; transform: translateX(-50%);
+        padding: 9px 18px 8px; border: 1px solid var(--faint); border-radius: 8px;
+        background: rgba(7, 10, 24, 0.72); color: var(--ink); font-size: 12px; letter-spacing: 0.04em;
+        text-align: center; white-space: nowrap; pointer-events: none;
+      }
+      #flight-help span { margin: 0 9px; }
+      #flight-help p { margin: 5px 0 0; font-size: 11px; color: var(--dim); }
+      #flight-help kbd {
+        display: inline-block; min-width: 1.6em; margin: 0 2px; padding: 0 5px;
+        border: 1px solid var(--hairline); border-radius: 3px; font: inherit; font-size: 11px; line-height: 1.6;
+      }
+      body.is-flying #flight-help { display: block; }
       body.is-flying #flight-toggle { right: 20px; }
       /* 飛行中は地図の部品を隠す（入る前の状態は保ったまま。出たら戻る） */
       body.is-flying #search-box, body.is-flying #constellation-list, body.is-flying #constellation-manage,
@@ -383,7 +396,14 @@
     <div id="hud"></div>
     <button id="relayout" title="星団から並べ直す">再配置</button>
     <button id="flight-toggle" title="星の間を飛ぶ（F）">飛行</button>
-    <div id="flight-help" aria-live="polite"></div>
+    <div id="flight-help" aria-live="polite">
+      <span><kbd>W</kbd> 加速 <kbd>S</kbd> 減速</span>
+      <span><kbd>A</kbd><kbd>D</kbd> 旋回</span>
+      <span>マウス 機首の向き</span>
+      <span><kbd>Space</kbd> 上昇 <kbd>Shift</kbd> 下降</span>
+      <span><kbd>Esc</kbd> 地図へ戻る</span>
+      <p>星に近づくと名前が見え、星の芯に入るとそのページが開く</p>
+    </div>
     <div id="loading">星を数えている…</div>
     <div id="hint">ドラッグで移動・ホイールで拡大縮小　操作の一覧は ⓘ</div>
     <script type="module" src="/src/main.ts"></script>

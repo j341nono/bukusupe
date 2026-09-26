@@ -106,6 +106,39 @@ try {
     console.log("  画面: docs/screens/flight-overview.png");
   }
 
+  // --- 宇宙船と操作：W で前進、A で左旋回、Space で上昇・Shift で下降、旋回の速さに上限、操作の説明 ---
+  const ship0 = (await flight())?.ship;
+  await press("KeyW", "w", 900);
+  const ship1 = (await flight())?.ship;
+  const moved = ship0 && ship1 ? Math.hypot(ship1.x - ship0.x, ship1.y - ship0.y) : 0;
+  // 前進は機首の向き（yaw 0 なら地図の上＝+y）へ
+  const forwardOk = ship0 && ship1 && ship1.speed > 0 && moved > 0.5 && ship1.y - ship0.y > moved * 0.9;
+  await press("KeyS", "s", 1500);   // 止まるまで減速
+  await press("KeyA", "a", 700);
+  const ship2 = (await flight())?.ship;
+  await press("Space", " ", 600);
+  const ship3 = (await flight())?.ship;
+  await press("ShiftLeft", "Shift", 600);
+  const ship4 = (await flight())?.ship;
+  // 旋回の上限：マウスを右端に置いたまま D を押し続けても、1 秒あたりの旋回は上限を超えない
+  await evalIn("window.dispatchEvent(new MouseEvent('mousemove', { clientX: innerWidth - 1, clientY: innerHeight / 2 }))");
+  const yawA = (await flight())?.ship.yaw;
+  const tA = Date.now();
+  await press("KeyD", "d", 1000);
+  const yawB = (await flight())?.ship.yaw;
+  const turnRate = yawA != null && yawB != null ? Math.abs(yawB - yawA) / ((Date.now() - tA) / 1000) : NaN;
+  await evalIn("window.dispatchEvent(new MouseEvent('mousemove', { clientX: innerWidth / 2, clientY: innerHeight / 2 }))");
+  await sleep(600);
+  const help = await evalIn(`(() => { const el = document.getElementById('flight-help');
+    return el && getComputedStyle(el).display !== 'none' ? el.textContent : ''; })()`);
+  const helpOk = ["W", "S", "A", "D", "Space", "Shift", "Esc"].every((k) => help.includes(k)) && help.includes("マウス");
+  check(!!forwardOk && ship2 && ship2.yaw > ship1.yaw + 0.2 && ship3 && ship3.z > ship2.z + 0.3 && ship4 && ship4.z < ship3.z - 0.3 &&
+    turnRate > 0.3 && turnRate <= 1.5 && helpOk,
+  "宇宙船：W で前進、A で左旋回、Space で上昇・Shift で下降、旋回の速さに上限、操作の説明が出ている",
+  ship1 ? `前進 ${moved.toFixed(1)}・旋回 ${(ship2?.yaw - ship1.yaw).toFixed(2)} rad・上昇 ${(ship3?.z - ship2?.z).toFixed(1)}・下降 ${(ship4?.z - ship3?.z).toFixed(1)}・旋回の速さ ${turnRate.toFixed(2)} rad/秒・説明 ${helpOk ? "あり" : "なし"}` : "測れない");
+  // 位置を入った直後に戻す（以降の確認が入った直後の配置を前提にするため）
+  await tryEval(`${b}.flightReset?.()`);
+
   // --- 3. 飛行中も x・y は地図の座標と一致し、z は同じデータなら毎回同じ ---
   const stars = await json(`${b}.flightStars?.() ?? null`);
   const layout = await json(`${b}.layout()`);
