@@ -75,7 +75,7 @@ npm install
 npm run dev        # http://localhost:5173 で画面を確認（サンプルデータ）
 npm run build      # dist/ を生成
 npm run typecheck  # tsc --noEmit
-npm run check:ext    # dist/ を実際の Chrome に読み込み、通しで自動確認（既存 94 項目＋飛行 15 項目。15 分ほど）
+npm run check:ext    # dist/ を実際の Chrome に読み込み、通しで自動確認（既存 94 項目＋飛行 21 項目。15 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 ```
 

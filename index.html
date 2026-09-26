@@ -227,6 +227,15 @@
         border: 1px solid var(--hairline); border-radius: 3px; font: inherit; font-size: 11px; line-height: 1.6;
       }
       body.is-flying #flight-help { display: block; }
+      #flight-help { transition: opacity 0.9s ease; }
+      /* 入って約 10 秒後：左下の小さな 1 行に。窓や星に重ならないように */
+      #flight-help.is-compact {
+        left: 16px; bottom: 14px; transform: none; padding: 4px 10px; font-size: 10.5px; opacity: 0.5;
+        border-color: transparent; background: rgba(7, 10, 24, 0.45);
+      }
+      #flight-help.is-compact span { margin: 0 5px; }
+      #flight-help.is-compact kbd { font-size: 9.5px; line-height: 1.4; padding: 0 3px; }
+      #flight-help.is-compact p { display: none; }
       /* 近づいた星の窓：アイコン・タイトル・ドメイン（位置は毎コマ transform で動かす） */
       #flight-windows { position: fixed; inset: 0; pointer-events: none; overflow: hidden; display: none; }
       /* 飛行中の星団名：遠くからも標識のように。明朝・広い字間（近づくと薄くなる） */

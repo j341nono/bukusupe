@@ -347,6 +347,22 @@ try {
   await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
   await sleep(800);
 
+  // --- 操作の説明：入ってすぐは大きく、約 10 秒で薄く小さくなり、左下へ寄る（窓や星に重ならないように） ---
+  await key("keydown", "KeyF", "f");
+  await waitFlight(true);
+  const helpAt = () => json(`(() => { const el = document.getElementById('flight-help'); const r = el.getBoundingClientRect();
+    return { w: r.width, h: r.height, left: r.left, bottom: r.bottom, opacity: Number(getComputedStyle(el).opacity) }; })()`);
+  const helpFirst = await helpAt();
+  await sleep(11_000);
+  const helpLater = await helpAt();
+  check(helpFirst && helpLater && helpFirst.h >= 40 && helpLater.h < 40 && helpLater.opacity <= 0.6 &&
+    helpLater.left < 80 && helpLater.bottom > 700 - 80,
+  "操作の説明は、入って約 10 秒で薄く小さくなり、左下へ寄る",
+  helpFirst && helpLater ? `高さ ${helpFirst.h.toFixed(0)}→${helpLater.h.toFixed(0)}px・不透明度 ${helpFirst.opacity}→${helpLater.opacity}・左 ${helpLater.left.toFixed(0)}px` : "測れない");
+  await key("keydown", "Escape", "Escape");
+  await waitFlight(false);
+  await sleep(800);
+
   // --- 8. 2000 件で、飛行中も 60 コマ/秒 ---
   await evalIn(`(async () => { await ${b}.benchmark(2000); })()`);
   await sleep(1000);

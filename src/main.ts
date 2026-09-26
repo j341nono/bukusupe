@@ -597,8 +597,14 @@ function setupFlight(): void {
   const leave = () => { view?.exitFlight(); };
   // 星の芯に入ったら、そのページを新しいタブで開く（突入の演出の後。SpaceView が押し戻しと反応しない時間を持つ）
   view!.onEnterStar = (id) => openBookmark(id);
+  // 操作の説明は、入ってすぐは大きく出し、約 10 秒で薄く小さくして左下へ寄せる（窓や星に重ならないように）
+  const help = document.getElementById("flight-help");
+  let helpTimer: number | undefined;
   view!.onFlightChange = (active) => {
     document.body.classList.toggle("is-flying", active);
+    clearTimeout(helpTimer);
+    help?.classList.remove("is-compact");
+    if (active) helpTimer = window.setTimeout(() => help?.classList.add("is-compact"), 10_000);
     if (button) {
       button.textContent = active ? "地図へ戻る" : "飛行";
       button.title = active ? "地図へ戻る（Esc）" : "星の間を飛ぶ（F）";
