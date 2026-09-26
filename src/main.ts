@@ -18,7 +18,7 @@ import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticS
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
 import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
-import { renderHud, renderHudMessage, setupHudControls } from "./ui/hud";
+import { renderHud, renderHudMessage, settleHud, setupHudControls } from "./ui/hud";
 import type { ZoomTier } from "./ui/labels";
 
 const META_MEAN = "mean-vector";
@@ -166,6 +166,7 @@ async function placeStars(): Promise<void> {
     status: `${layout.clusters.filter((c) => c.count > 0).length} つの星団`,
     phase: "ready",
   });
+  settleHud();
 }
 
 /** 全部まとめて計算し直す（「再配置」）。平均ベクトルも取り直す。 */
@@ -352,20 +353,30 @@ async function toggleConstellation(id: string): Promise<void> {
   view?.focusPoints(pointsFor(state.layout, row.lastMembers));
 }
 
+/** 名前の変更・削除の操作。一覧を作り直しても同じ要素を使い回す（一覧の中へ移すため）。 */
+let manageBar: HTMLElement | null = null;
+
 function renderConstellationList(): void {
   const list = document.getElementById("constellation-list");
   if (!list) return;
+  manageBar ??= document.getElementById("constellation-manage");
   document.body.classList.toggle("has-constellations", constellations.length > 0);
   list.replaceChildren();
+  let active: HTMLElement | null = null;
   for (const row of constellations) {
     const button = document.createElement("button");
     button.textContent = row.name;
     button.classList.toggle("is-active", row.id === activeConstellationId);
     button.addEventListener("click", () => void toggleConstellation(row.id));
     list.append(button);
+    if (row.id === activeConstellationId) active = button;
   }
-  const manage = document.getElementById("constellation-manage");
-  if (manage) manage.hidden = !activeConstellationId || savingAnimation;
+  if (manageBar) {
+    manageBar.hidden = !activeConstellationId || savingAnimation;
+    // 選んでいる星座のすぐ横に、小さな文字リンクとして置く
+    if (active) active.after(manageBar);
+    else list.append(manageBar);
+  }
 }
 
 function setupConstellations(): void {
