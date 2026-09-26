@@ -29,6 +29,52 @@ export function faviconUrl(pageUrl: string, size = 32): string | null {
   return url.toString();
 }
 
+/**
+ * 既定のアイコン（地球儀）の見分け方：確実に訪れていない架空の URL（予約された .invalid ドメイン）で `_favicon` を一度呼び、
+ * その画素を控える。窓のアイコンを読み込んだら同じ大きさで画素を比べ、同じなら「サイトのアイコンが無い」とみなす。
+ * 外部のアイコン取得サービスは使わない。
+ */
+const UNVISITED_PAGE = "https://bukusupe-unvisited-page.invalid/";
+const ICON_SIZE = 32;
+let defaultSignature: Promise<string | null> | null = null;
+
+function iconSignature(img: HTMLImageElement): string | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = ICON_SIZE;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, ICON_SIZE, ICON_SIZE);
+  const data = ctx.getImageData(0, 0, ICON_SIZE, ICON_SIZE).data;
+  // 画素そのものを比べる代わりに、短い要約（FNV-1a）にする
+  let h = 0x811c9dc5;
+  for (let i = 0; i < data.length; i++) h = Math.imul(h ^ data[i], 0x01000193) >>> 0;
+  return `${h.toString(16)}:${data.length}`;
+}
+
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function defaultIcon(): Promise<string | null> {
+  if (!defaultSignature) {
+    const src = faviconUrl(UNVISITED_PAGE, ICON_SIZE);
+    defaultSignature = src ? loadImage(src).then((img) => (img ? iconSignature(img) : null)) : Promise.resolve(null);
+  }
+  return defaultSignature;
+}
+
+/** ドメインから決めた淡い色合い（彩度・明度は控えめで一定。色相だけが変わる） */
+export function crestColor(domain: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < domain.length; i++) h = Math.imul(h ^ domain.charCodeAt(i), 0x01000193) >>> 0;
+  return `hsl(${h % 360}, 24%, 76%)`;
+}
+
 export class FlightWindows {
   private readonly entries = new Map<string, Entry>();
   private shown: string[] = [];
@@ -101,21 +147,40 @@ export class FlightWindows {
     const el = document.createElement("div");
     el.className = "flight-window";
     el.dataset.key = star.id;
-    const icon = faviconUrl(star.url);
+    const icon = faviconUrl(star.url, ICON_SIZE);
     const domain = domainOf(star.url);
+    // 頭文字の紋章：ドメインから決めた淡い色合いの小さな円。既定のアイコンだったときに出す
+    const crest = document.createElement("span");
+    crest.className = "flight-window-crest";
+    crest.textContent = (domain[0] ?? "?").toUpperCase();
+    crest.style.background = crestColor(domain);
+    const useCrest = () => {
+      el.dataset.icon = "crest";
+      crest.style.display = "";
+      const img = el.querySelector("img");
+      if (img) img.style.display = "none";
+    };
     if (icon) {
       const img = document.createElement("img");
       img.alt = "";
       img.width = 16;
       img.height = 16;
-      img.decoding = "async";
+      img.style.display = "none";   // 既定のアイコンかどうか分かるまで出さない（地球儀が一瞬見えないように）
+      crest.style.display = "none";
+      img.onload = async () => {
+        const [mine, fallback] = [iconSignature(img), await defaultIcon()];
+        if (mine && fallback && mine === fallback) useCrest();
+        else {
+          el.dataset.icon = "favicon";
+          img.style.display = "";
+        }
+      };
+      img.onerror = useCrest;
       img.src = icon;
-      el.appendChild(img);
+      el.append(img, crest);
     } else {
-      const glyph = document.createElement("span");
-      glyph.className = "flight-window-glyph";
-      glyph.textContent = (domain[0] ?? "?").toUpperCase();
-      el.appendChild(glyph);
+      el.append(crest);   // 拡張機能の外（開発サーバー）では _favicon が無い
+      useCrest();
     }
     const text = document.createElement("div");
     const title = document.createElement("div");
