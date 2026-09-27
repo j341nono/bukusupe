@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { AppearanceFn, RenderStar } from "./stars";
+import { getToday } from "../today";
 
 /**
  * 星の見え方を「最後に触れた日」で決める（段階 2 の一部を先に。`StarField.setAppearance()` で差し込む）。
@@ -17,16 +18,16 @@ const RECENT = new THREE.Color().setHSL(0.6, 0.42, 0.88);   // 青白
 const MIDDLE = new THREE.Color().setHSL(0.12, 0.1, 0.86);   // 生成り（分からないときもこれ）
 const OLD = new THREE.Color().setHSL(0.075, 0.45, 0.7);     // 淡い橙
 
-/** ページを開いた時点を「いま」とする（開いている間に見え方が揺れないように） */
-const OPENED_AT = Date.now();
-
 export function lastTouched(item: { dateLastUsed?: number; dateAdded?: number }): number | undefined {
   const t = Math.max(item.dateLastUsed ?? 0, item.dateAdded ?? 0);
   return t > 0 ? t : undefined;
 }
 
-/** 新しさ（1：いま触れた 〜 0：約 2 年以上前）。分からないときは 0.5。日数の対数で測る（最近の差を細かく）。 */
-export function recency(touched: number | undefined, now = OPENED_AT): number {
+/**
+ * 新しさ（1：いま触れた 〜 0：約 2 年以上前）。分からないときは 0.5。日数の対数で測る（最近の差を細かく）。
+ * 「いま」は基準の今日（`src/today.ts`。ふつうはページを開いた時点、サンプルでは基準日）。
+ */
+export function recency(touched: number | undefined, now = getToday()): number {
   if (touched == null) return 0.5;
   const days = Math.max(0, (now - touched) / DAY);
   return 1 - Math.min(1, Math.log(days + 1) / Math.log(COLDEST_DAYS + 1));

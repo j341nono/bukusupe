@@ -59,6 +59,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-fresh.mjs      # git の index の dist/ を、まっさらなプロファイルで初回起動
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
 │   ├── check-idle.mjs       # 動きがあるときだけ描く（止まる・すぐ再開する・止まった画面が正しい）
+│   ├── check-today.mjs      # 星の新しさの「今日」（サンプルは基準日に固定、自分のブックマークは実際の今日）
 │   ├── precompute-sample.mjs  # Web のデモに同梱する計算済みのサンプルを作る
 │   ├── gen-notices.mjs      # THIRD_PARTY_NOTICES を作る
 │   ├── bench/               # 時間とメモリの測定（npm run bench → docs/bench/results/、npm run bench:report → docs/BENCHMARK.md）
@@ -88,7 +89,7 @@ npm run dev        # http://localhost:5173 で画面を確認（サンプルデ�
 npm run build      # dist/ を生成
 npm run typecheck  # tsc --noEmit
 npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
-npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → Web のデモ。20 分ほど）
+npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → Web のデモ。20 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 npm run check:web    # Web のデモの確認だけ
 npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す

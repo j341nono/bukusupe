@@ -1,4 +1,5 @@
-import { loadBookmarks, setPreferSample, type BookmarkItem, type BookmarkSourceKind } from "./bookmarks";
+import { SAMPLE_TODAY, loadBookmarks, setPreferSample, type BookmarkItem, type BookmarkSourceKind } from "./bookmarks";
+import { setToday } from "./today";
 import { MODEL_ID, WorkerEmbedder, type Embedder } from "./embed/embedder";
 import { decodeSampleCache, encodeSampleCache, type SampleCacheFile } from "./data/sample-cache";
 import { ensureEmbeddings } from "./embed/ensure";
@@ -140,6 +141,8 @@ async function main(): Promise<void> {
   mark("bookmarks");
   state.kind = snapshot.kind;
   state.items = snapshot.items;
+  // 星の新しさを測る「今日」：サンプル（Web のデモを含む）は基準日に固定、自分のブックマークは実際の今日（ページを開いた時点）
+  setToday(state.kind === "sample" ? SAMPLE_TODAY : Date.now());
   // サンプル⇄自分のブックマーク（ⓘ のパネル）。自分のブックマークが 1 件も無ければ、戻る先が無いので出さない
   setSourceSwitch(state.kind === "chrome" ? "sample" : snapshot.chromeCount > 0 ? "chrome" : null, switchSource);
   // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）

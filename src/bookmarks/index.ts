@@ -54,4 +54,5 @@ async function loadBenchBookmarks(): Promise<(BookmarkSnapshot & { chromeCount: 
   return Array.isArray(items) ? { kind: "sample", items, chromeCount: 0, bench } : null;
 }
 
+export { SAMPLE_TODAY } from "./sample-source";
 export * from "./types";

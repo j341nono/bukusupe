@@ -1,10 +1,11 @@
 import type { BookmarkItem } from "../bookmarks/types";
+import { getToday } from "../today";
 
 /**
  * 星の明るさ＝最近使ったか（SPEC 7 章）。
  * dateLastUsed が無いときは中間の明るさにし、「未使用」と断定しない。
  */
-export function brightnessOf(item: BookmarkItem, now = Date.now()): number {
+export function brightnessOf(item: BookmarkItem, now = getToday()): number {
   if (!item.dateLastUsed) return 0.55;
   const days = (now - item.dateLastUsed) / 86400000;
   if (days <= 7) return 1;
