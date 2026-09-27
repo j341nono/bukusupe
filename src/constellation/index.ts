@@ -13,6 +13,40 @@ export type Constellation = {
   createdAt: number;
 };
 
+/** 星座の名前・検索語の長さの上限と、メンバーの数の上限（これを超えるものは壊れた値とみなす） */
+const NAME_MAX = 200;
+const QUERY_MAX = 500;
+const MEMBERS_MAX = 10_000;
+
+const isStringList = (v: unknown, max = MEMBERS_MAX): v is string[] =>
+  Array.isArray(v) && v.length <= max && v.every((x) => typeof x === "string" && x.length > 0 && x.length <= 256);
+
+/**
+ * 外から来た値（IndexedDB から読んだ行、段階 5 のバックアップの読み込み）を、星座 1 つとして確かめる。合わなければ null。
+ * 判定はここ 1 か所にまとめる（docs/SECURITY.md）。
+ */
+export function parseConstellation(value: unknown): Constellation | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.id !== "string" || row.id.length === 0 || row.id.length > 256) return null;
+  if (typeof row.name !== "string" || row.name.length === 0 || row.name.length > NAME_MAX) return null;
+  if (row.source !== "search" && row.source !== "folder") return null;
+  if (!isStringList(row.pinned) || !isStringList(row.excluded) || !isStringList(row.lastMembers)) return null;
+  if (typeof row.createdAt !== "number" || !Number.isFinite(row.createdAt)) return null;
+  if (row.query !== undefined && (typeof row.query !== "string" || row.query.length > QUERY_MAX)) return null;
+  if (row.folderId !== undefined && typeof row.folderId !== "string") return null;
+  const vector = row.queryVector;
+  if (vector !== undefined && (!Array.isArray(vector) || vector.length > 4096 ||
+    !vector.every((x) => typeof x === "number" && Number.isFinite(x)))) return null;
+  return {
+    id: row.id, name: row.name, source: row.source, pinned: row.pinned, excluded: row.excluded, lastMembers: row.lastMembers,
+    createdAt: row.createdAt,
+    ...(row.query !== undefined ? { query: row.query as string } : {}),
+    ...(vector !== undefined ? { queryVector: vector as number[] } : {}),
+    ...(row.folderId !== undefined ? { folderId: row.folderId as string } : {}),
+  };
+}
+
 export type ConstellationPoint = { id: string; x: number; y: number };
 export type ConstellationEdge = { a: string; b: string };
 

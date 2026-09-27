@@ -15,7 +15,7 @@ import {
 } from "./layout";
 import { provisionalLayout } from "./layout/provisional";
 import { clusterNames } from "./layout/names";
-import { membersFor, minimumSpanningTree, pointsFor, type Constellation } from "./constellation";
+import { membersFor, minimumSpanningTree, parseConstellation, pointsFor, type Constellation } from "./constellation";
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView } from "./render/scene";
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     await placeStars();
   }
   mark("ready");
-  constellations = await readConstellations<Constellation>();
+  constellations = await loadConstellations();
   await reconcileConstellations();
   refreshConstellations();
   setupSearch(canvas);
@@ -403,6 +403,16 @@ function refreshConstellations(): void {
   renderConstellationList();
 }
 
+/** 保存した星座を読む。形の合わない行は読み飛ばし（コンソールに警告を残す）、残りで起動する */
+async function loadConstellations(): Promise<Constellation[]> {
+  const rows = await readConstellations<unknown>();
+  const valid = rows.map(parseConstellation).filter((row): row is Constellation => row !== null);
+  if (valid.length < rows.length) {
+    console.warn(`[ブクスペ] 形の合わない星座の行を ${rows.length - valid.length} 件読み飛ばした`);
+  }
+  return valid;
+}
+
 async function reconcileConstellations(): Promise<void> {
   const alive = new Set(state.items.map((item) => item.id));
   for (const row of constellations) {
@@ -455,7 +465,8 @@ function cancelConstellation(): void {
 
 async function saveConstellation(): Promise<void> {
   if (!editing) return;
-  const name = (document.getElementById("constellation-name-input") as HTMLInputElement).value.trim() || editing.query;
+  // 名前は入力欄と同じ 80 文字まで（読み込むときの確かめ parseConstellation の上限に収める）
+  const name = ((document.getElementById("constellation-name-input") as HTMLInputElement).value.trim() || editing.query).slice(0, 80);
   const members = currentEditMembers().filter((id) => state.items.some((item) => item.id === id));
   const queryVector = embedder && modelReady ? Array.from((await embedder.embed([queryText(editing.query)]))[0]) : undefined;
   const row: Constellation = {
@@ -590,7 +601,7 @@ function setupConstellations(): void {
     closeConstellationMenu();
     const row = constellations.find((item) => item.id === activeConstellationId);
     if (!row) return;
-    const name = window.prompt("星座の名前", row.name)?.trim();
+    const name = window.prompt("星座の名前", row.name)?.trim().slice(0, 80);
     if (!name) return;
     row.name = name;
     await writeConstellation(row);
