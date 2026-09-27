@@ -416,7 +416,7 @@ try {
   check(segments && segments.length > 0 && lifted.length === segments.length &&
     segments.some((seg) => Math.abs(seg.az - seg.bz) > 0.5),
   "保存済みの星座の線が、立体の位置で結ばれている", segments ? `${lifted.length}/${segments.length} 辺が星の高さで結ばれている` : "測れない");
-  const member = await evalIn(`${b}.constellationState().rows[0]?.lastMembers[0] ?? null`);
+  const member = await evalIn(`${b}.constellationState().rows[0]?.members[0] ?? null`);
   if (member) await teleport(member, 20 * S);
   await sleep(500);
   if (segments?.length) {

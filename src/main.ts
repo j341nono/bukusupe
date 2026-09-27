@@ -15,7 +15,10 @@ import {
 } from "./layout";
 import { provisionalLayout } from "./layout/provisional";
 import { clusterNames } from "./layout/names";
-import { membersFor, minimumSpanningTree, parseConstellation, pointsFor, type Constellation } from "./constellation";
+import {
+  CONSTELLATION_FORMAT, membersFor, migrateConstellation, migratedMembers, minimumSpanningTree, parseConstellation,
+  parseLegacyConstellation, pointsFor, type Constellation, type LegacyConstellation,
+} from "./constellation";
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
 import { SpaceView, viewDebug } from "./render/scene";
@@ -75,6 +78,8 @@ const WEB = __WEB__;
 let embedder: Embedder | null = null;
 /** 意味の検索に使えるか。Web のデモでは、裏で読み込んでいるモデルが揃うまで文字一致の検索だけにする */
 let modelReady = !WEB;
+/** Web のデモで、モデルを読み込めなかった（文字一致の検索だけで動く） */
+let modelFailed = false;
 let view: SpaceView | null = null;
 let hits: SearchHit[] = [];
 let selectedIndex = 0;
@@ -82,6 +87,11 @@ let searchTimer: number | undefined;
 let searchGeneration = 0;
 let cardId: string | null = null;
 let constellations: Constellation[] = [];
+/**
+ * 旧形式から、まだ移していない星座（id → 旧形式の行）。移すまでは、前回の呼び出しの形（lastMembers）を仮のメンバーにして描く。
+ * 移行には「今呼び出したら表示されるメンバー」が要るので、検索が本来の形で使えるようになってから移す（Web のデモはモデルを読み込み終えてから）。
+ */
+const pendingMigration = new Map<string, LegacyConstellation>();
 let activeConstellationId: string | null = null;
 let editing: { query: string; automatic: string[]; pinned: Set<string>; excluded: Set<string> } | null = null;
 let savingAnimation = false;
@@ -162,6 +172,7 @@ async function main(): Promise<void> {
   }
   mark("ready");
   constellations = await loadConstellations();
+  await migrateConstellations();
   await reconcileConstellations();
   refreshConstellations();
   setupSearch(canvas);
@@ -212,12 +223,15 @@ function loadModelInBackground(): void {
     view?.wake();
     modelReady = true;
     document.body.dataset.model = "ready";
+    void migrateConstellations();
     if (status) status.hidden = true;
     const input = document.getElementById("search-input") as HTMLInputElement | null;
     if (input?.value.trim()) input.dispatchEvent(new Event("input"));
   }).catch((err) => {
     console.error("[ブクスペ] モデルを読み込めなかった", err);
     document.body.dataset.model = "error";
+    modelFailed = true;
+    void migrateConstellations();
     if (status) status.textContent = "意味の検索を準備できなかった（文字の一致で探す）";
   });
 }
@@ -400,28 +414,83 @@ function show(layout: Layout, frame = true): void {
 
 function refreshConstellations(): void {
   view?.setConstellations(constellations.map((row) => ({ id: row.id, name: row.name,
-    points: pointsFor(state.layout, row.lastMembers) })));
+    points: pointsFor(state.layout, row.members) })));
   if (editing) view?.setEditMembers(pointsFor(state.layout, currentEditMembers()));
   renderConstellationList();
 }
 
-/** 保存した星座を読む。形の合わない行は読み飛ばし（コンソールに警告を残す）、残りで起動する */
+/**
+ * 保存した星座を読む。形の合わない行は読み飛ばし（コンソールに警告を残す）、残りで起動する。
+ * 旧形式の行は、仮の形（前回の呼び出しのメンバー）で並べ、pendingMigration に入れる（migrateConstellations が移す）。
+ */
 async function loadConstellations(): Promise<Constellation[]> {
   const rows = await readConstellations<unknown>();
-  const valid = rows.map(parseConstellation).filter((row): row is Constellation => row !== null);
+  const valid: Constellation[] = [];
+  for (const raw of rows) {
+    const row = parseConstellation(raw);
+    if (row) { valid.push(row); continue; }
+    const legacy = parseLegacyConstellation(raw);
+    if (!legacy) continue;
+    pendingMigration.set(legacy.id, legacy);
+    valid.push(migrateConstellation(legacy, legacy.lastMembers, legacy.createdAt));
+  }
   if (valid.length < rows.length) {
     console.warn(`[ブクスペ] 形の合わない星座の行を ${rows.length - valid.length} 件読み飛ばした`);
   }
   return valid;
 }
 
+/** 検索が本来の形で使えるか（拡張機能では常に。Web のデモはモデルを読み込み終えたか、読み込めないと分かったら） */
+const searchSettled = (): boolean => !WEB || modelReady || modelFailed;
+
+/** 検索語で今検索して、引き寄せた上位（最大 12、検索中の引き寄せと同じ基準）の id。星座を作るときの自動の候補と同じ */
+async function attractedFor(query: string): Promise<string[]> {
+  const ranked = await searchResults(query);
+  const threshold = (ranked[0]?.score ?? 0) * ATTRACT_RATIO;
+  return ranked.filter((hit) => hit.score >= threshold).slice(0, 12).map((hit) => hit.id);
+}
+
+/**
+ * 旧形式の星座を新しい形へ移し、保存し直す（SPEC 9 章「旧形式からの移行」）。メンバーは、移す直前に呼び出したら表示されたもの
+ * ＝ pinned ∪（今の検索の上位 12 − excluded）から、今あるブックマークだけ。これで利用者が見ていた星座の形は変わらない。
+ */
+let migrating: Promise<void> | null = null;
+function migrateConstellations(): Promise<void> {
+  // 起動の途中とモデルの読み込み終わりから同時に呼ばれても、一度だけ移す
+  migrating ??= migrateNow().finally(() => { migrating = null; });
+  return migrating;
+}
+
+async function migrateNow(): Promise<void> {
+  if (!pendingMigration.size || !searchSettled()) return;
+  const alive = new Set(state.items.map((item) => item.id));
+  const now = Date.now();
+  for (const legacy of [...pendingMigration.values()]) {
+    const automatic = legacy.query ? await attractedFor(legacy.query) : [];
+    const row = migrateConstellation(legacy, migratedMembers(legacy, automatic, alive), now);
+    await writeConstellation(row);
+    pendingMigration.delete(legacy.id);
+    const index = constellations.findIndex((item) => item.id === row.id);
+    if (index >= 0) constellations[index] = row;
+  }
+  refreshConstellations();
+  if (activeConstellationId) {
+    const active = constellations.find((row) => row.id === activeConstellationId);
+    if (active) view?.focusPoints(pointsFor(state.layout, active.members));
+  }
+}
+
+/** 削除されたブックマークを、メンバーと見送った新星から除く。メンバーが変われば線も結び直される（SPEC 9 章） */
 async function reconcileConstellations(): Promise<void> {
   const alive = new Set(state.items.map((item) => item.id));
   for (const row of constellations) {
-    const members = row.lastMembers.filter((id) => alive.has(id));
-    if (members.length === row.lastMembers.length) continue;
-    row.lastMembers = members;
-    await writeConstellation(row);
+    const members = row.members.filter((id) => alive.has(id));
+    const dismissed = row.dismissed.filter((id) => alive.has(id));
+    if (members.length === row.members.length && dismissed.length === row.dismissed.length) continue;
+    row.members = members;
+    row.dismissed = dismissed;
+    // まだ移していない旧形式の行は、移すときに保存する（ここで書くと、仮の形で上書きしてしまう）
+    if (!pendingMigration.has(row.id)) await writeConstellation(row);
   }
   refreshConstellations();
 }
@@ -469,14 +538,9 @@ async function saveConstellation(): Promise<void> {
   if (!editing) return;
   // 名前は入力欄と同じ 80 文字まで（読み込むときの確かめ parseConstellation の上限に収める）
   const name = ((document.getElementById("constellation-name-input") as HTMLInputElement).value.trim() || editing.query).slice(0, 80);
-  const members = currentEditMembers().filter((id) => state.items.some((item) => item.id === id));
-  const queryVector = embedder && modelReady ? Array.from((await embedder.embed([queryText(editing.query)]))[0]) : undefined;
-  const row: Constellation = {
-    id: crypto.randomUUID(), name, source: "search", query: editing.query, queryVector,
-    pinned: [...editing.pinned], excluded: [...editing.excluded], lastMembers: members, createdAt: Date.now(),
-  };
-  await writeConstellation(row);
-  constellations.push(row);
+  const query = editing.query;
+  const members = currentEditMembers();
+  const queryVector = embedder && modelReady ? Array.from((await embedder.embed([queryText(query)]))[0]) : undefined;
   cancelConstellation();
   ++searchGeneration;
   clearTimeout(searchTimer);
@@ -485,6 +549,28 @@ async function saveConstellation(): Promise<void> {
   input.blur();
   (document.getElementById("constellation-create") as HTMLElement).hidden = true;
   hits = [];
+  await createConstellation(name, members, query !== undefined ? { query, queryVector } : undefined);
+}
+
+/**
+ * 星座を作って保存し、保存の演出をする（SPEC 9 章）。メンバーはこの時点で固定する。
+ * search は、検索から作ったときの検索語とその埋め込み（記録）。無ければ検索語を持たない星座（選択モードで作るもの）。
+ */
+async function createConstellation(name: string, ids: string[],
+  search?: { query: string; queryVector?: number[] }): Promise<Constellation | null> {
+  const alive = new Set(state.items.map((item) => item.id));
+  const members = [...new Set(ids)].filter((id) => alive.has(id));
+  const trimmed = name.trim().slice(0, 80);
+  if (!members.length || !trimmed || savingAnimation) return null;
+  const now = Date.now();
+  const row: Constellation = {
+    format: CONSTELLATION_FORMAT, id: crypto.randomUUID(), name: trimmed, source: search ? "search" : "selection",
+    members, dismissed: [], savedAt: now, createdAt: now,
+    ...(search ? { query: search.query } : {}),
+    ...(search?.queryVector ? { queryVector: search.queryVector } : {}),
+  };
+  await writeConstellation(row);
+  constellations.push(row);
   activeConstellationId = row.id;
   savingAnimation = true;
   refreshConstellations();
@@ -504,14 +590,18 @@ async function saveConstellation(): Promise<void> {
     } else requestAnimationFrame(finish);
   };
   requestAnimationFrame(finish);
+  return row;
 }
 
-/** 星座の選択の世代。検索し直している間に別の星座が選ばれたら、古い方の結果は捨てる。 */
+/** 星座の選択の世代。素早く続けて選ばれたときは、最後に選ばれたものだけを有効にする。 */
 let recallGeneration = 0;
 
+/**
+ * 星座を選ぶ（もう一度選ぶと解く）。保存したメンバーをそのまま表示し、最小全域木で結ぶ。検索はし直さない（SPEC 9 章）。
+ */
 async function toggleConstellation(id: string): Promise<void> {
   if (savingAnimation) return;
-  const generation = ++recallGeneration;
+  ++recallGeneration;
   if (activeConstellationId === id) {
     activeConstellationId = null;
     view?.selectConstellation(null);
@@ -520,19 +610,10 @@ async function toggleConstellation(id: string): Promise<void> {
   }
   const row = constellations.find((item) => item.id === id);
   if (!row) return;
-  const ranked = row.query ? await searchResults(row.query) : [];
-  // 素早く続けて選ばれたときは、最後に選ばれたものだけを有効にする
-  if (generation !== recallGeneration) return;
-  const threshold = (ranked[0]?.score ?? 0) * ATTRACT_RATIO;
-  const automatic = ranked.filter((hit) => hit.score >= threshold).slice(0, 12).map((hit) => hit.id);
-  const alive = new Set(state.items.map((item) => item.id));
-  row.lastMembers = membersFor(automatic, row.pinned, row.excluded).filter((itemId) => alive.has(itemId));
-  await writeConstellation(row);
-  if (generation !== recallGeneration) return;
   activeConstellationId = id;
   refreshConstellations();
   view?.selectConstellation(id, row.name);
-  view?.focusPoints(pointsFor(state.layout, row.lastMembers));
+  view?.focusPoints(pointsFor(state.layout, row.members));
 }
 
 /**
@@ -1045,6 +1126,8 @@ if (__DEBUG__) {
     /** 確認用：星団へ寄る（1,000 文字のタイトルのラベルを近距離で見るため） */
     focusCluster: (index: number) => view?.focusCluster(index),
     recallConstellation: toggleConstellation,
+    /** 確認用：検索語を持たない星座を作る（選択モードで作るものと同じ形） */
+    createConstellation: (name: string, ids: string[]) => createConstellation(name, ids),
     mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
     /** Web のデモに同梱する計算済みのサンプル（`npm run sample:precompute` が使う） */
     exportSampleCache: () => (state.kind === "sample" && state.layout && state.mean ? encodeSampleCache(state.items, MODEL_ID,

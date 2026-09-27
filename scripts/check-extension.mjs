@@ -1006,14 +1006,14 @@ try {
   const savedLines = savedConstellation.geometry.find((row) => row.id === constellationId);
   check(savedConstellation.active === null && savedRow?.name === "わたしの宇宙" &&
     savedRow.queryVector?.length === 384 && savedLines?.opacity === 0.15 &&
-    savedLines?.members.length === savedRow.lastMembers.length,
+    savedLines?.members.length === savedRow.members.length,
   "保存後は通常の夜空で星座の線が15%になる");
   {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
     writeFileSync("docs/screens/constellation-saved.png", Buffer.from(shot.data, "base64"));
     console.log("  画面: docs/screens/constellation-saved.png");
   }
-  const ids = savedRow.lastMembers;
+  const ids = savedRow.members;
   const mstA = JSON.parse((await evalIn(`JSON.stringify(globalThis.__bukusupe.mstFor(${JSON.stringify(ids)}))`)) ?? "[]");
   const byId = new Map(layout.stars.map((s) => [s.id, s]));
   const crosses = (e1, e2) => {
@@ -1034,18 +1034,18 @@ try {
   const persistedRow = persisted.rows.find((row) => row.id === constellationId);
   const persistedLines = persisted.geometry.find((row) => row.id === constellationId);
   check(persistedRow?.name === savedRow.name &&
-    JSON.stringify(persistedRow?.lastMembers) === JSON.stringify(savedRow.lastMembers) &&
+    JSON.stringify(persistedRow?.members) === JSON.stringify(savedRow.members) &&
     JSON.stringify(persistedLines?.edges) === JSON.stringify(savedLines.edges),
   "再読み込み後も名前・メンバー・線が残る");
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
   await sleep(850);
   const recalled = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState())")) ?? "null");
   check(recalled.active === constellationId && recalled.geometry.find((row) => row.id === constellationId)?.opacity === 0.85 &&
-    !recalled.rows[0].lastMembers.includes(removedId) && recalled.rows[0].lastMembers.includes(addedId),
+    !recalled.rows[0].members.includes(removedId) && recalled.rows[0].members.includes(addedId),
   "呼び出しで明るくなり、excluded は除外・pinned は維持される");
   // カメラが寄り終わり、タイトルの判断（カメラ停止の約 150ms 後）が済むのを待つ
   for (let i = 0; i < 20; i++) {
-    const ready = await evalIn(`(() => { const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].lastMembers);
+    const ready = await evalIn(`(() => { const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].members);
       return [...document.querySelectorAll('.label-star')].some((el) => ids.has(el.dataset.key) && el.style.opacity === '1'); })()`);
     if (ready) break;
     await sleep(100);
@@ -1053,7 +1053,7 @@ try {
   await sleep(250);
   // 星座のすべての星が、画面の部品（検索欄・星座一覧と操作・左上のパネル）に隠れず、画面の中にある
   const fit = JSON.parse((await evalIn(`JSON.stringify((() => {
-    const ids = globalThis.__bukusupe.constellationState().rows[0].lastMembers;
+    const ids = globalThis.__bukusupe.constellationState().rows[0].members;
     const parts = ['search-box', 'constellation-list', 'constellation-manage', 'hud', 'hud-toggle']
       .map((id) => document.getElementById(id))
       .filter((el) => el && !el.hidden && getComputedStyle(el).display !== 'none')
@@ -1072,7 +1072,7 @@ try {
     fit ? `${fit.stars} 星中 ${fit.bad} 星がはみ出し・隠れ` : "測れない");
   // 星座の星は大きく明るく、タイトルが優先され、他のタイトルは暗い
   const emphasis = JSON.parse((await evalIn(`JSON.stringify((() => {
-    const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].lastMembers);
+    const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].members);
     const labels = [...document.querySelectorAll('.label')].filter((el) => el.style.display !== 'none');
     const member = labels.filter((el) => ids.has(el.dataset.key));
     const others = labels.filter((el) => !ids.has(el.dataset.key) && el.style.opacity !== '0');
@@ -1096,7 +1096,7 @@ try {
     const s = b.constellationState();
     const row = s.rows.find((r) => r.id === ${JSON.stringify(constellationId)});
     const hits = new Set(b.searchState().ids);
-    const members = row.lastMembers.filter((m) => !hits.has(m));
+    const members = row.members.filter((m) => !hits.has(m));
     const labels = [...document.querySelectorAll('.label-star')]
       .filter((el) => members.includes(el.dataset.key) && el.style.opacity !== '0');
     return {
@@ -1141,12 +1141,18 @@ try {
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
   check((await evalIn("globalThis.__bukusupe.constellationState().active")) === null,
     "もう一度選ぶと星座の強調を解除する");
+  // メンバーは保存した時点で固定（SPEC 9 章）。検索語に合うブックマークが増えても、呼び出しで検索し直さない
+  const beforeAdd = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().rows[0].members)")) ?? "[]");
   const addedLayout = JSON.parse((await evalIn("(async () => JSON.stringify(await globalThis.__bukusupe.simulateAdd('宇宙を感じたい', 'https://example.org/space-new', ['宇宙'])))()")) ?? "null");
   const newId = addedLayout?.stars.find((star) => star.id.startsWith("sim-"))?.id;
+  const newRank = JSON.parse((await evalIn("(async () => JSON.stringify((await globalThis.__bukusupe.searchNow('宇宙を感じたい')).map((h) => h.id)))()")) ?? "[]").indexOf(newId);
+  await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
+  await sleep(300);
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
-  const withNew = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().rows[0].lastMembers)")) ?? "[]");
-  check(!!newId && withNew.includes(newId), "検索に合うブックマークを追加して呼び出すとメンバーに入る",
-    `${newId} / ${withNew.includes(newId) ? "含まれる" : "含まれない"}`);
+  const withNew = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().rows[0].members)")) ?? "[]");
+  check(!!newId && newRank >= 0 && newRank < 12 && !withNew.includes(newId) && JSON.stringify(withNew) === JSON.stringify(beforeAdd),
+    "検索に合うブックマークを追加して呼び出しても、メンバーは保存した時点のまま",
+    `足した星の検索順位 ${newRank + 1}・メンバー ${beforeAdd.length} → ${withNew.length} 星（${withNew.includes(newId) ? "足した星が入った" : "足した星は入らない"}）`);
   await evalIn("globalThis.__bukusupe.restore()");
   // 画面下には名前だけ。「名前を変える」「削除」は、選んでいる星座の横の「…」から開く
   const menu = JSON.parse((await evalIn(`JSON.stringify((() => {
@@ -1218,7 +1224,7 @@ try {
   // 1. サンプルのまま星座を保存し、その時点の平均ベクトルを控える
   const sampleRow = await saveConstellationNamed("宇宙を感じたい", "サンプルの星座");
   const sampleMean = JSON.parse((await evalIn("JSON.stringify(Array.from(globalThis.__bukusupe.state.mean))")) ?? "[]");
-  console.log(`  サンプルの星座：メンバー ${sampleRow?.lastMembers.length ?? 0} 件`);
+  console.log(`  サンプルの星座：メンバー ${sampleRow?.members.length ?? 0} 件`);
 
   // 2. 実ブックマークを 20 件作る → データ源が Chrome に変わる
   await evalIn("window.__beforeSwitch = true");
@@ -1249,11 +1255,11 @@ try {
 
   // 3. 実ブックマークで星座を作り、本物の削除通知で線が結び直されるか
   const chromeRow = await saveConstellationNamed("宇宙の写真や星空", "実ブックマークの星座", SPACE);
-  const removedMember = chromeRow?.lastMembers[0];
+  const removedMember = chromeRow?.members[0];
   if (removedMember) await evalIn(`(async () => { await chrome.bookmarks.remove(${JSON.stringify(removedMember)}); })()`);
   const relinked = await waitUntil(`(() => {
     const row = globalThis.__bukusupe.constellationState().rows.find((r) => r.name === "実ブックマークの星座");
-    return row && !row.lastMembers.includes(${JSON.stringify(removedMember)}) &&
+    return row && !row.members.includes(${JSON.stringify(removedMember)}) &&
       !globalThis.__bukusupe.state.items.some((item) => item.id === ${JSON.stringify(removedMember)});
   })()`, 15000);
   await sleep(300);
@@ -1261,13 +1267,13 @@ try {
     c: globalThis.__bukusupe.constellationState(), layout: globalThis.__bukusupe.layout() })`)) ?? "null");
   const chromeLines = chromeState?.c.geometry.find((row) => row.id === chromeRow?.id);
   const chromeById = new Map((chromeState?.layout?.stars ?? []).map((star) => [star.id, star]));
-  const remaining = (chromeRow?.lastMembers ?? []).filter((id) => id !== removedMember);
+  const remaining = (chromeRow?.members ?? []).filter((id) => id !== removedMember);
   const expectedLines = kruskal(remaining.map((id) => chromeById.get(id)).filter(Boolean));
-  check(relinked && (chromeRow?.lastMembers.length ?? 0) >= 6 && chromeLines &&
+  check(relinked && (chromeRow?.members.length ?? 0) >= 6 && chromeLines &&
     !chromeLines.members.includes(removedMember) && chromeLines.members.length === remaining.length &&
     sameEdges(chromeLines.edges, expectedLines),
   "本物の削除通知で、星座のメンバーと線が結び直される",
-  `${chromeRow?.lastMembers.length ?? 0} → ${chromeLines?.members.length ?? 0} 星 / ${chromeLines?.edges.length ?? 0} 辺`);
+  `${chromeRow?.members.length ?? 0} → ${chromeLines?.members.length ?? 0} 星 / ${chromeLines?.edges.length ?? 0} 辺`);
 
   // 3b. ブックマークが 20 件未満なら、初回に「サンプルで試す」を勧める案内が控えめに出る（2 回目以降は出ない）
   const hintVisible = "(() => { const el = document.getElementById('sample-hint'); return !!el && !el.hidden && getComputedStyle(el).display !== 'none'; })()";
@@ -1319,10 +1325,10 @@ try {
   await waitUntil("globalThis.__bukusupe?.state.kind === 'sample' && document.body.dataset.phase === 'ready'", 60000);
   const backRow = JSON.parse((await tryEval(`JSON.stringify(globalThis.__bukusupe.constellationState().rows
     .find((row) => row.id === ${JSON.stringify(sampleRow?.id)}) ?? null)`)) ?? "null");
-  check(backRow && (sampleRow?.lastMembers.length ?? 0) > 0 &&
-    JSON.stringify(backRow.lastMembers) === JSON.stringify(sampleRow.lastMembers),
+  check(backRow && (sampleRow?.members.length ?? 0) > 0 &&
+    JSON.stringify(backRow.members) === JSON.stringify(sampleRow.members),
   "サンプルに戻すと、サンプルの星座のメンバーがそのまま残る",
-  `${sampleRow?.lastMembers.length ?? 0} → ${backRow?.lastMembers.length ?? "なし"} 件`);
+  `${sampleRow?.members.length ?? 0} → ${backRow?.members.length ?? "なし"} 件`);
   const backMean = JSON.parse((await tryEval("JSON.stringify(Array.from(globalThis.__bukusupe.state.mean ?? []))")) ?? "[]");
   const backGap = backMean.length === sampleMean.length && sampleMean.length > 0
     ? Math.max(...sampleMean.map((v, i) => Math.abs(v - backMean[i]))) : Infinity;
