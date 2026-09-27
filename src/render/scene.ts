@@ -23,6 +23,11 @@ const DIVE_SECONDS = 0.45;
 const PUSH_BACK = 2.5 * FLIGHT_SCALE;
 const ENTRY_COOLDOWN_MS = 4000;
 const CAMERA_FOV = 50;
+/**
+ * 動きがあるときだけ描く（docs/BENCHMARK.md「改善の余地」）。画面を変えるものが何も無いコマがこの数だけ続いたら、
+ * 描画のループを止める（ラベルの判断や最後のコマを取りこぼさないための猶予）。入力や状態の変化で、すぐに再開する。
+ */
+const IDLE_FRAMES = 12;
 /** 検索中に星座の線を描かない範囲：外側の軌道（半径 2.55）の少し外まで（検索の単位の倍数） */
 const SEARCH_HOLE = 2.55 * 1.2;
 
@@ -83,6 +88,24 @@ export class SpaceView {
   private readonly labels: LabelLayer;
 
   private running = false;
+  /** 描画のループが回っているか（動きが無いと止まる）、何も変わらないコマが続いた数 */
+  private looping = false;
+  private idleFrames = 0;
+  /**
+   * 次のコマの requestAnimationFrame。three.js の setAnimationLoop は、コールバックの中で止めても次のコマを要求してしまい
+   * （止めたつもりのループが空回りし、再開するたびに重なって 1 回の書き換えで 2 回以上描いた）、ここで自分で持つ。
+   */
+  private rafId: number | null = null;
+  private readonly loop = (): void => {
+    this.rafId = null;
+    this.tick();
+    if (this.looping && this.rafId === null) this.rafId = requestAnimationFrame(this.loop);
+  };
+  /** 描き続ける理由（埋め込みの計算中など）。1 つでもあれば止めない */
+  private readonly holds = new Set<string>();
+  /** 測定用：止めずに描き続ける（描画の力を測るとき）・止めたままにする（CPU の比較） */
+  private continuous = false;
+  private paused = false;
   private extent = 60;
   private bounds = { minX: -30, maxX: 30, minY: -30, maxY: 30 };
   /** 地図全体が画面の約 80% に収まる距離。拡大率の段階はこれを基準にする。 */
@@ -288,6 +311,11 @@ export class SpaceView {
     document.addEventListener("mouseleave", () => this.flightMouse.set(0, 0));
     addEventListener("keydown", this.onKeyDown);
     addEventListener("keyup", this.onKeyUp);
+    // 入力（マウス・キー・ホイール・タッチ）があったら、すぐに描画を再開する（止まっていても）
+    for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "keydown", "keyup", "touchstart", "touchmove", "touchend"]) {
+      addEventListener(type, () => this.wake(), { capture: true, passive: true });
+    }
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) this.wake(); });
     // ウィンドウからフォーカスが外れたら、押したままの状態をすべて解除する
     addEventListener("blur", this.releaseKeys);
     document.addEventListener("visibilitychange", this.releaseKeys);
@@ -341,6 +369,7 @@ export class SpaceView {
   }
 
   setLayout(layout: Layout, stars: RenderStar[], source: LabelSource, frame = true): void {
+    this.wake();
     this.collisionStars = null;
     this.field.setStars(stars);
     this.field.setEmphasis([...this.emphasisIds], this.emphasisMode);
@@ -365,12 +394,14 @@ export class SpaceView {
   }
 
   setConstellations(rows: DrawnConstellation[]): void {
+    this.wake();
     this.constellations.set(rows);
     this.constellations.setLift((id) => this.heights.get(id) ?? 0, this.flight.lift);
     this.refreshEmphasis();
   }
 
   setEditMembers(points: ConstellationPoint[]): void {
+    this.wake();
     this.editIds = points.map((point) => point.id);
     this.refreshEmphasis();
   }
@@ -400,6 +431,7 @@ export class SpaceView {
   }
 
   selectConstellation(id: string | null, name = ""): void {
+    this.wake();
     this.constellations.select(id);
     this.constellationNameId = id;
     this.searchStash = null;   // 選び直したら、検索前のカメラには戻さない
@@ -412,6 +444,7 @@ export class SpaceView {
   }
 
   saveConstellation(id: string, name: string, points: ConstellationPoint[]): void {
+    this.wake();
     this.setTopDown(true);
     this.setSearch([]);
     this.selectSearch(null);
@@ -432,6 +465,7 @@ export class SpaceView {
    * 傾きの移動中なら行き先の傾きで合わせる。カメラを仮に動かして投影し、位置と距離を詰めていく。
    */
   focusPoints(points: ConstellationPoint[]): void {
+    this.wake();
     if (!points.length) return;
     const safe = this.safeRect();
     const size = this.renderer.getSize(new THREE.Vector2());
@@ -517,6 +551,7 @@ export class SpaceView {
   }
 
   restoreNavigationCamera(saved: { x: number; y: number; distance: number; tilt: number }): void {
+    this.wake();
     this.focus = null;
     this.controls.target.set(saved.x, 0, -saved.y);
     this.tilt = this.tiltTarget = this.preferredTilt = THREE.MathUtils.clamp(saved.tilt, 0, MAX_TILT);
@@ -526,6 +561,7 @@ export class SpaceView {
 
   /** 保存した船の位置から、突入アニメーションを挟まずに再開する。座標は地図の単位。 */
   resumeFlight(saved: { x: number; y: number; z: number; yaw: number; pitch: number; speed: number }): void {
+    this.wake();
     if (!this.enterFlight()) return;
     this.flight.resume(new THREE.Vector3(saved.x * FLIGHT_SCALE, saved.z * FLIGHT_SCALE, -saved.y * FLIGHT_SCALE),
       saved.yaw, saved.pitch, saved.speed, this.camera, this.flightLook);
@@ -542,6 +578,7 @@ export class SpaceView {
    * 星座の選択はそのまま（輪と名前だけ隠す）。
    */
   enterFlight(): boolean {
+    this.wake();
     if (this.flight.active) return false;
     this.flightSearch = this.searchIds.slice();
     this.collisionStars = null;
@@ -575,6 +612,7 @@ export class SpaceView {
 
   /** 飛行モードから出る。宇宙船がいた場所の真上から見た地図に、入る前の拡大率で戻る。 */
   exitFlight(): boolean {
+    this.wake();
     if (!this.flight.active || this.flight.phase === "leaving") return false;
     this.endDive(false);
     this.flight.leave(this.camera, this.flightLook);
@@ -645,6 +683,7 @@ export class SpaceView {
 
   /** 星の見え方（大きさ・明るさ・色）を決める関数を差し替える。地図と飛行モードの両方に効く */
   setStarAppearance(fn: AppearanceFn): void {
+    this.wake();
     this.field.setAppearance(fn);
   }
 
@@ -674,6 +713,7 @@ export class SpaceView {
 
   /** 確認用：宇宙船を入った直後の位置と向きに戻す。 */
   flightReset(): void {
+    this.wake();
     this.flight.reset();
   }
 
@@ -684,6 +724,7 @@ export class SpaceView {
   flightNebulaRanges() { return this.obstacles.ranges.map((r) => ({ ...r })); }
   flightRings() { return this.obstacles.rings.map((r) => ({ ...r })); }
   flightPlace(px: number, py: number, pz: number, lx: number, ly: number, lz: number): void {
+    this.wake();
     this.flight.place(new THREE.Vector3(px, py, pz), new THREE.Vector3(lx, ly, lz));
   }
 
@@ -716,6 +757,7 @@ export class SpaceView {
 
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
   setTopDown(topDown: boolean): void {
+    this.wake();
     this.tiltTarget = topDown ? 0 : this.preferredTilt;
     this.tiltSpeed = Math.abs(this.tiltTarget - this.tilt) / TURN_SECONDS;
   }
@@ -753,6 +795,7 @@ export class SpaceView {
 
   /** 画面中央の地図上の点を中心に、検索結果を軌道へ移す。 */
   setSearch(ids: string[]): void {
+    this.wake();
     const wasSearching = this.searchIds.length > 0;
     const searching = ids.length > 0;
     if (!wasSearching && searching && this.constellationNameId) {
@@ -788,13 +831,16 @@ export class SpaceView {
   }
 
   selectSearch(id: string | null): void {
+    this.wake();
     this.selectedId = id;
     this.selectedHalo.visible = !!id;
   }
 
   hoverStar(id: string | null): void {
-    this.hoveredId = id && this.searchIds.includes(id) ? id : null;
+    const hovered = id && this.searchIds.includes(id) ? id : null;
     const next = this.searchIds.length ? null : id;
+    if (hovered !== this.hoveredId || next !== this.hoveredMapId) this.wake();   // 光の尾やラベルが変わる
+    this.hoveredId = hovered;
     if (this.hoveredMapId !== next) {
       this.hoveredMapId = next;
       this.labelsDirty = true;
@@ -849,13 +895,16 @@ export class SpaceView {
 
   /** 確認用：星座の線と光点を出す・消す（画素を比べるため） */
   setConstellationLinesVisible(visible: boolean): void {
+    this.wake();
     this.constellations.object.visible = visible;
   }
 
   setConstellationTestOpacity(value: number | null): void {
+    this.wake();
     this.constellations.setTestOpacity(value);
   }
   setConstellationTestLine(enabled: boolean): void {
+    this.wake();
     this.constellations.setTestLine(enabled && this.searchIds.length ? this.blackHole.position : null,
       SEARCH_HOLE * this.searchUnit);
   }
@@ -890,6 +939,7 @@ export class SpaceView {
    * 今が中距離より遠ければ中距離まで寄り、それより近ければ今の距離を保つ。
    */
   focusCluster(index: number): void {
+    this.wake();
     if (this.searchIds.length) return;
     const cluster = this.labelSource.clusters.find((row) => row.index === index && row.count > 0);
     if (!cluster) return;
@@ -907,6 +957,7 @@ export class SpaceView {
 
   /** 確認用：星団へ寄った後に全体表示へ戻す。 */
   resetCamera(): void {
+    this.wake();
     this.focus = null;
     this.frameAll();
     this.labelsDirty = true;
@@ -939,6 +990,7 @@ export class SpaceView {
 
   /** 確認用：段階ごとの決まった拡大率に合わせる。 */
   setZoomTier(tier: ZoomTier): void {
+    this.wake();
     const factor = tier === "far" ? 1.9 : tier === "mid" ? MID_DISTANCE : 0.3;
     this.setDistance(this.fitDistance * factor);
   }
@@ -960,7 +1012,69 @@ export class SpaceView {
   start(): void {
     if (this.running) return;
     this.running = true;
-    this.renderer.setAnimationLoop(this.tick);
+    this.wake();
+  }
+
+  /**
+   * 描画を再開する（止まっていれば）。画面を変える操作・状態の変化・入力のたびに呼ぶ。
+   * 止まっていた間の時間は、次のコマの経過時間に数えない（アニメーションが飛ばないように）。
+   */
+  wake(): void {
+    if (!this.running || this.paused) return;
+    this.idleFrames = 0;
+    if (this.looping) return;
+    this.looping = true;
+    this.clock.getDelta();
+    if (this.rafId === null) this.rafId = requestAnimationFrame(this.loop);
+  }
+
+  /** 描き続ける理由を足す・外す（埋め込みの計算中の進み具合の表示など）。 */
+  hold(reason: string, on: boolean): void {
+    if (on) this.holds.add(reason);
+    else this.holds.delete(reason);
+    this.wake();
+  }
+
+  /** 描画のループが回っているか（確認用） */
+  get isRendering(): boolean {
+    return this.looping;
+  }
+
+  private sleepLoop(): void {
+    this.looping = false;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  /**
+   * このコマの後も描く必要があるか。飛行中・カメラや星の動き・演出・ラベルの判断待ち・入力の途中のどれかがあれば true。
+   */
+  private needsNextFrame(controlsMoved: boolean, cameraMoving: boolean): boolean {
+    return this.continuous || this.holds.size > 0 || this.flight.active || this.dive !== null ||
+      this.focus !== null || Math.abs(this.tilt - this.tiltTarget) > 1e-4 || this.tiltPointer !== null ||
+      this.keys.size > 0 || this.keyPan.lengthSq() > 0 || this.keyZoom !== 0 ||
+      controlsMoved || cameraMoving || this.field.isAnimating || this.constellations.isAnimating || this.constellationNameWait ||
+      this.lastLabelTier === null || this.labelsDirty || this.lastLabelMotion > 0;
+  }
+
+  /** 1 コマの終わり：描く必要が無いコマが続いたら、ループを止める */
+  private settle(active: boolean): void {
+    if (active) { this.idleFrames = 0; return; }
+    if (++this.idleFrames >= IDLE_FRAMES && this.looping) this.sleepLoop();
+  }
+
+  /** 測定用：止めずに描き続ける（1 コマの描画の力を測るとき）。false で、動きがあるときだけ描く方式に戻す */
+  setContinuousRender(on: boolean): void {
+    this.continuous = on;
+    this.wake();
+  }
+
+  /** 確認用：いまの状態で 1 コマ描く（止まった画面が古くないかを比べるため） */
+  renderNow(): void {
+    this.clock.getDelta();
+    this.step();
   }
 
   /** 地図全体が画面の約 80% に収まる位置へカメラを置く */
@@ -1054,14 +1168,17 @@ export class SpaceView {
 
   /** 測定用：描画のループを止める・再開する（何もしていないときの CPU 使用率への影響を見るためだけ）。 */
   setLoopPaused(paused: boolean): void {
-    this.renderer.setAnimationLoop(paused ? null : this.tick);
+    this.paused = paused;
+    if (paused) this.sleepLoop();
+    else this.wake();
   }
 
   private step(): void {
     this.frames++;
     const dt = Math.min(0.05, this.clock.getDelta());
     if (this.flight.active) {
-      this.flightTick(dt);
+      this.flightTick(dt);   // 飛行中は毎コマ描く
+      this.settle(true);
       return;
     }
     this.applyKeys(dt);
@@ -1153,7 +1270,7 @@ export class SpaceView {
       const p = this.field.displayPosition(this.selectedId);
       if (p) this.selectedHalo.position.set(p.x, 0.11, -p.y);
     }
-    this.controls.update();
+    const controlsMoved = this.controls.update();
     this.camera.updateMatrixWorld();
     if (this.constellationNameId && this.constellationName) {
       const members = this.constellations.points(this.constellationNameId);
@@ -1210,6 +1327,7 @@ export class SpaceView {
     this.labelPositionUpdates++;
     this.maxLabelPositionMs = Math.max(this.maxLabelPositionMs, performance.now() - labelStart);
     this.phase("render", () => this.renderer.render(this.scene, this.camera));
+    this.settle(this.needsNextFrame(controlsMoved, cameraMoving));
   }
 
   /** 飛行中の 1 コマ：宇宙船とカメラ、星の立ち上がり、星座の線。地図のラベルや操作は動かさない。 */
@@ -1418,6 +1536,7 @@ export class SpaceView {
    * （途中に他の星が入りにくい）。
    */
   flightTeleport(id: string, distance: number): boolean {
+    this.wake();
     const point = this.worldOf(id);
     const star = this.labelSource.stars.find((s) => s.id === id);
     const cluster = this.labelSource.clusters.find((c) => c.index === star?.cluster);
@@ -1554,6 +1673,7 @@ export class SpaceView {
   }
 
   private readonly resize = (): void => {
+    this.wake();
     const w = this.canvas.clientWidth || innerWidth;
     const h = this.canvas.clientHeight || innerHeight;
     this.renderer.setSize(w, h, false);

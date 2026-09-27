@@ -251,6 +251,11 @@ export class ConstellationLayer {
     }
   }
 
+  /** 線を描く演出の途中か（途中なら毎コマ描く必要がある） */
+  get isAnimating(): boolean {
+    return this.drawing !== null;
+  }
+
   animationState(): { phase: "returning" | "drawing" | "done"; edgesDrawn: number; edges: number } {
     const entry = this.drawing && this.entries.get(this.drawing.id);
     if (!this.drawing || !entry) return { phase: "done", edgesDrawn: 0, edges: 0 };

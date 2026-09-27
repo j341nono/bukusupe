@@ -204,9 +204,11 @@ function loadModelInBackground(): void {
   if (status) status.hidden = false;
   embedder = createEmbedder();
   embedder.onDownload = (_file, percent) => {
+    view?.wake();   // Worker からの通知
     if (status) status.textContent = `意味の検索を準備している ${percent.toFixed(0)}%（それまでは文字の一致で探す）`;
   };
   embedder.ready().then(() => {
+    view?.wake();
     modelReady = true;
     document.body.dataset.model = "ready";
     if (status) status.hidden = true;
@@ -261,9 +263,12 @@ function enqueue(task: () => Promise<void>): Promise<void> {
 async function computeEmbeddings(): Promise<void> {
   if (!embedder) return;
   const base = { count: state.items.length, kind: state.kind };
+  // 埋め込みの計算中は、進み具合の表示と星の誕生のあいだ描き続ける（動きがあるときだけ描く方式の例外）
+  view?.hold("embedding", true);
   try {
     state.vectors = await ensureEmbeddings(state.items, embedder, (p) => {
       mark(`embed:${p.phase}`);
+      view?.wake();   // Worker からの通知
       if (p.phase === "model") {
         renderHud({ ...base, status: `モデルを取り込んでいる ${p.percent.toFixed(0)}%`, progress: p.percent / 100, phase: "model" });
       } else if (p.phase === "embed") {
@@ -275,6 +280,8 @@ async function computeEmbeddings(): Promise<void> {
   } catch (err) {
     console.error("[ブクスペ] 埋め込みに失敗", err);
     renderHud({ ...base, status: "意味の計算に失敗した", phase: "error" });
+  } finally {
+    view?.hold("embedding", false);
   }
 }
 
@@ -923,10 +930,13 @@ const debugApi = {
     state.vectors = vectors;
     show(layout);
 
+    // 描画の力（何コマ描けるか）を測るので、この 1.5 秒は動きが無くても止めずに描く
+    view?.setContinuousRender(true);
     const before = view?.frames ?? 0;
     const start = performance.now();
     await new Promise((r) => setTimeout(r, 1500));
     const fps = ((view?.frames ?? 0) - before) / ((performance.now() - start) / 1000);
+    view?.setContinuousRender(false);
     return { n, layoutMs, fps, clusters: layout.clusters.map((c) => ({ name: c.name, count: c.count })) };
   },
 
@@ -1066,6 +1076,10 @@ const debugApi = {
   setProfiling: (on: boolean) => view?.setProfiling(on),
   takeProfile: () => view?.takeProfile() ?? [],
   setLoopPaused: (paused: boolean) => view?.setLoopPaused(paused),
+  /** 動きがあるときだけ描く方式の確認用：止めずに描く・いまの状態で 1 コマ描く・ループが回っているか */
+  setContinuousRender: (on: boolean) => view?.setContinuousRender(on),
+  renderNow: () => view?.renderNow(),
+  isRendering: () => view?.isRendering ?? false,
   dtype: () => DTYPE ?? "q8",
 };
 if (new URLSearchParams(location.search).get("debug") === "1") {

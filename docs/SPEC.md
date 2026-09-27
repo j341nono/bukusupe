@@ -56,6 +56,8 @@
 ## 5. 技術構成
 
 - Chrome拡張機能 Manifest V3。TypeScript＋Vite。描画はthree.js。UIフレームワークは必須ではない（素のTSで可）。
+- 描画は、画面が変わる要因（カメラの移動、星や演出のアニメーション、ラベルの判断、入力、埋め込みの計算中）があるときだけ行い、
+  すべて落ち着いたら描画のループを止める。入力・ブックマークの更新・Worker からの通知ですぐに再開する。飛行モード中は毎コマ描く（2026-09-27）。
 - 権限：`bookmarks`、`storage`。必要なら `unlimitedStorage`。
 - アイコンのクリック（`chrome.action.onClicked`）で `chrome.tabs.create({ url: chrome.runtime.getURL("index.html") })`。
 - データの保存：埋め込みベクトル、配置、星座はIndexedDBに保存する（1件あたり384次元のfloat32）。

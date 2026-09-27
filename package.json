@@ -13,14 +13,15 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/gen-icons.mjs",
-    "check:ext": "node scripts/check-dist.mjs; d=$?; node scripts/check-fresh.mjs; c=$?; node scripts/check-extension.mjs; e=$?; node scripts/check-flight.mjs; f=$?; npm run build:web >/dev/null && node scripts/check-web.mjs; w=$?; exit $((d | c | e | f | w))",
+    "check:ext": "node scripts/check-dist.mjs; d=$?; node scripts/check-fresh.mjs; c=$?; node scripts/check-extension.mjs; e=$?; node scripts/check-flight.mjs; f=$?; node scripts/check-idle.mjs; i=$?; npm run build:web >/dev/null && node scripts/check-web.mjs; w=$?; exit $((d | c | e | f | i | w))",
     "prebuild": "node scripts/copy-ort.mjs",
     "predev": "node scripts/copy-ort.mjs",
     "check:flight": "node scripts/check-flight.mjs",
     "check:web": "npm run build:web && node scripts/check-web.mjs",
     "check:dist": "node scripts/check-dist.mjs",
     "bench": "node scripts/bench/index.mjs",
-    "bench:report": "node scripts/bench/report.mjs"
+    "bench:report": "node scripts/bench/report.mjs",
+    "check:idle": "node scripts/check-idle.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

@@ -132,6 +132,7 @@ export class StarField {
   private targetAlpha = new Float32Array(0);
   private moveT = 1;
   private elapsed = 0;
+  private animating = true;
   private springX = new Float32Array(0);
   private springY = new Float32Array(0);
   private velocityX = new Float32Array(0);
@@ -210,6 +211,14 @@ export class StarField {
   /** 星が動いている最中か（配置の移動、または検索の引き寄せ・戻りのばね）。 */
   get isSettling(): boolean {
     return this.settling;
+  }
+
+  /**
+   * 見た目がまだ変わっている最中か（配置の移動・ばね・誕生の演出・明るさと大きさの追従）。
+   * 直前の update で決まる。false の間は、次のコマを描いても見た目は変わらない（描画のループを止めてよい）。
+   */
+  get isAnimating(): boolean {
+    return this.animating;
   }
 
   constructor() {
@@ -378,7 +387,7 @@ export class StarField {
   }
 
   update(dt: number): void {
-    if (this.stars.length === 0) return;
+    if (this.stars.length === 0) { this.animating = false; return; }
     this.elapsed += dt;
 
     if (this.moveT < 1) {
@@ -406,8 +415,9 @@ export class StarField {
     let travelling = false;   // 目標にまだ着いていない星があるか（ラベルの判断を待つため）
     // 配置の移動中（moveT < 1）はばねを動かさない。動かし手は常に一つ
     for (let i = 0; this.moveT >= 1 && i < this.stars.length; i++) {
-      if (!this.searching && Math.abs(this.springX[i] - this.stars[i].x) < 0.001 &&
-        Math.abs(this.springY[i] - this.stars[i].y) < 0.001 &&
+      // 目標（検索していなければ配置の位置、検索中は軌道の位置）に着いて止まっている星は動かさない
+      if (Math.abs(this.springX[i] - this.searchX[i]) < 0.001 &&
+        Math.abs(this.springY[i] - this.searchY[i]) < 0.001 &&
         Math.abs(this.velocityX[i]) + Math.abs(this.velocityY[i]) < 0.001) continue;
       const damping = Math.exp(-13 * dt);
       this.velocityX[i] = (this.velocityX[i] + (this.searchX[i] - this.springX[i]) * 90 * dt) * damping;
@@ -424,7 +434,8 @@ export class StarField {
     }
     if (moving) this.position.needsUpdate = true;
     this.settling = travelling || this.moveT < 1;
-    if (this.searching || moving || this.stars.some((_, i) => Math.abs(alpha[i] - this.searchAlpha[i]) > 0.001)) {
+    const fading = this.stars.some((_, i) => Math.abs(alpha[i] - this.searchAlpha[i]) > 0.001);
+    if (this.searching || moving || fading) {
       for (let i = 0; i < this.stars.length; i++) {
         alpha[i] += (this.searchAlpha[i] - alpha[i]) * Math.min(1, dt * 12);
       }
@@ -457,12 +468,14 @@ export class StarField {
       this.liftDirty = false;
     }
     const sizes = this.sizeAttr.array as Float32Array;
-    if (this.stars.some((_, i) => Math.abs(sizes[i] - this.searchSize[i]) > 0.001)) {
+    const resizing = this.stars.some((_, i) => Math.abs(sizes[i] - this.searchSize[i]) > 0.001);
+    if (resizing) {
       for (let i = 0; i < this.stars.length; i++) {
         sizes[i] += (this.searchSize[i] - sizes[i]) * Math.min(1, dt * 12);
       }
       this.sizeAttr.needsUpdate = true;
     }
+    this.animating = this.moveT < 1 || moving || fading || born || resizing;
   }
 
   private positionsById(): Map<string, { x: number; y: number }> {

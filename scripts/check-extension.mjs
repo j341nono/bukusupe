@@ -161,7 +161,9 @@ try {
     const cx = innerWidth / 2, cy = innerHeight / 2;
     const out = {};
     for (const el of document.querySelectorAll('.label-star')) {
-      if (el.style.opacity !== '1') continue;
+      // 見えているラベルすべて（段階 2 から、地図のタイトルの不透明度は新しさで 0.4〜1.0。ちょうど 1 だけに絞ると、
+      // サンプルの日時と今日の差で 0 件になることがある）
+      if (!(Number(el.style.opacity) > 0)) continue;
       const m = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px/.exec(el.style.transform);
       const p = m && globalThis.__bukusupe.starScreen(el.dataset.key);
       if (!p) continue;
@@ -743,11 +745,15 @@ try {
   check(searchLabelCard?.found && searchLabelCard.visible && searchLabelCard.title === searchLabelCard.label,
     "検索中のタイトルもクリックでカードが開く", searchLabelCard?.title ?? "ラベルなし");
   await evalIn("document.getElementById('star-card').hidden = true");
+  // 描画の力（検索を表示したまま何コマ描けるか）を測る。動きがあるときだけ描く方式では、落ち着いた検索は描き直さないので、
+  // この 3 秒は止めずに描かせる（止まることの確認は check-idle.mjs）
+  await evalIn("globalThis.__bukusupe.setContinuousRender(true)");
   const beforeSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
   const searchFrameStart = performance.now();
   await sleep(3000);
   const afterSearchFrames = await evalIn("globalThis.__bukusupe.frames()");
   const searchFps = (afterSearchFrames - beforeSearchFrames) / ((performance.now() - searchFrameStart) / 1000);
+  await evalIn("globalThis.__bukusupe.setContinuousRender(false)");
   check(searchFps >= 55, "検索中も 60 コマを保つ", `${searchFps.toFixed(1)} コマ/秒（3 秒平均）`);
   {
     const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
@@ -966,11 +972,27 @@ try {
     await sleep(40);
   }
   check(drawingCaptured, "線を1本ずつ描く途中を確認できる");
-  const animationFramesBefore = await evalIn("globalThis.__bukusupe.frames()");
-  await sleep(1000);
-  const animationFramesAfter = await evalIn("globalThis.__bukusupe.frames()");
-  check(animationFramesAfter - animationFramesBefore >= 55, "保存演出中も60コマを保つ",
-    `${animationFramesAfter - animationFramesBefore} コマ/秒`);
+  // 演出が続いている間（最大 1 秒）のコマ数を数える。動きがあるときだけ描く方式では、演出が終われば描かなくなるので、
+  // 窓が演出の終わりを越えると、その分コマ数が少なく出る（演出の途中のコマ落ちとは別）
+  const animationFps = JSON.parse((await evalIn(`(async () => {
+    const b = globalThis.__bukusupe;
+    // 直前のスクリーンショットで止まったコマを数えないよう、2 コマ待ってから、コマの時刻でそろえて数える
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    let f0 = null, t0 = null, f1 = null, t1 = null;
+    await new Promise((resolve) => {
+      const step = (ts) => {
+        if (t0 === null) { t0 = ts; f0 = b.frames(); }
+        t1 = ts; f1 = b.frames();
+        if (ts - t0 >= 1000 || b.constellationState().animation.phase === 'done') { resolve(); return; }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    const seconds = (t1 - t0) / 1000;
+    return JSON.stringify({ fps: seconds > 0 ? (f1 - f0) / seconds : 0, seconds });
+  })()`)) ?? "null");
+  check(animationFps && animationFps.seconds >= 0.3 && animationFps.fps >= 55, "保存演出中も60コマを保つ",
+    animationFps ? `${animationFps.fps.toFixed(0)} コマ/秒（演出中の ${animationFps.seconds.toFixed(2)} 秒）` : "測れない");
   let nameAppeared = false;
   for (let i = 0; i < 30; i++) {
     nameAppeared = await evalIn("document.getElementById('constellation-name').classList.contains('is-visible')");
