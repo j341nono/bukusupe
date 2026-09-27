@@ -212,12 +212,13 @@ try {
   `CSP ${csp ? csp.slice(0, 90) + "…" : "なし"}・違反 ${violations ? violations.length : "数えられない"}${violations?.length ? "（" + violations.slice(0, 2).join(" / ") + "）" : ""}`);
   // 保存領域の名前に、ブクスペ専用の接頭辞が付いている
   const namesAsync = JSON.parse((await evalIn(`(async () => JSON.stringify({ idb: (await indexedDB.databases()).map((d) => d.name),
-    local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))()`)) ?? "null");
+    local: Object.keys(localStorage), session: Object.keys(sessionStorage), cache: await caches.keys() }))()`)) ?? "null");
   const unprefixed = namesAsync ? [...namesAsync.idb.filter((n) => !n.startsWith("bukusupe-")),
-    ...namesAsync.local.filter((k) => !k.startsWith("bukusupe:")), ...namesAsync.session.filter((k) => !k.startsWith("bukusupe:"))] : ["測れない"];
-  check(namesAsync && namesAsync.idb.length > 0 && unprefixed.length === 0,
-    "Web 版の保存領域（IndexedDB・localStorage・sessionStorage）の名前に、ブクスペ専用の接頭辞が付いている",
-    namesAsync ? `IndexedDB ${namesAsync.idb.join(", ")}・localStorage ${namesAsync.local.join(", ") || "なし"}・sessionStorage ${namesAsync.session.join(", ") || "なし"}${unprefixed.length ? "・接頭辞なし " + unprefixed.join(", ") : ""}` : "測れない");
+    ...namesAsync.local.filter((k) => !k.startsWith("bukusupe:")), ...namesAsync.session.filter((k) => !k.startsWith("bukusupe:")),
+    ...namesAsync.cache.filter((n) => !n.startsWith("bukusupe-"))] : ["測れない"];
+  check(namesAsync && namesAsync.idb.length > 0 && namesAsync.cache.length > 0 && unprefixed.length === 0,
+    "Web 版の保存領域（IndexedDB・localStorage・sessionStorage・モデルの Cache Storage）の名前に、ブクスペ専用の接頭辞が付いている",
+    namesAsync ? `IndexedDB ${namesAsync.idb.join(", ")}・Cache Storage ${namesAsync.cache.join(", ")}・localStorage ${namesAsync.local.join(", ") || "なし"}・sessionStorage ${namesAsync.session.join(", ") || "なし"}${unprefixed.length ? "・接頭辞なし " + unprefixed.join(", ") : ""}` : "測れない");
 
   // --- 6. 外部から読むのはモデルの重みだけ。コンソールにエラー・警告が無い ---
   const requests = app.events.filter((e) => e.method === "Network.requestWillBeSent").map((e) => e.params.request.url);

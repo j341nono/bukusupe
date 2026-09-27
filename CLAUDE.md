@@ -64,6 +64,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-flight.mjs     # 飛行モードの確認
 │   ├── check-dist.mjs       # コミットされる dist/ が今のソースのビルドと一致するか
 │   ├── check-release.mjs    # 配布用のビルドに確認用の仕組みが残っていない・版ずれと仮の問い合わせ先で失敗する
+│   ├── check-cache.mjs      # モデルのキャッシュの名前（前の版の壊れたキャッシュがあっても動く）
 │   ├── package.mjs          # ストアに上げる zip を作る（npm run package）
 │   ├── check-fresh.mjs      # git の index の dist/ を、まっさらなプロファイルで初回起動
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
@@ -105,7 +106,7 @@ npm run build:debug  # 確認用のビルドを dist-debug/ に生成（check:ex
 npm run package    # 配布用のビルドから、ストアに上げる zip を release/ に作る
 npm run typecheck  # tsc --noEmit
 npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
-npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ。20 分ほど）
+npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ → キャッシュの名前。25 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 npm run check:web    # Web のデモの確認だけ
 npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す
@@ -128,6 +129,7 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
    スクリプト・WASM は必ず同梱する（CDN 参照を書かない）。
    - transformers.js は**既定で ONNX Runtime の `.mjs` / `.wasm` を jsDelivr から読む**。
      埋め込みを使う入口では必ず `configureOrt()`（`src/embed/ort-env.ts`）を先に呼ぶ。
+   - モデルの重みの Cache Storage は `env.cacheKey = "bukusupe-model"`（Web のデモの origin を他のページと共有するため）。
    - `env.useWasmCache` は false のままにする。true にすると `.mjs` を `blob:` URL にして
      読み込もうとし、MV3 の CSP（`script-src 'self'`）に弾かれる。
 2. **ブックマークの内容をブラウザの外に送らない。** 分析・ログ送信・外部 API 呼び出しを書かない。

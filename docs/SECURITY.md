@@ -55,8 +55,9 @@
 | chrome.storage.local `bench:…` | 確認用の注入（確認用のビルドで `?debug=1&bench=…` のときだけ読む） | `parseBookmarkItem` を通す。配布用のビルドには、この処理も `storage` 権限も無い（段階 2） |
 
 - Web のデモの保存領域の名前には、すべてブクスペ専用の接頭辞（`bukusupe-` / `bukusupe:`）が付いている（`check-web` が確かめる）。
-  GitHub Pages では、同じユーザーの他のリポジトリのページと保存領域（同じ origin）を共有するため。モデルのキャッシュ（Cache Storage）は
-  transformers.js の既定の名前 `transformers-cache` のまま。
+  GitHub Pages では、同じユーザーの他のリポジトリのページと保存領域（同じ origin）を共有するため。モデルのキャッシュ（Cache Storage）も、
+  Transformers.js の `env.cacheKey` で `bukusupe-model` にした（段階 2。既定は `transformers-cache`）。前の版の `transformers-cache` は、
+  拡張機能では消し、Web のデモでは他のページのものかもしれないので残す。壊れた古いキャッシュがあっても読まないことを `check-cache` が確かめる。
 
 ## 拡張機能の設定
 
@@ -76,7 +77,10 @@
 ## 依存関係
 
 - `npm audit`（配布物の依存・開発用の依存とも）：0 件（2026-09-27）。
-- ONNX Runtime Web は、Transformers.js 4.3.0 が指定する開発版（`1.31.0-dev.20260914`）。段階 2 で、正式版が出ていれば更新を検討する。
+- ONNX Runtime Web は、Transformers.js 4.3.0 が指定する開発版（`1.31.0-dev.20260914-8d85527a0`）。段階 2 で調べた結果（2026-09-28）：
+  `1.31.0` の正式版はまだ出ていない（npm の `latest` は `1.30.0`、2026-09-14。`dev` は `1.31.0-dev.20260918`）。Transformers.js も `4.3.0` が最新で、
+  指定は変わっていない。`1.30.0` に下げるのは、Transformers.js が前提にする版と食い違うので勧めない。`1.31.0` の正式版か、それを指定する
+  Transformers.js が出たら更新する（使う人の判断）。
 
 ## 調査のときの結果（2026-09-27）と修正
 
@@ -91,7 +95,7 @@
 | 7 | 低 | IndexedDB から読んだ星座の形を確かめず、形の違う行で起動が止まった | 修正（`parseConstellation`） |
 | 8 | 低 | Web のデモに CSP が無い | 修正（`WEB_CSP`） |
 | 9 | 低 | ストア向けに要らない権限・仕組み（`storage`、`?debug=1`） | 修正（確認用のビルドに分けた。段階 2） |
-| 10 | 低 | ONNX Runtime Web が開発版 | 段階 2 |
+| 10 | 低 | ONNX Runtime Web が開発版 | 調べた（正式版の 1.31.0 は未公開。更新は使う人の判断） |
 
 実地の確かめ：`<img src=x onerror=…>`・`<script>`・`"><svg onload=…>` を含むタイトルとフォルダ名、HTML を含む星座の名前で、
 地図・カード・検索中・星座の名前と一覧・飛行中の窓のどこでも文字として表示され、差し込まれた要素・ダイアログ・例外は 0 件だった（修正前から）。

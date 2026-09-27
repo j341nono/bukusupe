@@ -13,7 +13,7 @@
 |---|---|---|
 | 0 | ハッカソンの提出（`v0.1.0-hacksonic`） | 完了（2026-09-27） |
 | 1 | 安全性の調査と修正 | **完了（2026-09-28）**。`docs/SECURITY.md`。調査の #3・#9・#10 は段階 2 へ |
-| 2 | ストア向けのビルド | **進行中（2026-09-28）**。`host_permissions` を外した・配布用と確認用のビルドを分けた・`npm run package` |
+| 2 | ストア向けのビルド | **ほぼ完了（2026-09-28）**。`host_permissions` を外した・配布用と確認用のビルドを分けた・`npm run package`・版 0.9.0・キャッシュの名前。残りは、警告の文言と段階 3 の説明文の照合だけ |
 | 3 | プライバシーポリシー・掲載文・権限の説明・画像 | 未着手 |
 | 4 | 限定公開で申請し、試してもらう（0.9.x） | 未着手 |
 | 5 | 利用者のための修正 | 未着手（方針は「決めたこと」で決定済み） |
@@ -107,6 +107,11 @@
     確認用の名前が残っている、のどれかで失敗する。問い合わせ先は `src/config.ts` の `SUPPORT_EMAIL`。
   - 版の番号：`public/manifest.json` と `package.json` がずれていると、配布用のビルド（`vite.config.ts` の `checkVersion`）が失敗する。
     git のタグはストアに上げたコミットに後から付けるものなので、ビルドでは比べない（上げる手順で付ける）。
+- **モデルのキャッシュの名前**：Transformers.js の `env.cacheKey` で `bukusupe-model` にした（`src/embed/ort-env.ts`）。前の版の
+  `transformers-cache` は拡張機能では消し、Web のデモ（GitHub Pages で origin を共有）では残す。前の版のキャッシュが壊れていても動くことを
+  `scripts/check-cache.mjs`（新規）が拡張機能と Web のデモで確かめる（変更前は、壊れた古いキャッシュを読んでモデルを読み込めず NG だった）。
+- **ONNX Runtime Web**：`1.31.0` の正式版はまだ無い（`latest` は `1.30.0`、2026-09-14）。Transformers.js 4.3.0（最新）は `1.31.0-dev.20260914` を指定している。
+  切り替えていない（使う人の判断。`docs/SECURITY.md` の依存関係）。
 - **版を `0.9.0` にした**（`public/manifest.json`・`package.json`）。`CHANGELOG.md` を作った。
 - **確認**（`scripts/check-release.mjs`、`check:ext` の 2 番目）：配布用の `dist/` と Web のデモに確認用・測定用の名前が無い／manifest に
   `host_permissions` と `storage` が無い／版ずれで配布用のビルドと `package` が失敗する／仮のメールで `package` が失敗する／本物の値なら zip ができる。
@@ -123,7 +128,8 @@
       （範囲に入っていない通信が 1 件でもあれば NG。自動確認）。
 - [x] 自動確認：manifest・`package.json` の版が一致しないと配布用のビルドと `npm run package` が失敗する（タグは上げた後に付けるので比べない）。
 - [ ] `chrome://extensions` でストア向けのビルドを読み込んだときの権限の警告の文言が、段階 3 の説明文と一致している（スクリーンショットで確認）。
-- [ ] zip の大きさと、ファイルの一覧が `docs/RELEASE.md` の付録に記録されている。
+      警告の文言は実測した（「結果」）。段階 3 の説明文を書くときに照らし合わせる。
+- [x] zip の大きさと、ファイルの一覧が `docs/RELEASE.md` の付録に記録されている。
 
 ---
 
@@ -360,3 +366,22 @@
 - **B. 利用者がフォルダを選んだときだけ、そのフォルダを星座にする**。
 - **推奨：B**。理由：フォルダが多い人の画面が銀色の線で埋まり、自分で名付けた星座（金）が目立たなくなる。
   選んだフォルダだけにすれば、「フォルダ＝自分で決めた分類」を星図の上で見る、という用途に絞れる。
+
+---
+
+## 付録：ストアに上げる zip（0.9.0、2026-09-28）
+
+`npm run package` → `release/bukusupe-0.9.0.zip`。**7.1 MB**（展開すると 28.2 MB）、ファイル 11 個。manifest.json が直下。
+ソースマップ・`.DS_Store`・確認用のファイル・Web のデモ用の計算済みのサンプルは入っていない（`check-release`）。
+モデルの重み（約 118 MB）は入れず、初回に Hugging Face から取得する（「決めたこと」の 9）。
+
+| ファイル | 大きさ（バイト） |
+|---|---:|
+| `manifest.json` | 1,067 |
+| `index.html` | 25,412 |
+| `index.js` | 670,211 |
+| `background.js` | 106 |
+| `assets/embed.worker-*.js`（名前の後ろはビルドごとのハッシュ） | 548,671 |
+| `ort/ort-wasm-simd-threaded.asyncify.mjs` | 53,057 |
+| `ort/ort-wasm-simd-threaded.asyncify.wasm` | 26,861,777 |
+| `icons/icon16.png`・`icon32.png`・`icon48.png`・`icon128.png` | 911・2,485・4,392・17,423 |

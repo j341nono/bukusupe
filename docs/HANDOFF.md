@@ -24,8 +24,9 @@
 | 段階 | 内容 | 状態 |
 |---|---|---|
 | 1 | 安全性の調査と修正（ブックマークのタイトルの表示、特殊な URL の扱い、極端な文字列、`docs/SECURITY.md`） | **完了（2026-09-28）** |
-| 2 | ストア向けのビルド（測定用・確認用の仕組みを取り除く、Hugging Face の権限をなくすか絞る、`storage` 権限を外す、`npm run package` と zip、`CHANGELOG.md`） | **進行中（2026-09-28）** |
-| 3 | プライバシーポリシーのページ、ストアの掲載文、権限ごとの説明文、掲載用の画像 | 未着手 |
+| 2 | ストア向けのビルド（測定用・確認用の仕組みを取り除く、Hugging Face の権限をなくすか絞る、`storage` 権限を外す、`npm run package` と zip、`CHANGELOG.md`） | **ほぼ完了（2026-09-28）**。残りは警告の文言と段階 3 の説明文の照合 |
+| — | **使う人に頼むこと**：問い合わせのメールアドレス（`src/config.ts` の `SUPPORT_EMAIL`。仮の値のままだと `npm run package` が失敗する）、ONNX Runtime Web を正式版に替えるか（今は替えない） | 待ち |
+| 3 | プライバシーポリシーのページ、ストアの掲載文、権限ごとの説明文、掲載用の画像 | **次に行う** |
 | 4 | 限定公開（0.9.x）で申請し、試してもらう | 未着手（ストアの登録は使う人） |
 | 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 未着手 |
 | 6 | 1.0.0 として一般公開 | 未着手 |
@@ -79,7 +80,10 @@
 - **版の番号**：`public/manifest.json` と `package.json` がずれていると、配布用のビルドが失敗する（`vite.config.ts` の `checkVersion`）。
 - **`npm run package`**（`scripts/package.mjs`）：`dist/` から `release/bukusupe-X.Y.Z.zip`。問い合わせのメール（`src/config.ts` の `SUPPORT_EMAIL`）が
   仮の値だと失敗する。**使う人からメールアドレスを受け取ったら `SUPPORT_EMAIL` を直す。**
-- 確認：`scripts/check-release.mjs`（新規、`check:ext` の 2 番目）と `check-fresh` の追加（権限なしで意味検索、`?debug=1` でも窓口が無い）。
+- **モデルのキャッシュ**を `bukusupe-model` にした（`env.cacheKey`）。前の版の `transformers-cache` は拡張機能では消し、Web のデモでは残す。
+- **ONNX Runtime Web**：正式版の `1.31.0` はまだ無い。開発版のまま（更新は使う人の判断）。
+- 確認：`scripts/check-release.mjs`（新規、`check:ext` の 2 番目）、`check-fresh` の追加（権限なしで意味検索、`?debug=1` でも窓口が無い）、
+  `scripts/check-cache.mjs`（新規、`check:ext` の最後。壊れた古いキャッシュがあっても動く）、`check-web` の保存領域の名前に Cache Storage を足した。
 
 ---
 
@@ -440,7 +444,7 @@ npm run icons      # アイコン PNG を作り直す
 
 `check:ext` は、はじめに確認用のビルド（`dist-debug/`・`dist-web-debug/`）を作ってから、次の順に動かす：`check-dist`（コミットされる `dist/` が
 配布用のビルドと一致）→ `check-release`（配布用の中身・版・zip）→ `check-fresh`（配布用の `dist/` をまっさらなプロファイルで。権限なしで意味検索、
-`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web`（ここから確認用のビルド）。
+`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache`（`check-extension` から後は確認用のビルド）。
 以下の番号は `check-extension` の項目。
 
 1. 拡張機能として読み込め、専用ページが開く

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
-import { configureOrt } from "./ort-env";
+import { configureOrt, dropOldModelCache } from "./ort-env";
 import type { EmbedDtype, EmbedRequest, EmbedResponse } from "./protocol";
 
 /**
@@ -61,6 +61,8 @@ self.onmessage = async (event: MessageEvent<EmbedRequest>) => {
   try {
     if (msg.type === "init") {
       configureOrt(msg.ortBaseUrl);
+      // 前の版のモデルのキャッシュ（transformers-cache）を消す。拡張機能だけ（Web のデモは origin を他のページと共有する）
+      if (!__WEB__) await dropOldModelCache();
       // 量子化の切り替えは確認用のビルドだけ（配布用は常に q8）
       extractor = load(msg.model, __DEBUG__ ? msg.dtype ?? "q8" : "q8");
       await extractor;
