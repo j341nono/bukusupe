@@ -45,6 +45,13 @@ const DOT_WIDTH = 11;
 
 /** 中距離で省略する長さ（全角を 1、半角を 0.5 として数える）。 */
 const MID_WIDTH = 18;
+/**
+ * 近距離・検索中のタイトルの最大の長さ（同じ数え方）。とても長いタイトルが画面の外まで伸びないように（docs/SECURITY.md）。
+ * マウスを乗せたときの全文も、この長さまで。それより長い分は title（ブラウザの小さな吹き出し）で見る。
+ */
+const NEAR_WIDTH = 40;
+const SEARCH_WIDTH = 32;
+const HOVER_WIDTH = 80;
 
 const isWide = (ch: string) => !/[ -߿｡-ﾟ]/.test(ch);
 
@@ -101,10 +108,11 @@ export class LabelLayer {
       if (shown.length >= MAX_LABELS) break;
       const full = item.text;
       this.fullText.set(item.key, full);
-      const shortened =
-        item.kind === "star" && tier === "mid" && this.hovered !== item.key
-          ? truncate(full, MID_WIDTH)
-          : full;
+      const limit = item.kind !== "star" ? Infinity
+        : this.hovered === item.key ? HOVER_WIDTH
+          : item.searchRank != null ? SEARCH_WIDTH
+            : tier === "mid" ? MID_WIDTH : NEAR_WIDTH;
+      const shortened = limit === Infinity ? full : truncate(full, limit);
 
       const size = sizeOf(item);
       const w = this.labelWidth(item, shortened, size);
@@ -176,6 +184,10 @@ export class LabelLayer {
         this.elements.set(item.key, el);
       }
       el.textContent = text;
+      // 省略したときは、全文を title に入れる（マウスを乗せると見られる）
+      const full = this.fullText.get(item.key) ?? text;
+      if (full !== text) el.title = full;
+      else el.removeAttribute("title");
       const orbit = item.searchRank == null ? "" : item.searchRank < 3 ? " label-orbit-inner"
         : item.searchRank < 9 ? " label-orbit-middle" : " label-orbit-outer";
       // 星団名はどの拡大率でもクリックでその星団へ移れる
@@ -209,7 +221,8 @@ export class LabelLayer {
     el.classList.add("is-hovered");
     const hovered = this.active.find(({ item }) => item.key === key);
     if (hovered?.item.opacity != null) el.style.opacity = "1";
-    const full = this.fullText.get(key) ?? "";
+    // 全文を出す。ただし長すぎるものは HOVER_WIDTH まで（残りは title で見る）
+    const full = truncate(this.fullText.get(key) ?? "", HOVER_WIDTH);
     el.textContent = full;
     // 左側のタイトルは右端（星の側）を固定して、全文を左へ伸ばす。星の上にかぶらないように
     const entry = this.active.find(({ item }) => item.key === key);

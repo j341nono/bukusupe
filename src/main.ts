@@ -546,6 +546,7 @@ function renderConstellationList(): void {
   for (const row of constellations) {
     const button = document.createElement("button");
     button.textContent = row.name;
+    button.title = row.name;   // 長い名前は CSS で省略する。全文はここで見られる
     button.classList.toggle("is-active", row.id === activeConstellationId);
     button.addEventListener("click", () => void toggleConstellation(row.id));
     list.append(button);
@@ -656,9 +657,15 @@ function showCard(id: string): void {
   const card = document.getElementById("star-card");
   if (!item || !card) return;
   cardId = id;
-  (document.getElementById("star-card-title") as HTMLElement).textContent = item.title;
-  (document.getElementById("star-card-url") as HTMLElement).textContent = item.url;
-  (document.getElementById("star-card-folder") as HTMLElement).textContent = item.folderPath.join(" / ") || "ルート";
+  // 長いものは CSS で行数を限って省略する。全文はマウスを乗せたときの title で見られる
+  const setText = (id: string, text: string) => {
+    const el = document.getElementById(id) as HTMLElement;
+    el.textContent = text;
+    el.title = text;
+  };
+  setText("star-card-title", item.title);
+  setText("star-card-url", item.url);
+  setText("star-card-folder", item.folderPath.join(" / ") || "ルート");
   card.hidden = false;
 }
 
