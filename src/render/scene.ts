@@ -134,6 +134,8 @@ export class SpaceView {
   private readonly keyPan = new THREE.Vector2();
   private keyZoom = 0;
   private editIds: string[] = [];
+  /** 選んでいる星座の新星（SPEC 9 章）。星座を選んでいて、検索していないときだけ輪を付けて明るくする */
+  private novaIds: string[] = [];
   /** 飛行モード（SPEC 13 章）。入る前の検索は flightSearch に預け、出たら掛け直す */
   private readonly flight = new Flight();
   private readonly flightLook = new THREE.Vector3();
@@ -400,6 +402,16 @@ export class SpaceView {
     this.refreshEmphasis();
   }
 
+  /** 選んでいる星座の新星を示す（空で消す） */
+  setNovae(points: ConstellationPoint[]): void {
+    this.wake();
+    this.novaIds = points.map((point) => point.id);
+    this.refreshEmphasis();
+  }
+
+  /** 確認用：輪を付けている新星の id */
+  novaeShown(): string[] { return this.constellations.novaeIds(); }
+
   setEditMembers(points: ConstellationPoint[]): void {
     this.wake();
     this.editIds = points.map((point) => point.id);
@@ -420,13 +432,18 @@ export class SpaceView {
       this.constellationName.classList.toggle("is-visible", !!this.constellationNameId && !searching);
     }
     const ids = mode === "edit" ? this.editIds : selected.map((point) => point.id);
-    this.emphasisIds = new Set(ids);
+    // 新星は、星座の星と同じく明るくしてタイトルを優先する（輪は金ではなく淡い白）
+    const novae = mode === "selected" ? this.novaIds.filter((id) => !ids.includes(id)) : [];
+    const emphasized = [...ids, ...novae];
+    this.emphasisIds = new Set(emphasized);
     this.emphasisMode = mode;
-    this.field.setEmphasis(ids, mode);
-    this.constellations.editMembers(ids.flatMap((id) => {
+    this.field.setEmphasis(emphasized, mode);
+    const at = (list: string[]) => list.flatMap((id) => {
       const p = this.field.displayPosition(id);
       return p ? [{ id, ...p }] : [];
-    }), mode === "edit");
+    });
+    this.constellations.editMembers(at(ids), mode === "edit");
+    this.constellations.setNovae(at(novae));
     this.labelsDirty = true;
   }
 
@@ -518,7 +535,7 @@ export class SpaceView {
     };
     const pad = 12;
     const search = rectOf("search-box");
-    const bottoms = ["constellation-list", "constellation-manage"].map(rectOf).filter((r) => !!r) as DOMRect[];
+    const bottoms = ["constellation-list", "constellation-manage", "constellation-novae"].map(rectOf).filter((r) => !!r) as DOMRect[];
     const panel = ["hud", "hud-toggle"].map(rectOf).filter((r) => !!r) as DOMRect[];
     const top = (search?.bottom ?? 0) + pad;
     const bottom = Math.min(size.y, ...bottoms.map((r) => r.top)) - pad;

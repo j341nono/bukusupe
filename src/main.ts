@@ -16,7 +16,7 @@ import {
 import { provisionalLayout } from "./layout/provisional";
 import { clusterNames } from "./layout/names";
 import {
-  CONSTELLATION_FORMAT, membersFor, migrateConstellation, migratedMembers, minimumSpanningTree, parseConstellation,
+  CONSTELLATION_FORMAT, membersFor, migrateConstellation, migratedMembers, minimumSpanningTree, novaeFor, parseConstellation,
   parseLegacyConstellation, pointsFor, type Constellation, type LegacyConstellation,
 } from "./constellation";
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
@@ -93,6 +93,8 @@ let constellations: Constellation[] = [];
  */
 const pendingMigration = new Map<string, LegacyConstellation>();
 let activeConstellationId: string | null = null;
+/** 選んでいる星座の新星（SPEC 9 章）。保存の後に加わり、保存した検索語に合う星 */
+let novae: string[] = [];
 let editing: { query: string; automatic: string[]; pinned: Set<string>; excluded: Set<string> } | null = null;
 let savingAnimation = false;
 let openModifierHeld = false;
@@ -172,7 +174,6 @@ async function main(): Promise<void> {
   }
   mark("ready");
   constellations = await loadConstellations();
-  await migrateConstellations();
   await reconcileConstellations();
   refreshConstellations();
   setupSearch(canvas);
@@ -182,6 +183,8 @@ async function main(): Promise<void> {
   offerSample();
 
   watchBookmarks();
+  // 旧形式の星座を移す。検索（モデル）を待つので、画面の準備は止めない（移すまでは前回の呼び出しの形で描く）
+  void migrateConstellations();
   document.getElementById("relayout")?.addEventListener("click", () => void enqueue(relayout));
 }
 
@@ -457,7 +460,10 @@ async function attractedFor(query: string): Promise<string[]> {
 let migrating: Promise<void> | null = null;
 function migrateConstellations(): Promise<void> {
   // 起動の途中とモデルの読み込み終わりから同時に呼ばれても、一度だけ移す
-  migrating ??= migrateNow().finally(() => { migrating = null; });
+  // 失敗しても起動は止めない（旧形式のまま残り、次に開いたときに移す）
+  migrating ??= migrateNow()
+    .catch((err) => console.warn("[ブクスペ] 旧形式の星座を移せなかった", err))
+    .finally(() => { migrating = null; });
   return migrating;
 }
 
@@ -493,6 +499,7 @@ async function reconcileConstellations(): Promise<void> {
     if (!pendingMigration.has(row.id)) await writeConstellation(row);
   }
   refreshConstellations();
+  if (novae.some((id) => !alive.has(id))) setNovae(novae.filter((id) => alive.has(id)));
 }
 
 function currentEditMembers(): string[] {
@@ -573,6 +580,7 @@ async function createConstellation(name: string, ids: string[],
   constellations.push(row);
   activeConstellationId = row.id;
   savingAnimation = true;
+  setNovae([]);
   refreshConstellations();
   view?.saveConstellation(row.id, row.name, pointsFor(state.layout, members));
   renderConstellationList();
@@ -582,6 +590,7 @@ async function createConstellation(name: string, ids: string[],
       window.setTimeout(() => {
         savingAnimation = false;
         activeConstellationId = null;
+        setNovae([]);
         view?.selectConstellation(null);
         // 演出のあいだに入力欄へ戻っていたら、真上のまま（検索の見やすさを保つ）
         if (document.activeElement !== document.getElementById("search-input")) view?.setTopDown(false);
@@ -601,19 +610,98 @@ let recallGeneration = 0;
  */
 async function toggleConstellation(id: string): Promise<void> {
   if (savingAnimation) return;
-  ++recallGeneration;
+  const generation = ++recallGeneration;
   if (activeConstellationId === id) {
     activeConstellationId = null;
+    setNovae([]);
     view?.selectConstellation(null);
     renderConstellationList();
     return;
   }
   const row = constellations.find((item) => item.id === id);
   if (!row) return;
+  // 新星を探すのは、検索語を持つ星座だけ。探し終えてから選ぶ（カメラを一度で新星まで収める）
+  const found = row.query && searchSettled() && !pendingMigration.has(row.id)
+    ? novaeFor(row, await attractedFor(row.query), addedAtOf()) : [];
+  if (generation !== recallGeneration) return;
   activeConstellationId = id;
   refreshConstellations();
+  setNovae(found);
   view?.selectConstellation(id, row.name);
-  view?.focusPoints(pointsFor(state.layout, row.members));
+  view?.focusPoints(pointsFor(state.layout, [...row.members, ...found]));
+}
+
+/** ブックマークの追加日時（新星の判定に使う） */
+function addedAtOf(): (id: string) => number | undefined {
+  const byId = new Map(state.items.map((item) => [item.id, item.dateAdded]));
+  return (id) => byId.get(id);
+}
+
+/** 新星を地図（輪）と一覧に出す。空で消す */
+function setNovae(ids: string[]): void {
+  novae = ids;
+  view?.setNovae(pointsFor(state.layout, ids));
+  renderNovae();
+}
+
+/**
+ * 新星の一覧。選んでいる星座に新星があり、保存の演出中でも検索中でもないときだけ出す。
+ * タイトルは textContent で入れる（ブックマークから来た文字列を HTML として解釈させない。規則 9）。
+ */
+function renderNovae(): void {
+  const panel = document.getElementById("constellation-novae");
+  if (!panel) return;
+  const row = constellations.find((item) => item.id === activeConstellationId);
+  const byId = new Map(state.items.map((item) => [item.id, item]));
+  const shown = row ? novae.filter((id) => byId.has(id)) : [];
+  panel.replaceChildren();
+  panel.hidden = !shown.length || savingAnimation || hits.length > 0;
+  if (panel.hidden || !row) return;
+  const heading = document.createElement("p");
+  const label = document.createElement("b");
+  label.textContent = "新星";
+  heading.append(label, `保存の後に加わり、「${row.query ?? ""}」に合う星`);
+  heading.title = heading.textContent ?? "";
+  const list = document.createElement("ul");
+  for (const id of shown) {
+    const item = document.createElement("li");
+    item.dataset.id = id;
+    const title = document.createElement("span");
+    title.className = "nova-title";
+    title.textContent = byId.get(id)?.title || byId.get(id)?.url || "";
+    title.title = title.textContent;
+    title.addEventListener("click", () => showCard(id));
+    const accept = document.createElement("button");
+    accept.dataset.action = "accept";
+    accept.textContent = "加える";
+    accept.addEventListener("click", () => void acceptNova(id));
+    const dismiss = document.createElement("button");
+    dismiss.dataset.action = "dismiss";
+    dismiss.textContent = "見送る";
+    dismiss.addEventListener("click", () => void dismissNova(id));
+    item.append(title, accept, dismiss);
+    list.append(item);
+  }
+  panel.append(heading, list);
+}
+
+/** 新星を星座に加える：メンバーに足して保存し、線を結び直す。savedAt は変えない（他の新星を候補に残すため） */
+async function acceptNova(id: string): Promise<void> {
+  const row = constellations.find((item) => item.id === activeConstellationId);
+  if (!row || !novae.includes(id)) return;
+  if (!row.members.includes(id)) row.members = [...row.members, id];
+  await writeConstellation(row);
+  refreshConstellations();
+  setNovae(novae.filter((other) => other !== id));
+}
+
+/** 新星を見送る：記録して、二度と新星として出さない */
+async function dismissNova(id: string): Promise<void> {
+  const row = constellations.find((item) => item.id === activeConstellationId);
+  if (!row || !novae.includes(id)) return;
+  if (!row.dismissed.includes(id)) row.dismissed = [...row.dismissed, id];
+  await writeConstellation(row);
+  setNovae(novae.filter((other) => other !== id));
 }
 
 /**
@@ -700,6 +788,7 @@ function setupConstellations(): void {
     constellations = constellations.filter((item) => item.id !== id);
     ++recallGeneration;
     activeConstellationId = null;
+    setNovae([]);
     view?.selectConstellation(null);
     refreshConstellations();
   });
@@ -712,6 +801,7 @@ function setupConstellations(): void {
     else if (activeConstellationId) {
       ++recallGeneration;
       activeConstellationId = null;
+      setNovae([]);
       view?.selectConstellation(null);
       renderConstellationList();
     }
@@ -760,6 +850,8 @@ function applySearch(next: SearchHit[]): void {
   view?.selectSearch(hits[0]?.id ?? null);
   const create = document.getElementById("constellation-create") as HTMLElement | null;
   if (create) create.hidden = !hits.length || !(document.getElementById("search-input") as HTMLInputElement).value.trim() || !!editing;
+  // 検索中は新星の一覧を隠す（検索を前面に出す。消すと戻る）
+  renderNovae();
 }
 
 function setupSearch(canvas: HTMLCanvasElement): void {
@@ -804,6 +896,7 @@ function setupSearch(canvas: HTMLCanvasElement): void {
       if (activeConstellationId && !input.value.trim()) {
         ++recallGeneration;
         activeConstellationId = null;
+        setNovae([]);
         view?.selectConstellation(null);
         renderConstellationList();
         event.preventDefault();
@@ -983,7 +1076,7 @@ if (__DEBUG__) {
     async simulateAdd(title: string, url: string, folder: string[] = []) {
       if (!embedder || !state.mean || !state.layout) return null;
       saved ??= { items: state.items, vectors: state.vectors, layout: state.layout };
-      const item: BookmarkItem = { id: `sim-${Date.now()}`, title, url, folderPath: folder };
+      const item: BookmarkItem = { id: `sim-${Date.now()}`, title, url, folderPath: folder, dateAdded: Date.now() };
       const [vec] = await embedder.embed([passageText(item)]);
       state.items = [...state.items, item];
       state.vectors = new Map(state.vectors).set(item.id, vec);
@@ -1114,7 +1207,9 @@ if (__DEBUG__) {
     resetLabelTiming: () => view?.resetLabelTiming(),
     cameraTilt: () => view?.cameraTilt(),
     measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
-    constellationState: () => ({ rows: constellations, active: activeConstellationId,
+    constellationState: () => ({ rows: constellations, active: activeConstellationId, novae: [...novae],
+      pendingMigration: pendingMigration.size,
+      novaeShown: view?.novaeShown() ?? [],
       editing: editing ? { query: editing.query, automatic: editing.automatic,
         pinned: [...editing.pinned], excluded: [...editing.excluded], members: currentEditMembers() } : null,
       geometry: view?.constellationGeometry(), animation: view?.constellationAnimationState() }),
@@ -1126,6 +1221,18 @@ if (__DEBUG__) {
     /** 確認用：星団へ寄る（1,000 文字のタイトルのラベルを近距離で見るため） */
     focusCluster: (index: number) => view?.focusCluster(index),
     recallConstellation: toggleConstellation,
+    /** 確認用：新しい Worker を作ってすぐに埋め込みを頼む（モデルの準備の途中に来た頼みも、準備を待ってから計算されるか） */
+    async embedRightAway() {
+      const fresh = createEmbedder();
+      try {
+        const [vec] = await fresh.embed([queryText("宇宙")]);
+        return { ok: vec?.length === 384 };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      } finally {
+        fresh.dispose();
+      }
+    },
     /** 確認用：検索語を持たない星座を作る（選択モードで作るものと同じ形） */
     createConstellation: (name: string, ids: string[]) => createConstellation(name, ids),
     mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),

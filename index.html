@@ -315,7 +315,7 @@
       .flight-window-domain { font-size: 10.5px; color: var(--dim); letter-spacing: 0.04em; }
       body.is-flying #flight-toggle { right: 20px; }
       /* 飛行中は地図の部品を隠す（入る前の状態は保ったまま。出たら戻る） */
-      body.is-flying #search-box, body.is-flying #constellation-list, body.is-flying #constellation-manage,
+      body.is-flying #search-box, body.is-flying #constellation-list, body.is-flying #constellation-manage, body.is-flying #constellation-novae,
       body.is-flying #star-card, body.is-flying #hint, body.is-flying #relayout, body.is-flying #labels,
       body.is-flying #constellation-name { display: none !important; }
 
@@ -425,6 +425,34 @@
         background: rgba(7, 10, 24, 0.96);
       }
       #constellation-manage[hidden] { display: none; }
+      /* 新星の一覧（SPEC 9 章）：選んでいる星座の、保存の後に加わって検索語に合う星。画面下の星座の名前の上に控えめに出す */
+      #constellation-novae {
+        position: fixed; z-index: 4; bottom: 52px; left: 50%; transform: translateX(-50%);
+        width: min(440px, calc(100vw - 32px)); max-height: 34vh; overflow-y: auto;
+        padding: 9px 12px 10px; border: 1px solid var(--faint); border-radius: 8px;
+        background: rgba(7, 10, 24, 0.9);
+      }
+      #constellation-novae p {
+        margin: 0 0 6px; font-size: 11px; letter-spacing: 0.06em; color: var(--dim);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #constellation-novae p b { font-family: var(--font-name); font-weight: normal; letter-spacing: 0.18em; color: var(--ink); margin-right: 8px; }
+      #constellation-novae ul { margin: 0; padding: 0; list-style: none; }
+      #constellation-novae li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid rgba(214, 205, 180, 0.08); }
+      #constellation-novae li:first-child { border-top: none; }
+      #constellation-novae .nova-title {
+        flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: isolate;
+      }
+      #constellation-novae .nova-title::before { content: "✧ "; color: var(--ink); opacity: 0.8; }
+      #constellation-novae button {
+        flex: none; padding: 3px 10px; border-radius: 999px; background: none; cursor: pointer;
+        font: inherit; font-size: 11.5px; letter-spacing: 0.08em;
+      }
+      /* 「加える」は星座（人が名付けたもの）への操作なので金。「見送る」は控えめ */
+      #constellation-novae button[data-action="accept"] { border: 1px solid var(--gold-soft); color: #f0dcb0; }
+      #constellation-novae button[data-action="dismiss"] { border: 1px solid var(--faint); color: var(--dim); }
+      #constellation-novae button:hover { background: rgba(214, 205, 180, 0.08); }
       #constellation-name {
         position: fixed; z-index: 3; left: 0; top: 0; pointer-events: none;
         color: #f2dcaa; font-family: var(--font-name); font-size: 19px; letter-spacing: 0.32em;
@@ -523,6 +551,7 @@
       </div>
     </div>
     <div id="constellation-name"></div>
+    <section id="constellation-novae" aria-label="新星" hidden></section>
     <nav id="constellation-list" aria-label="保存した星座"></nav>
     <div id="constellation-manage" role="menu" aria-label="星座の操作" hidden><button id="constellation-rename" role="menuitem">名前を変える</button><button id="constellation-delete" role="menuitem">削除</button></div>
     <aside id="star-card" hidden>

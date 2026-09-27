@@ -1150,9 +1150,11 @@ try {
   await sleep(300);
   await evalIn(`globalThis.__bukusupe.recallConstellation(${JSON.stringify(constellationId)})`);
   const withNew = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().rows[0].members)")) ?? "[]");
-  check(!!newId && newRank >= 0 && newRank < 12 && !withNew.includes(newId) && JSON.stringify(withNew) === JSON.stringify(beforeAdd),
-    "検索に合うブックマークを追加して呼び出しても、メンバーは保存した時点のまま",
-    `足した星の検索順位 ${newRank + 1}・メンバー ${beforeAdd.length} → ${withNew.length} 星（${withNew.includes(newId) ? "足した星が入った" : "足した星は入らない"}）`);
+  const newNovae = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().novae ?? null)")) ?? "null");
+  check(!!newId && newRank >= 0 && newRank < 12 && !withNew.includes(newId) && JSON.stringify(withNew) === JSON.stringify(beforeAdd) &&
+    !!newNovae?.includes(newId),
+    "検索に合うブックマークを追加して呼び出しても、メンバーは保存した時点のまま。足した星は新星として示される",
+    `足した星の検索順位 ${newRank + 1}・メンバー ${beforeAdd.length} → ${withNew.length} 星（${withNew.includes(newId) ? "足した星が入った" : "足した星は入らない"}）・新星 ${JSON.stringify(newNovae)}`);
   await evalIn("globalThis.__bukusupe.restore()");
   // 画面下には名前だけ。「名前を変える」「削除」は、選んでいる星座の横の「…」から開く
   const menu = JSON.parse((await evalIn(`JSON.stringify((() => {

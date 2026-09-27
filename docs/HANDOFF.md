@@ -28,7 +28,7 @@
 | — | **使う人に頼むこと**：問い合わせのメールアドレス（`src/config.ts` の `SUPPORT_EMAIL`。仮の値のままだと `npm run package` が失敗する）、ONNX Runtime Web を正式版に替えるか（今は替えない） | 待ち |
 | 3 | プライバシーポリシーのページ、ストアの掲載文、権限ごとの説明文、掲載用の画像 | **次に行う** |
 | 4 | 限定公開（0.9.x）で申請し、試してもらう | 未着手（ストアの登録は使う人） |
-| 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 未着手 |
+| 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 星座のメンバーの固定と新星だけ**完了（2026-09-28、先に行った）**。残りは未着手 |
 | 6 | 1.0.0 として一般公開 | 未着手 |
 | 7 | 伸ばすための機能（英語対応、片付け、フォルダの自動星座、検索候補、新しいタブ版） | 未着手 |
 
@@ -65,6 +65,23 @@
 - `hud.ts` の `innerHTML` を要素の組み立てに替えた（`src/` に HTML として解釈する処理は無い）。
 - Web のデモの index.html に CSP（`vite.config.ts` の `WEB_CSP`、`--mode web` のときだけ）。
 - 確認用の窓口に `openUrl`・`returnStateInfo`・`focusCluster` を足した（`?debug=1` のときだけ。段階 2 で配布物から取り除く）。
+
+### 段階 5 から先に行ったこと：星座のメンバーの固定と新星（2026-09-28）
+
+この後に作る「選択モード」（検索と関係なく星を選んで星座にする）の前提で、ストアへの最初の申請の前に保存データの形を変えておくため、段階 5 の 2 を先に行った。
+詳しくは `docs/SPEC.md` 9 章と `docs/RELEASE.md` 段階 5 の 2。
+- 星座のメンバーは保存した時点で固定（`members`）。呼び出しで検索し直さない。検索語（`query`）は記録で、新星を探すのにだけ使う。
+- 新星：保存の後に加わり、保存した検索語で引き寄せた上位 12 に入る星。淡い白の輪と、画面下の一覧（`#constellation-novae`、「加える」「見送る」）。
+  見送った星は `dismissed` に残り、二度と出ない。追加日時（`dateAdded`）の無いブックマークは新星にしない。
+- 旧形式は `loadConstellations` で仮の形（`lastMembers`）にして並べ、`migrateConstellations` が検索の使えるようになった後に移して保存する。
+  移行は起動を止めない（`void migrateConstellations()`）。失敗しても起動は続け、次に開いたときに移す。
+- 検索語を持たない星座は `createConstellation(name, ids)`（`source: "selection"`）。選択モードはこれを呼べばよい。
+- **つまずいた点**：段階 2 のモデルのキャッシュの変更（`f9f7fed`）で、Worker の `init` が古いキャッシュを消す `await` の後に `extractor` を入れていたため、
+  その間に届いた `embed` が「init より先に embed が来た」で失敗していた。起動の直後に埋め込みを頼む移行で表に出た（起動の残りも止まった）。
+  `extractor` を同期で入れ、消す処理はその中で待つように直した。`check-cache` に「Worker を作った直後の埋め込み」を足した（直す前は必ず NG）。
+- 気づいたこと（直していない）：星が少なく近くまで寄ったとき、星座の星の輪（金）と新星の輪が、星の点から少しずれて見える（傾けたときの描き方。前からある）。
+- `check:ext` の最後に `check-constellation`（新規）を足した。`check-extension` の「足したブックマークがメンバーに入る」は
+  「メンバーは変わらず、新星として示される」に変えた。
 
 ### 段階 2 でしたこと（2026-09-28。詳しくは `docs/RELEASE.md` 段階 2 の「結果」）
 
@@ -444,7 +461,7 @@ npm run icons      # アイコン PNG を作り直す
 
 `check:ext` は、はじめに確認用のビルド（`dist-debug/`・`dist-web-debug/`）を作ってから、次の順に動かす：`check-dist`（コミットされる `dist/` が
 配布用のビルドと一致）→ `check-release`（配布用の中身・版・zip）→ `check-fresh`（配布用の `dist/` をまっさらなプロファイルで。権限なしで意味検索、
-`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache`（`check-extension` から後は確認用のビルド）。
+`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache` → `check-constellation`（`check-extension` から後は確認用のビルド）。
 以下の番号は `check-extension` の項目。
 
 1. 拡張機能として読み込め、専用ページが開く

@@ -61,10 +61,14 @@ self.onmessage = async (event: MessageEvent<EmbedRequest>) => {
   try {
     if (msg.type === "init") {
       configureOrt(msg.ortBaseUrl);
-      // 前の版のモデルのキャッシュ（transformers-cache）を消す。拡張機能だけ（Web のデモは origin を他のページと共有する）
-      if (!__WEB__) await dropOldModelCache();
       // 量子化の切り替えは確認用のビルドだけ（配布用は常に q8）
-      extractor = load(msg.model, __DEBUG__ ? msg.dtype ?? "q8" : "q8");
+      const dtype = __DEBUG__ ? msg.dtype ?? "q8" : "q8";
+      // extractor は、この処理の中で待たずに（同期で）入れる。await の間に次の embed が届くと、準備の前だとみなして失敗するため。
+      // 前の版のモデルのキャッシュ（transformers-cache）は、読み込みの前に消す。拡張機能だけ（Web のデモは origin を他のページと共有する）
+      extractor = (async () => {
+        if (!__WEB__) await dropOldModelCache();
+        return load(msg.model, dtype);
+      })();
       await extractor;
       post({ type: "ready", model: msg.model });
       return;

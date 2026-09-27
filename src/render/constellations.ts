@@ -51,12 +51,16 @@ export class ConstellationLayer {
   private readonly animated = new THREE.LineSegments(new THREE.BufferGeometry(), lineMaterial(0xe6c88c, 0.95));
   private readonly rings = new THREE.Group();
   private ringIds: string[] = [];
+  /** 新星の輪（SPEC 9 章「新星」）。金ではなく、星と文字の淡い白（まだ自分で名付けた星座の星ではない） */
+  private readonly novae = new THREE.Group();
+  private novaIds: string[] = [];
 
   constructor() {
     this.animated.visible = false;
     this.animated.renderOrder = LINE_ORDER;
     this.rings.renderOrder = LINE_ORDER;
-    this.object.add(this.animated, this.rings);
+    this.novae.renderOrder = LINE_ORDER;
+    this.object.add(this.animated, this.rings, this.novae);
   }
 
   set(rows: DrawnConstellation[]): void {
@@ -130,6 +134,7 @@ export class ConstellationLayer {
   setFlight(on: boolean): void {
     this.flying = on;
     this.rings.visible = !on;
+    this.novae.visible = !on;
     this.style();
   }
 
@@ -205,12 +210,46 @@ export class ConstellationLayer {
     }
   }
 
+  /**
+   * 新星に輪を付ける：細い輪を 2 重にし、星座の星の輪（金）と見分けられるようにする。
+   * 点滅させない（動きがあるときだけ描く方式を保ち、静かな見た目にする）。
+   */
+  setNovae(points: ConstellationPoint[]): void {
+    this.novaIds = points.map((point) => point.id);
+    for (const group of [...this.novae.children]) {
+      this.novae.remove(group);
+      for (const mesh of group.children as THREE.Mesh[]) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    }
+    for (const point of points) {
+      const group = new THREE.Group();
+      for (const [inner, outer, opacity] of [[0.34, 0.38, 0.85], [0.5, 0.52, 0.4]] as const) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 32),
+          new THREE.MeshBasicMaterial({ color: 0xece6d6, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false }));
+        ring.rotation.x = -Math.PI / 2;
+        group.add(ring);
+      }
+      group.position.set(point.x, 0.16, -point.y);
+      this.novae.add(group);
+    }
+  }
+
+  /** 確認用：輪を付けている新星の id */
+  novaeIds(): string[] { return [...this.novaIds]; }
+
   /** 輪を星の表示位置に合わせる。scale は画面上でほぼ一定の大きさに見せるための倍率。 */
   moveEditMembers(position: (id: string) => { x: number; y: number } | null, scale = 1): void {
     this.rings.children.forEach((ring, i) => {
       const p = position(this.ringIds[i]);
       if (p) ring.position.set(p.x, 0.16, -p.y);
       ring.scale.setScalar(scale);
+    });
+    this.novae.children.forEach((group, i) => {
+      const p = position(this.novaIds[i]);
+      if (p) group.position.set(p.x, 0.16, -p.y);
+      group.scale.setScalar(scale);
     });
   }
 

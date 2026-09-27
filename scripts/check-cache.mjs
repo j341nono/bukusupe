@@ -70,6 +70,10 @@ async function scenario(label, app, reload, modelReady, keepOld) {
       await app.send("Page.reload", {}, app.sessionId);
       await sleep(500);
     }, `document.body.dataset.phase === 'ready' && !!${b}?.modelReady()`, false);
+    // 古いキャッシュを消している途中（Worker の準備の途中）に来た埋め込みの頼みも、準備を待ってから計算される
+    const rightAway = JSON.parse((await app.tryEval(`(async () => JSON.stringify(await ${b}.embedRightAway()))()`)) ?? "null");
+    check(rightAway?.ok === true, "拡張機能：Worker を作った直後の埋め込みの頼みも、モデルの準備を待って計算される",
+      rightAway?.error ?? "");
     const bad = app.events.filter((e) => e.method === "Runtime.exceptionThrown");
     check(bad.length === 0, "拡張機能：例外が出ない", bad.slice(0, 2).map((e) => e.params?.exceptionDetails?.text).join(" / "));
   } catch (err) {
