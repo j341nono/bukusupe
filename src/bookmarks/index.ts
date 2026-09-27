@@ -48,6 +48,8 @@ export async function loadBookmarks(): Promise<BookmarkSnapshot & { chromeCount:
  * ブックマーク自体には触らない。
  */
 async function loadBenchBookmarks(): Promise<(BookmarkSnapshot & { chromeCount: number; bench: string }) | null> {
+  // 確認用のビルドだけ（配布用のビルドでは、この下は取り除かれる）
+  if (!__DEBUG__) return null;
   const params = new URLSearchParams(location.search);
   const bench = params.get("debug") === "1" ? params.get("bench") : null;
   if (!bench || typeof chrome === "undefined" || !chrome.storage?.local) return null;

@@ -21,7 +21,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createChecker, decodePng, launchExtension, sleep } from "./lib/harness.mjs";
 
-const DIST = resolve(process.argv[2] ?? "dist");
+const DIST = resolve(process.argv[2] ?? "dist-debug");
 const { check, problems } = createChecker();
 const IGNORE = /GPU stall|GL Driver Message|software WebGL/;
 let app = null;

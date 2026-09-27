@@ -32,8 +32,8 @@ export class WorkerEmbedder implements Embedder {
    * dtype で量子化を切り替える（通常は q8）。
    */
   constructor(private readonly options: { debug?: boolean; dtype?: EmbedDtype } = {}) {
-    // Vite は Worker の起動の書き方を静的に読むので、2 通りをそのまま書く
-    this.worker = options.debug
+    // Vite は Worker の起動の書き方を静的に読むので、2 通りをそのまま書く（確認用のビルドだけ debug の名前で起こす）
+    this.worker = __DEBUG__ && options.debug
       ? new Worker(new URL("./embed.worker.ts", import.meta.url), { type: "module", name: "bukusupe-debug" })
       : new Worker(new URL("./embed.worker.ts", import.meta.url), { type: "module" });
 
@@ -54,8 +54,10 @@ export class WorkerEmbedder implements Embedder {
           this.onDownload?.(msg.file, msg.progress);
           break;
         case "memory":
-          this.memoryWaiting.get(msg.requestId)?.({ bytes: msg.bytes, memories: msg.memories });
-          this.memoryWaiting.delete(msg.requestId);
+          if (__DEBUG__) {
+            this.memoryWaiting.get(msg.requestId)?.({ bytes: msg.bytes, memories: msg.memories });
+            this.memoryWaiting.delete(msg.requestId);
+          }
           break;
         case "vectors": {
           this.waiting.get(msg.requestId)?.resolve(msg.vectors);
@@ -77,7 +79,7 @@ export class WorkerEmbedder implements Embedder {
     this.worker.onerror = (e) => rejectReady(new Error(`Worker が落ちた: ${e.message}`));
 
     this.send({ type: "init", ortBaseUrl: ortBaseUrl(), model: this.model,
-      ...(this.options.dtype ? { dtype: this.options.dtype } : {}) });
+      ...(__DEBUG__ && this.options.dtype ? { dtype: this.options.dtype } : {}) });
   }
 
   ready(): Promise<void> {
@@ -93,15 +95,6 @@ export class WorkerEmbedder implements Embedder {
     });
   }
 
-  /** 測定用：Worker の中の WebAssembly のメモリの合計（バイト）。debug で起動したときだけ意味がある。 */
-  wasmMemory(): Promise<{ bytes: number; memories: number }> {
-    const requestId = this.nextId++;
-    return new Promise((resolve) => {
-      this.memoryWaiting.set(requestId, resolve);
-      this.send({ type: "memory", requestId });
-    });
-  }
-
   dispose(): void {
     this.worker.terminate();
     for (const { reject } of this.waiting.values()) reject(new Error("Worker を止めた"));
@@ -111,4 +104,19 @@ export class WorkerEmbedder implements Embedder {
   private send(msg: EmbedRequest): void {
     this.worker.postMessage(msg);
   }
+}
+
+/**
+ * 確認用：Worker の中の WebAssembly のメモリの合計（バイト）。debug で起動したときだけ意味がある。
+ * 配布用のビルドでは使わないので、クラスの外の関数にしてビルドの時点で取り除かれるようにする（規則 11）。
+ */
+export function requestWasmMemory(embedder: WorkerEmbedder): Promise<{ bytes: number; memories: number }> {
+  const inner = embedder as unknown as {
+    nextId: number; memoryWaiting: Map<number, (v: { bytes: number; memories: number }) => void>; worker: Worker;
+  };
+  const requestId = inner.nextId++;
+  return new Promise((resolve) => {
+    inner.memoryWaiting.set(requestId, resolve);
+    inner.worker.postMessage({ type: "memory", requestId } satisfies EmbedRequest);
+  });
 }

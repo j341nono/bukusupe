@@ -34,8 +34,8 @@ async function openWeb(app, url, reload) {
 }
 
 export async function web({ allowLoad = false, freshRuns = Number(process.env.BENCH_WEB_RUNS ?? 3) }) {
-  execFileSync("npm", ["run", "build:web"], { cwd: ROOT, stdio: "ignore" });
-  const server = await serve(join(ROOT, "dist-web"));
+  execFileSync("npm", ["run", "build:web:debug"], { cwd: ROOT, stdio: "ignore" });
+  const server = await serve(join(ROOT, "dist-web-debug"));
   const url = `http://127.0.0.1:${server.address().port}/bukusupe/?debug=1`;
   const env = captureEnvironment({ headless: true });
   const load = watchLoad();

@@ -52,7 +52,7 @@
 | sessionStorage `bukusupe:return-state` | 「戻る」で再開するための状態（版の番号 2） | `src/ui/return-state.ts` の `parseReturnState`：版・データ源・数値は有限で妥当な範囲・検索語は 500 文字まで・星座の id は文字列。一つでも合わなければ丸ごと捨ててふつうに開く。「戻る」以外で開いたときも捨てる |
 | IndexedDB `bukusupe-chrome` / `bukusupe-sample`（測定用は `bukusupe-bench-…`） | 埋め込み・配置・星座 | 星座の行は `src/constellation/index.ts` の `parseConstellation` で確かめ、合わない行は読み飛ばしてコンソールに警告を残す。名前は保存するときに 80 文字まで |
 | localStorage `bukusupe:prefer-sample`・`bukusupe:sample-hint-shown` | サンプルで試すかの選択・案内を出したか | `"1"` と比べるだけ |
-| chrome.storage.local `bench:…` | 確認用の注入（`?debug=1&bench=…` のときだけ読む） | `parseBookmarkItem` を通す。段階 2 で配布物から取り除く |
+| chrome.storage.local `bench:…` | 確認用の注入（確認用のビルドで `?debug=1&bench=…` のときだけ読む） | `parseBookmarkItem` を通す。配布用のビルドには、この処理も `storage` 権限も無い（段階 2） |
 
 - Web のデモの保存領域の名前には、すべてブクスペ専用の接頭辞（`bukusupe-` / `bukusupe:`）が付いている（`check-web` が確かめる）。
   GitHub Pages では、同じユーザーの他のリポジトリのページと保存領域（同じ origin）を共有するため。モデルのキャッシュ（Cache Storage）は
@@ -66,8 +66,12 @@
   `default-src 'self'`、`script-src 'self' 'wasm-unsafe-eval'`、`worker-src 'self'`、`connect-src 'self'` と Hugging Face（`*.hf.co` を含む）、
   `style-src 'self' 'unsafe-inline'`（index.html の中の `<style>`）、`img-src 'self' data: blob:`、`object-src 'none'`、`base-uri 'self'`、
   `form-action 'none'`。モデルの取得と意味検索まで通して、違反は 0 件（`check-web`）。
-- **段階 2 で扱う**：`host_permissions` が必要より広い（まず外せるかを確かめる）／`storage` 権限は確認用の注入のためだけ／
-  `?debug=1` の確認用の窓口（Web ページや他の拡張機能からは触れないが、規則 11 に従い配布物から取り除く）。
+- **権限（段階 2）**：配布用の manifest は `bookmarks`・`unlimitedStorage`・`favicon` だけ。`host_permissions` は外した（Hugging Face は
+  CORS を許しているので、拡張機能の画面と Worker から権限なしで重みを取れる。まっさらなプロファイルでモデルの取得 → 意味検索まで通すのを
+  `check-fresh` が確かめる）。`storage` は確認用の注入のためだけなので、確認用のビルド（`dist-debug/`）の manifest にだけ足す。
+- **確認用・測定用の仕組み（段階 2）**：`?debug=1` の窓口・測定用の注入と DB・量子化の切り替え・Worker のメモリの記録・描画の測定は
+  `if (__DEBUG__) { … }` の中にあり、配布用のビルドでは取り除かれる。`check-release` が名前の一覧（`scripts/lib/release.mjs` の `FORBIDDEN`）で
+  配布物を調べ、`check-fresh` が配布用のビルドで `?debug=1` を付けても窓口が無いことを確かめる。
 
 ## 依存関係
 
@@ -80,13 +84,13 @@
 |---|---|---|---|
 | 1 | 中 | ページを開く処理が URL の種類を確かめていなかった | 修正（`openPage`・`isOpenableUrl`・`parseBookmarkItem`） |
 | 2 | 中 | 「戻る」用の保存状態を確かめずに使い、壊れた値で起動が止まる・カメラが NaN になった | 修正（`parseReturnState`、版の番号） |
-| 3 | 中 | `host_permissions` が必要より広い | 段階 2 |
+| 3 | 中 | `host_permissions` が必要より広い | 修正（外した。段階 2） |
 | 4 | 低 | 右から左へ書く制御文字で、タイトルを別の URL に見せかけられる | 修正（書字の向きを区切る、カードの URL を固定） |
 | 5 | 低 | とても長いタイトルが画面からはみ出した（ラベルの幅 12,261px、カードの上端 −779px） | 修正（長さの上限と「…」、全文は title） |
 | 6 | 低 | `hud.ts` の `innerHTML` 2 か所 | 修正（要素の組み立て） |
 | 7 | 低 | IndexedDB から読んだ星座の形を確かめず、形の違う行で起動が止まった | 修正（`parseConstellation`） |
 | 8 | 低 | Web のデモに CSP が無い | 修正（`WEB_CSP`） |
-| 9 | 低 | ストア向けに要らない権限・仕組み（`storage`、`?debug=1`） | 段階 2 |
+| 9 | 低 | ストア向けに要らない権限・仕組み（`storage`、`?debug=1`） | 修正（確認用のビルドに分けた。段階 2） |
 | 10 | 低 | ONNX Runtime Web が開発版 | 段階 2 |
 
 実地の確かめ：`<img src=x onerror=…>`・`<script>`・`"><svg onload=…>` を含むタイトルとフォルダ名、HTML を含む星座の名前で、

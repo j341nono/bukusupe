@@ -31,7 +31,7 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 | 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄（入力中は無効、Ctrl は使わない） |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
 | 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
-| 権限 | `bookmarks`, `storage`, `unlimitedStorage`, `favicon`（飛行モードの窓のアイコン。インストール時の警告が 1 つ増える）。重みの取得に `huggingface.co` / `*.hf.co` の host_permissions |
+| 権限 | `bookmarks`, `unlimitedStorage`, `favicon`（飛行モードの窓のアイコン。インストール時の警告が 1 つ増える）。host_permissions は無し（Hugging Face が CORS を許すので、重みは権限なしで取れる）。確認用のビルドだけ `storage`（確認用の注入） |
 
 CSP は `manifest.json` の `content_security_policy.extension_pages` に
 `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'` を指定している。**外してはいけない。**
@@ -63,6 +63,8 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
 │   ├── check-flight.mjs     # 飛行モードの確認
 │   ├── check-dist.mjs       # コミットされる dist/ が今のソースのビルドと一致するか
+│   ├── check-release.mjs    # 配布用のビルドに確認用の仕組みが残っていない・版ずれと仮の問い合わせ先で失敗する
+│   ├── package.mjs          # ストアに上げる zip を作る（npm run package）
 │   ├── check-fresh.mjs      # git の index の dist/ を、まっさらなプロファイルで初回起動
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
 │   ├── check-idle.mjs       # 動きがあるときだけ描く（止まる・すぐ再開する・止まった画面が正しい）
@@ -71,9 +73,10 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── precompute-sample.mjs  # Web のデモに同梱する計算済みのサンプルを作る
 │   ├── gen-notices.mjs      # THIRD_PARTY_NOTICES を作る
 │   ├── bench/               # 時間とメモリの測定（npm run bench → docs/bench/results/、npm run bench:report → docs/BENCHMARK.md）
-│   └── lib/harness.mjs      # 確認スクリプトの共通の土台（CDP パイプ、ページ内のキー入力）
+│   └── lib/                 # harness.mjs（確認スクリプトの共通の土台）、release.mjs（配布物に残ってはいけない名前・版・問い合わせ先）
 ├── src/
 │   ├── main.ts              # 画面の入口（読み込み → 埋め込み → 配置 → 検索・星座）
+│   ├── config.ts            # 問い合わせ先（SUPPORT_EMAIL は仮の値。本物にするまで npm run package が失敗する）
 │   ├── background.ts        # service worker（アイコン → 専用タブ）
 │   ├── bookmarks/           # ブックマークの取得（Chrome / サンプルの 2 系統。読み取りのみ）
 │   ├── embed/               # 埋め込み（Worker、入力文の組み立て、ドメイン辞書、大分類、ORT 設定）
@@ -85,8 +88,11 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── render/              # three.js の描画（星・星雲・ブラックホール・星座の線）
 │   ├── ui/                  # HUD とラベルの重ね表示
 │   └── data/                # sample-bookmarks.json（156 件）、sample-precomputed.json（Web のデモ用の計算済み）
-├── dist/                    # ビルド成果物（拡張機能として読み込む）。**リポジトリに含める**（審査員はビルドしない）
-└── dist-web/                # Web のデモのビルド成果物（git には入れない。GitHub Actions が作って公開する）
+├── dist/                    # 配布用のビルド（拡張機能として読み込む・ストアの zip の元）。**リポジトリに含める**（審査員はビルドしない）
+├── dist-debug/              # 確認用のビルド（?debug=1 の窓口・測定用の仕組みを含む。check:ext と bench が使う。git には入れない）
+├── dist-web/                # Web のデモのビルド成果物（git には入れない。GitHub Actions が作って公開する）
+├── dist-web-debug/          # Web のデモの確認用のビルド（check:web が使う。git には入れない）
+└── release/                 # npm run package が作る zip（git には入れない）
 ```
 
 ## ビルドと確認の手順
@@ -94,7 +100,9 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ```bash
 npm install
 npm run dev        # http://localhost:5173 で画面を確認（サンプルデータ）
-npm run build      # dist/ を生成
+npm run build      # 配布用のビルドを dist/ に生成（版の番号がずれていると失敗する）
+npm run build:debug  # 確認用のビルドを dist-debug/ に生成（check:ext・bench・sample:precompute が使う）
+npm run package    # 配布用のビルドから、ストアに上げる zip を release/ に作る
 npm run typecheck  # tsc --noEmit
 npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
 npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ。20 分ほど）
@@ -104,12 +112,14 @@ npm run sample:precompute  # サンプル・入力文・配置の計算・モデ
 npm run bench        # 時間とメモリの測定（2〜3 時間。--only=run1 / run2 / <項目>）。npm run bench:report で報告書だけ作り直す
 ```
 
-拡張機能としての確認：`npm run build` → `chrome://extensions` → デベロッパーモード ON →
+拡張機能としての確認：`npm run build`（確認用の窓口が要るなら `npm run build:debug` と `dist-debug/`）→ `chrome://extensions` → デベロッパーモード ON →
 「パッケージ化されていない拡張機能を読み込む」で `dist/` を選択 → ツールバーのアイコンを押す。
 
 データ源は自動判定する（`chrome.bookmarks` に http(s) のブックマークがあれば Chrome、なければサンプル）。
 URL に `?sample=1` を付けると拡張機能内でも強制的にサンプルデータになる（ⓘ のパネルの「サンプルの宇宙で試す」でも切り替わる）。
-`?demo=1` で左上のパネルを隠す。確認用の窓口 `__bukusupe` は **`?debug=1` のときだけ**公開する（確認スクリプトは `?debug=1` で開く）。
+`?demo=1` で左上のパネルを隠す。確認用の窓口 `__bukusupe` は **確認用のビルド（dist-debug/）で `?debug=1` のときだけ**公開する
+（確認スクリプトは `?debug=1` で開く）。確認用・測定用のコードは `if (__DEBUG__) { … }` で囲み、配布用のビルドでは丸ごと消す
+（クラスのメソッドは消えないので、`viewDebug(view)` のような関数に分ける）。`check-release` が配布用に残っていないことを確かめる。
 使っている途中でデータ源が変わったら（サンプル⇄実ブックマーク）、ページを読み込み直す。
 
 ## 守るべきルール

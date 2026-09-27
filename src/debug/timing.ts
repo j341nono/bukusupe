@@ -16,7 +16,7 @@ export function stopTiming(): void {
 
 /** fn を呼び、記録中なら name ごとにかかった時間（ミリ秒）を足す。 */
 export function timed<T>(name: string, fn: () => T): T {
-  if (!sink) return fn();
+  if (!__DEBUG__ || !sink) return fn();
   const start = performance.now();
   const result = fn();
   sink[name] = (sink[name] ?? 0) + performance.now() - start;

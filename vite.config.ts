@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 
@@ -21,12 +21,49 @@ function dropDuplicateOrtWasm(): Plugin {
 /**
  * Web のデモ（`--mode web`）には拡張機能のマニフェストを置かない（public/ から写されたものを消す）。
  */
-function dropManifest(): Plugin {
+function dropManifest(outDir: string): Plugin {
   return {
     name: "drop-extension-manifest",
     apply: "build",
     closeBundle() {
-      rmSync(resolve("dist-web/manifest.json"), { force: true });
+      rmSync(resolve(outDir, "manifest.json"), { force: true });
+    },
+  };
+}
+
+/**
+ * 版の番号をそろえる（docs/RELEASE.md「版の番号の決まり」）：manifest の version と package.json の version が違えば、
+ * 配布用のビルドを失敗させる。確認（scripts/check-release.mjs）のために、package.json の版を環境変数で差し替えられる
+ * （BUKUSUPE_TEST_PACKAGE_VERSION。ビルドの道具の中だけで使い、配布物には入らない）。
+ */
+function checkVersion(): Plugin {
+  return {
+    name: "check-version",
+    apply: "build",
+    buildStart() {
+      const manifest = JSON.parse(readFileSync(resolve("public/manifest.json"), "utf8")).version;
+      const pkg = process.env.BUKUSUPE_TEST_PACKAGE_VERSION ?? JSON.parse(readFileSync(resolve("package.json"), "utf8")).version;
+      if (manifest !== pkg) {
+        this.error(`版の番号がそろっていない：public/manifest.json は ${manifest}、package.json は ${pkg}（docs/RELEASE.md「版の番号の決まり」）`);
+      }
+    },
+  };
+}
+
+/**
+ * 確認用のビルドの manifest：確認用の注入（chrome.storage.local）のための storage 権限を足し、名前に「（確認用）」を付ける。
+ * 配布用の manifest（public/manifest.json そのまま）には、確認用だけに使う権限を入れない。
+ */
+function debugManifest(outDir: string): Plugin {
+  return {
+    name: "debug-manifest",
+    apply: "build",
+    closeBundle() {
+      const path = resolve(outDir, "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.name = `${manifest.name}（確認用）`;
+      manifest.permissions = [...new Set([...(manifest.permissions ?? []), "storage"])];
+      writeFileSync(path, JSON.stringify(manifest, null, 2) + "\n");
     },
   };
 }
@@ -66,30 +103,46 @@ function webCsp(): Plugin {
 
 // 素の Vite で MV3 を組む。プラグインを使わないのは、CSP と
 // ONNX Runtime の補助ファイル（M1 で同梱）の配置を自分で握るため。
-// `--mode web` は Web のデモ（M6）：サンプルだけで動く版を dist-web/ に出す（service worker もマニフェストも無い）。
-export default defineConfig(({ mode }) => ({
-  base: "./",
-  plugins: mode === "web" ? [dropDuplicateOrtWasm(), dropManifest(), webCsp()] : [dropDuplicateOrtWasm()],
-  build: {
-    target: "es2022",
-    outDir: mode === "web" ? "dist-web" : "dist",
-    emptyOutDir: true,
-    rollupOptions: {
-      // パスは root（プロジェクト直下）からの相対
-      input: mode === "web" ? { index: "index.html" } as Record<string, string> : {
-        index: "index.html",
-        background: "src/background.ts",
-      },
-      output: {
-        // manifest.json から参照するため、background だけは固定名にする。
-        entryFileNames: "[name].js",
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash].[ext]",
+//
+// ビルドは 4 種類（docs/RELEASE.md 段階 2）：
+// - 配布用（既定。`npm run build`）→ dist/。確認用の仕組み（__DEBUG__ の中）はビルドの時点で取り除く。リポジトリに含め、ストアに出す
+// - 確認用（`--mode debug`。`npm run build:debug`）→ dist-debug/。check:ext と bench が使う（?debug=1 の確認用の窓口など）
+// - Web のデモ（`--mode web`。`npm run build:web`）→ dist-web/。公開するのはこれ
+// - Web のデモの確認用（`--mode web-debug`。`npm run build:web:debug`）→ dist-web-debug/。check-web と bench が使う
+export default defineConfig(({ mode }) => {
+  const web = mode === "web" || mode === "web-debug";
+  const debug = mode === "debug" || mode === "web-debug";
+  const outDir = { debug: "dist-debug", web: "dist-web", "web-debug": "dist-web-debug" }[mode] ?? "dist";
+  const plugins = [dropDuplicateOrtWasm()];
+  if (web) plugins.push(dropManifest(outDir), webCsp());
+  else if (debug) plugins.push(debugManifest(outDir));
+  else plugins.push(checkVersion());
+  return {
+    base: "./",
+    plugins,
+    // 確認用の仕組みを囲む定数。配布用では false になり、囲んだコードは丸ごと消える
+    define: { __DEBUG__: JSON.stringify(debug), __WEB__: JSON.stringify(web) },
+    build: {
+      target: "es2022",
+      outDir,
+      emptyOutDir: true,
+      rollupOptions: {
+        // パスは root（プロジェクト直下）からの相対
+        input: web ? { index: "index.html" } as Record<string, string> : {
+          index: "index.html",
+          background: "src/background.ts",
+        },
+        output: {
+          // manifest.json から参照するため、background だけは固定名にする。
+          entryFileNames: "[name].js",
+          chunkFileNames: "assets/[name]-[hash].js",
+          assetFileNames: "assets/[name]-[hash].[ext]",
+        },
       },
     },
-  },
-  worker: {
-    // MV3 では classic worker が使えないので ES モジュールで出す（M1 で使う）。
-    format: "es",
-  },
-}));
+    worker: {
+      // MV3 では classic worker が使えないので ES モジュールで出す（M1 で使う）。
+      format: "es" as const,
+    },
+  };
+});

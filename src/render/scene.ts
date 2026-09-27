@@ -1020,7 +1020,7 @@ export class SpaceView {
    * 止まっていた間の時間は、次のコマの経過時間に数えない（アニメーションが飛ばないように）。
    */
   wake(): void {
-    if (!this.running || this.paused) return;
+    if (!this.running || (__DEBUG__ && this.paused)) return;
     this.idleFrames = 0;
     if (this.looping) return;
     this.looping = true;
@@ -1052,7 +1052,7 @@ export class SpaceView {
    * このコマの後も描く必要があるか。飛行中・カメラや星の動き・演出・ラベルの判断待ち・入力の途中のどれかがあれば true。
    */
   private needsNextFrame(controlsMoved: boolean, cameraMoving: boolean): boolean {
-    return this.continuous || this.holds.size > 0 || this.flight.active || this.dive !== null ||
+    return (__DEBUG__ && this.continuous) || this.holds.size > 0 || this.flight.active || this.dive !== null ||
       this.focus !== null || Math.abs(this.tilt - this.tiltTarget) > 1e-4 || this.tiltPointer !== null ||
       this.keys.size > 0 || this.keyPan.lengthSq() > 0 || this.keyZoom !== 0 ||
       controlsMoved || cameraMoving || this.field.isAnimating || this.constellations.isAnimating || this.constellationNameWait ||
@@ -1063,18 +1063,6 @@ export class SpaceView {
   private settle(active: boolean): void {
     if (active) { this.idleFrames = 0; return; }
     if (++this.idleFrames >= IDLE_FRAMES && this.looping) this.sleepLoop();
-  }
-
-  /** 測定用：止めずに描き続ける（1 コマの描画の力を測るとき）。false で、動きがあるときだけ描く方式に戻す */
-  setContinuousRender(on: boolean): void {
-    this.continuous = on;
-    this.wake();
-  }
-
-  /** 確認用：いまの状態で 1 コマ描く（止まった画面が古くないかを比べるため） */
-  renderNow(): void {
-    this.clock.getDelta();
-    this.step();
   }
 
   /** 地図全体が画面の約 80% に収まる位置へカメラを置く */
@@ -1132,7 +1120,7 @@ export class SpaceView {
 
   /** 測定中なら kind の時間を足す。通常は fn を呼ぶだけ */
   private phase<T>(kind: "overlay" | "render", fn: () => T): T {
-    if (!this.profile) return fn();
+    if (!__DEBUG__ || !this.profile) return fn();
     const start = performance.now();
     const result = fn();
     this.profile.current[kind] += performance.now() - start;
@@ -1140,38 +1128,12 @@ export class SpaceView {
   }
 
   private readonly tick = (): void => {
-    if (!this.profile) { this.step(); return; }
+    if (!__DEBUG__ || !this.profile) { this.step(); return; }
     const start = performance.now();
     this.profile.current = { overlay: 0, render: 0 };
     this.step();
     this.profile.frames.push({ at: start, total: performance.now() - start, ...this.profile.current });
   };
-
-  /** 測定用：1 コマごとの時間の記録を始める・止める。 */
-  setProfiling(on: boolean): void {
-    this.profile = on ? { frames: [], current: { overlay: 0, render: 0 } } : null;
-  }
-
-  /** 測定用：ここまでの 1 コマごとの記録を取り出して空にする。 */
-  takeProfile(): FrameProfile[] {
-    const frames = this.profile?.frames ?? [];
-    if (this.profile) this.profile.frames = [];
-    return frames;
-  }
-
-  /** 測定用：three.js の描画の資源（直前のコマの描画の呼び出し回数など）。 */
-  renderInfo(): { geometries: number; textures: number; programs: number; calls: number; triangles: number; points: number; lines: number } {
-    const info = this.renderer.info;
-    return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0,
-      calls: info.render.calls, triangles: info.render.triangles, points: info.render.points, lines: info.render.lines };
-  }
-
-  /** 測定用：描画のループを止める・再開する（何もしていないときの CPU 使用率への影響を見るためだけ）。 */
-  setLoopPaused(paused: boolean): void {
-    this.paused = paused;
-    if (paused) this.sleepLoop();
-    else this.wake();
-  }
 
   private step(): void {
     this.frames++;
@@ -1694,4 +1656,51 @@ export class SpaceView {
       if (mat?.uniforms?.uScale) mat.uniforms.uScale.value = scale;
     }
   }
+}
+
+/**
+ * 確認用・測定用の操作（check:ext と bench が `__bukusupe` から使う）。配布用のビルドでは使わないので、クラスのメソッドにせず
+ * この関数にまとめ、ビルドの時点で取り除かれるようにする（規則 11、docs/RELEASE.md 段階 2）。
+ */
+export function viewDebug(view: SpaceView) {
+  // クラスの中の値に触れるための型（TypeScript の private は実行時には無い）
+  const inner = view as unknown as {
+    profile: { frames: FrameProfile[]; current: { overlay: number; render: number } } | null;
+    continuous: boolean; paused: boolean; renderer: THREE.WebGLRenderer; clock: THREE.Clock;
+    step(): void; sleepLoop(): void;
+  };
+  return {
+    /** 1 コマごとの時間の記録を始める・止める */
+    setProfiling(on: boolean): void {
+      inner.profile = on ? { frames: [], current: { overlay: 0, render: 0 } } : null;
+    },
+    /** ここまでの 1 コマごとの記録を取り出して空にする */
+    takeProfile(): FrameProfile[] {
+      const frames = inner.profile?.frames ?? [];
+      if (inner.profile) inner.profile.frames = [];
+      return frames;
+    },
+    /** three.js の描画の資源（直前のコマの描画の呼び出し回数など） */
+    renderInfo() {
+      const info = inner.renderer.info;
+      return { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0,
+        calls: info.render.calls, triangles: info.render.triangles, points: info.render.points, lines: info.render.lines };
+    },
+    /** 描画のループを止める・再開する（何もしていないときの CPU 使用率への影響を見るためだけ） */
+    setLoopPaused(paused: boolean): void {
+      inner.paused = paused;
+      if (paused) inner.sleepLoop();
+      else view.wake();
+    },
+    /** 止めずに描き続ける（1 コマの描画の力を測るとき）。false で、動きがあるときだけ描く方式に戻す */
+    setContinuousRender(on: boolean): void {
+      inner.continuous = on;
+      view.wake();
+    },
+    /** いまの状態で 1 コマ描く（止まった画面が古くないかを比べるため） */
+    renderNow(): void {
+      inner.clock.getDelta();
+      inner.step();
+    },
+  };
 }

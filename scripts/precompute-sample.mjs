@@ -13,7 +13,7 @@ import { resolve } from "node:path";
 import { launchExtension } from "./lib/harness.mjs";
 
 const OUT = resolve("src/data/sample-precomputed.json");
-const app = await launchExtension(resolve("dist"), { query: "sample=1&debug=1" });
+const app = await launchExtension(resolve("dist-debug"), { query: "sample=1&debug=1" });
 try {
   const ready = await app.waitUntil(
     "document.body.dataset.phase === 'ready' && globalThis.__bukusupe?.state.kind === 'sample' && globalThis.__bukusupe.state.layout",

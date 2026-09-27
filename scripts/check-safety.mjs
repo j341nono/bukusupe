@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import { createChecker, launchExtension, sleep } from "./lib/harness.mjs";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
-const DIST = resolve(process.argv[2] ?? "dist");
+const DIST = resolve(process.argv[2] ?? "dist-debug");
 const { check, problems } = createChecker();
 const b = "globalThis.__bukusupe";
 

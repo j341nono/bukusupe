@@ -1,6 +1,6 @@
 import { SAMPLE_TODAY, loadBookmarks, setPreferSample, type BookmarkItem, type BookmarkSourceKind } from "./bookmarks";
 import { setToday } from "./today";
-import { MODEL_ID, WorkerEmbedder, type Embedder } from "./embed/embedder";
+import { MODEL_ID, WorkerEmbedder, requestWasmMemory, type Embedder } from "./embed/embedder";
 import { decodeSampleCache, encodeSampleCache, type SampleCacheFile } from "./data/sample-cache";
 import { ensureEmbeddings } from "./embed/ensure";
 import { passageText, queryText } from "./embed/text";
@@ -18,7 +18,7 @@ import { clusterNames } from "./layout/names";
 import { membersFor, minimumSpanningTree, parseConstellation, pointsFor, type Constellation } from "./constellation";
 import { ATTRACT_RATIO, CLUSTER_PRIOR, GENERALITY_PENALTY, rankSearch, semanticScores, type SearchHit } from "./search";
 import { toLabelSource, toRenderStars } from "./render/present";
-import { SpaceView } from "./render/scene";
+import { SpaceView, viewDebug } from "./render/scene";
 import { startTiming, stopTiming } from "./debug/timing";
 import type { EmbedDtype } from "./embed/protocol";
 import { lastTouched, touchAppearance } from "./render/magnitude";
@@ -53,7 +53,8 @@ const state: AppState = {
  * `?debug=1&dtype=fp16|fp32` は量子化の比較のためだけの切り替え（通常は q8）。
  */
 const PARAMS = new URLSearchParams(location.search);
-const DEBUG = PARAMS.get("debug") === "1";
+// 確認用のビルドだけ（配布用のビルドでは __DEBUG__ が false なので、DEBUG の下のコードは取り除かれる）
+const DEBUG = __DEBUG__ && PARAMS.get("debug") === "1";
 const DTYPE = DEBUG && ["q8", "fp16", "fp32"].includes(PARAMS.get("dtype") ?? "") ? PARAMS.get("dtype") as EmbedDtype : undefined;
 const benchMarks: Record<string, number> = {};
 const mark = (name: string): void => {
@@ -69,7 +70,8 @@ const createEmbedder = (): WorkerEmbedder => {
 };
 
 /** Web のデモ（`npm run build:web`）。サンプルだけで動き、計算済みの配置で開いた瞬間に星空を出す（M6） */
-const WEB = import.meta.env.MODE === "web";
+// ビルド時の定数（"web" と "web-debug" で true）。拡張機能のビルドでは、Web のデモだけのコードが丸ごと消える
+const WEB = __WEB__;
 let embedder: Embedder | null = null;
 /** 意味の検索に使えるか。Web のデモでは、裏で読み込んでいるモデルが揃うまで文字一致の検索だけにする */
 let modelReady = !WEB;
@@ -858,248 +860,252 @@ function watchBookmarks(): void {
   chrome.bookmarks.onMoved.addListener(refresh);   // フォルダのパスが入力文に入るため
 }
 
-// --- 開発と自動確認のための窓口。URL に ?debug=1 があるときだけ公開する（M6） ---
+if (__DEBUG__) {
+  // --- 開発と自動確認のための窓口。確認用のビルドで、URL に ?debug=1 があるときだけ公開する（M6、段階 2）。
+  // 配布用のビルドでは __DEBUG__ が false なので、この中は丸ごと取り除かれる（規則 11）。 ---
 
-const plain = (layout: Layout) => ({
-  spacing: layout.spacing,
-  stars: layout.stars.map((s) => ({
-    id: s.id,
-    x: s.x,
-    y: s.y,
-    cluster: s.cluster,
-    rank: s.rank,
-    title: state.items.find((i) => i.id === s.id)?.title ?? "",
-    folder: state.items.find((i) => i.id === s.id)?.folderPath.join("/") ?? "",
-  })),
-  clusters: layout.clusters.map((c) => ({
-    index: c.index,
-    name: c.name,
-    x: c.x,
-    y: c.y,
-    radius: c.radius,
-    count: c.count,
-  })),
-});
+  const plain = (layout: Layout) => ({
+    spacing: layout.spacing,
+    stars: layout.stars.map((s) => ({
+      id: s.id,
+      x: s.x,
+      y: s.y,
+      cluster: s.cluster,
+      rank: s.rank,
+      title: state.items.find((i) => i.id === s.id)?.title ?? "",
+      folder: state.items.find((i) => i.id === s.id)?.folderPath.join("/") ?? "",
+    })),
+    clusters: layout.clusters.map((c) => ({
+      index: c.index,
+      name: c.name,
+      x: c.x,
+      y: c.y,
+      radius: c.radius,
+      count: c.count,
+    })),
+  });
 
-let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: Layout | null } | null = null;
+  let saved: { items: BookmarkItem[]; vectors: Map<string, Float32Array>; layout: Layout | null } | null = null;
 
-const debugApi = {
-  state,
-  frames: () => view?.frames ?? 0,
-  layout: () => (state.layout ? plain(state.layout) : null),
+  const debugApi = {
+    state,
+    frames: () => view?.frames ?? 0,
+    layout: () => (state.layout ? plain(state.layout) : null),
 
-  /** 同じ入力から配置をもう一度計算する（毎回同じ座標になることの確認用）。 */
-  computeAgain() {
-    if (!state.mean) return null;
-    return plain(computeLayout(state.items, state.vectors, state.mean));
-  },
+    /** 同じ入力から配置をもう一度計算する（毎回同じ座標になることの確認用）。 */
+    computeAgain() {
+      if (!state.mean) return null;
+      return plain(computeLayout(state.items, state.vectors, state.mean));
+    },
 
-  /** ブックマークが 1 件増えたときの動きを、本物の経路で再現する。 */
-  async simulateAdd(title: string, url: string, folder: string[] = []) {
-    if (!embedder || !state.mean || !state.layout) return null;
-    saved ??= { items: state.items, vectors: state.vectors, layout: state.layout };
-    const item: BookmarkItem = { id: `sim-${Date.now()}`, title, url, folderPath: folder };
-    const [vec] = await embedder.embed([passageText(item)]);
-    state.items = [...state.items, item];
-    state.vectors = new Map(state.vectors).set(item.id, vec);
-    const next = addStar(state.layout, item.id, vec, state.mean);
-    show(next, false);
-    return plain(next);
-  },
+    /** ブックマークが 1 件増えたときの動きを、本物の経路で再現する。 */
+    async simulateAdd(title: string, url: string, folder: string[] = []) {
+      if (!embedder || !state.mean || !state.layout) return null;
+      saved ??= { items: state.items, vectors: state.vectors, layout: state.layout };
+      const item: BookmarkItem = { id: `sim-${Date.now()}`, title, url, folderPath: folder };
+      const [vec] = await embedder.embed([passageText(item)]);
+      state.items = [...state.items, item];
+      state.vectors = new Map(state.vectors).set(item.id, vec);
+      const next = addStar(state.layout, item.id, vec, state.mean);
+      show(next, false);
+      return plain(next);
+    },
 
-  /** 件数を増やしたときの配置と描画を測る。サンプルを複製して作る。 */
-  async benchmark(n: number) {
-    if (!state.mean) return null;
-    saved ??= { items: state.items, vectors: state.vectors, layout: state.layout };
-    const base = saved.items.filter((i) => saved?.vectors.has(i.id));
-    const items: BookmarkItem[] = [];
-    const vectors = new Map<string, Float32Array>();
-    let seed = 12345;
-    const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296 - 0.5);
-    for (let i = 0; i < n; i++) {
-      const src = base[i % base.length];
-      const copy: BookmarkItem = { ...src, id: `bench-${i}` };
-      const v = saved.vectors.get(src.id) as Float32Array;
-      const jittered = new Float32Array(v.length);
-      let sum = 0;
-      for (let d = 0; d < v.length; d++) {
-        jittered[d] = v[d] + rnd() * 0.06;
-        sum += jittered[d] * jittered[d];
+    /** 件数を増やしたときの配置と描画を測る。サンプルを複製して作る。 */
+    async benchmark(n: number) {
+      if (!state.mean) return null;
+      saved ??= { items: state.items, vectors: state.vectors, layout: state.layout };
+      const base = saved.items.filter((i) => saved?.vectors.has(i.id));
+      const items: BookmarkItem[] = [];
+      const vectors = new Map<string, Float32Array>();
+      let seed = 12345;
+      const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296 - 0.5);
+      for (let i = 0; i < n; i++) {
+        const src = base[i % base.length];
+        const copy: BookmarkItem = { ...src, id: `bench-${i}` };
+        const v = saved.vectors.get(src.id) as Float32Array;
+        const jittered = new Float32Array(v.length);
+        let sum = 0;
+        for (let d = 0; d < v.length; d++) {
+          jittered[d] = v[d] + rnd() * 0.06;
+          sum += jittered[d] * jittered[d];
+        }
+        const norm = Math.sqrt(sum);
+        for (let d = 0; d < v.length; d++) jittered[d] /= norm;
+        items.push(copy);
+        vectors.set(copy.id, jittered);
       }
-      const norm = Math.sqrt(sum);
-      for (let d = 0; d < v.length; d++) jittered[d] /= norm;
-      items.push(copy);
-      vectors.set(copy.id, jittered);
-    }
-    const mean = meanVector([...vectors.values()]);
-    const t0 = performance.now();
-    const layout = computeLayout(items, vectors, mean);
-    const layoutMs = performance.now() - t0;
+      const mean = meanVector([...vectors.values()]);
+      const t0 = performance.now();
+      const layout = computeLayout(items, vectors, mean);
+      const layoutMs = performance.now() - t0;
 
-    state.items = items;
-    state.vectors = vectors;
-    show(layout);
+      state.items = items;
+      state.vectors = vectors;
+      show(layout);
 
-    // 描画の力（何コマ描けるか）を測るので、この 1.5 秒は動きが無くても止めずに描く
-    view?.setContinuousRender(true);
-    const before = view?.frames ?? 0;
-    const start = performance.now();
-    await new Promise((r) => setTimeout(r, 1500));
-    const fps = ((view?.frames ?? 0) - before) / ((performance.now() - start) / 1000);
-    view?.setContinuousRender(false);
-    return { n, layoutMs, fps, clusters: layout.clusters.map((c) => ({ name: c.name, count: c.count })) };
-  },
+      // 描画の力（何コマ描けるか）を測るので、この 1.5 秒は動きが無くても止めずに描く
+      const vd = view ? viewDebug(view) : null;
+      vd?.setContinuousRender(true);
+      const before = view?.frames ?? 0;
+      const start = performance.now();
+      await new Promise((r) => setTimeout(r, 1500));
+      const fps = ((view?.frames ?? 0) - before) / ((performance.now() - start) / 1000);
+      vd?.setContinuousRender(false);
+      return { n, layoutMs, fps, clusters: layout.clusters.map((c) => ({ name: c.name, count: c.count })) };
+    },
 
-  /** benchmark の前の状態に戻す。 */
-  restore() {
-    if (!saved) return false;
-    state.items = saved.items;
-    state.vectors = saved.vectors;
-    if (saved.layout) show(saved.layout);
-    saved = null;
-    return true;
-  },
+    /** benchmark の前の状態に戻す。 */
+    restore() {
+      if (!saved) return false;
+      state.items = saved.items;
+      state.vectors = saved.vectors;
+      if (saved.layout) show(saved.layout);
+      saved = null;
+      return true;
+    },
 
-  setZoomTier: (tier: ZoomTier) => view?.setZoomTier(tier),
-  cameraState: () => view?.cameraState(),
-  resetCamera: () => view?.resetCamera(),
-  labelGeometry: () => view?.labelGeometry() ?? [],
-  setTopDown: (on: boolean) => view?.setTopDown(on),
-  // 飛行モード（SPEC 13 章）の確認用
-  enterFlight: () => view?.enterFlight(),
-  exitFlight: () => view?.exitFlight(),
-  flightState: () => view?.flightState(),
-  flightStars: () => view?.flightStars(),
-  flightHeights: () => view?.flightHeights(),
-  flightReset: () => view?.flightReset(),
-  flightDebris: (again = false) => view?.flightDebris(again),
-  flightNebulaRanges: () => view?.flightNebulaRanges(),
-  flightRings: () => view?.flightRings(),
-  flightPlace: (px: number, py: number, pz: number, lx: number, ly: number, lz: number) =>
-    view?.flightPlace(px, py, pz, lx, ly, lz),
-  flightTeleport: (id: string, distance: number) => view?.flightTeleport(id, distance),
-  starScreenSize: (id: string) => view?.starScreenSize(id),
-  flightConstellationSegments: () => view?.flightConstellationSegments(),
-  /** 確認用：最終利用日・追加日・螺旋の順位から、星の見え方（大きさ・明るさ・色）を求める */
-  appearanceFor: (input: { id?: string; dateLastUsed?: number; dateAdded?: number; rank?: number }) => {
-    const look = touchAppearance({ id: input.id ?? "", x: 0, y: 0, brightness: 0, cluster: 0, rank: input.rank ?? 0,
-      touched: lastTouched(input) });
-    return { size: look.size, alpha: look.alpha, color: [look.color.r, look.color.g, look.color.b] };
-  },
-  relayout,
+    setZoomTier: (tier: ZoomTier) => view?.setZoomTier(tier),
+    cameraState: () => view?.cameraState(),
+    resetCamera: () => view?.resetCamera(),
+    labelGeometry: () => view?.labelGeometry() ?? [],
+    setTopDown: (on: boolean) => view?.setTopDown(on),
+    // 飛行モード（SPEC 13 章）の確認用
+    enterFlight: () => view?.enterFlight(),
+    exitFlight: () => view?.exitFlight(),
+    flightState: () => view?.flightState(),
+    flightStars: () => view?.flightStars(),
+    flightHeights: () => view?.flightHeights(),
+    flightReset: () => view?.flightReset(),
+    flightDebris: (again = false) => view?.flightDebris(again),
+    flightNebulaRanges: () => view?.flightNebulaRanges(),
+    flightRings: () => view?.flightRings(),
+    flightPlace: (px: number, py: number, pz: number, lx: number, ly: number, lz: number) =>
+      view?.flightPlace(px, py, pz, lx, ly, lz),
+    flightTeleport: (id: string, distance: number) => view?.flightTeleport(id, distance),
+    starScreenSize: (id: string) => view?.starScreenSize(id),
+    flightConstellationSegments: () => view?.flightConstellationSegments(),
+    /** 確認用：最終利用日・追加日・螺旋の順位から、星の見え方（大きさ・明るさ・色）を求める */
+    appearanceFor: (input: { id?: string; dateLastUsed?: number; dateAdded?: number; rank?: number }) => {
+      const look = touchAppearance({ id: input.id ?? "", x: 0, y: 0, brightness: 0, cluster: 0, rank: input.rank ?? 0,
+        touched: lastTouched(input) });
+      return { size: look.size, alpha: look.alpha, color: [look.color.r, look.color.g, look.color.b] };
+    },
+    relayout,
 
-  async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY, priorCoefficient = CLUSTER_PRIOR) {
-    const ranked = await searchResults(text, coefficient, priorCoefficient);
-    const byId = new Map(state.items.map((i) => [i.id, i]));
-    const clusterOf = new Map((state.layout?.stars ?? []).map((s) => [s.id, s.cluster]));
-    const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, c.name]));
-    return ranked.slice(0, topK).map((row) => ({ ...row,
-      folder: byId.get(row.id)?.folderPath.join("/") ?? "",
-      cluster: names.get(clusterOf.get(row.id) ?? -1) ?? "(未配置)",
-    }));
-  },
-  searchNow: async (text: string) => {
-    const input = document.getElementById("search-input") as HTMLInputElement;
-    input.focus();
-    input.value = text;
-    input.dispatchEvent(new Event("input"));
-    if (text.length >= 2) {
-      const generation = ++searchGeneration;
-      clearTimeout(searchTimer);
-      const result = await searchResults(text);
-      if (generation === searchGeneration) applySearch(result);
-    }
-    return hits;
-  },
-  searchState: () => ({ ids: hits.map((hit) => hit.id), selected: hits[selectedIndex]?.id ?? null }),
-  searchCoefficient: GENERALITY_PENALTY,
-  clusterPriorCoefficient: CLUSTER_PRIOR,
-  attractRatio: ATTRACT_RATIO,
-  searchGeometry: () => view?.searchGeometry(),
-  searchHole: () => view?.searchHole() ?? null,
-  setConstellationLinesVisible: (visible: boolean) => view?.setConstellationLinesVisible(visible),
-  setConstellationTestOpacity: (value: number | null) => view?.setConstellationTestOpacity(value),
-  setConstellationTestLine: (enabled: boolean) => view?.setConstellationTestLine(enabled),
-  starScreen: (id: string) => view?.starScreen(id),
-  starPosition: (id: string) => view?.starPosition(id),
-  starVisual: (id: string) => view?.starVisual(id),
-  traceGeometry: () => view?.traceGeometry(),
-  labelStats: () => view?.labelStats(),
-  resetLabelTiming: () => view?.resetLabelTiming(),
-  cameraTilt: () => view?.cameraTilt(),
-  measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
-  constellationState: () => ({ rows: constellations, active: activeConstellationId,
-    editing: editing ? { query: editing.query, automatic: editing.automatic,
-      pinned: [...editing.pinned], excluded: [...editing.excluded], members: currentEditMembers() } : null,
-    geometry: view?.constellationGeometry(), animation: view?.constellationAnimationState() }),
-  toggleEditMember: handleStarClick,
-  /** 確認用：ページを開く関数そのもの（http(s) 以外は開かないことの確かめ） */
-  openUrl: (url: string, newTab = false) => openPage(url, { newTab, beforeLeave: saveReturnState }),
-  /** 確認用：「戻る」用の保存状態の場所と版 */
-  returnStateInfo: () => ({ key: RETURN_STATE_KEY, version: RETURN_STATE_VERSION }),
-  /** 確認用：星団へ寄る（1,000 文字のタイトルのラベルを近距離で見るため） */
-  focusCluster: (index: number) => view?.focusCluster(index),
-  recallConstellation: toggleConstellation,
-  mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
-  /** Web のデモに同梱する計算済みのサンプル（`npm run sample:precompute` が使う） */
-  exportSampleCache: () => (state.kind === "sample" && state.layout && state.mean ? encodeSampleCache(state.items, MODEL_ID,
-    { vectors: state.vectors, mean: state.mean, generality: state.generality, layout: state.layout }) : null),
-  modelReady: () => modelReady,
+    async search(text: string, topK = 5, coefficient = GENERALITY_PENALTY, priorCoefficient = CLUSTER_PRIOR) {
+      const ranked = await searchResults(text, coefficient, priorCoefficient);
+      const byId = new Map(state.items.map((i) => [i.id, i]));
+      const clusterOf = new Map((state.layout?.stars ?? []).map((s) => [s.id, s.cluster]));
+      const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, c.name]));
+      return ranked.slice(0, topK).map((row) => ({ ...row,
+        folder: byId.get(row.id)?.folderPath.join("/") ?? "",
+        cluster: names.get(clusterOf.get(row.id) ?? -1) ?? "(未配置)",
+      }));
+    },
+    searchNow: async (text: string) => {
+      const input = document.getElementById("search-input") as HTMLInputElement;
+      input.focus();
+      input.value = text;
+      input.dispatchEvent(new Event("input"));
+      if (text.length >= 2) {
+        const generation = ++searchGeneration;
+        clearTimeout(searchTimer);
+        const result = await searchResults(text);
+        if (generation === searchGeneration) applySearch(result);
+      }
+      return hits;
+    },
+    searchState: () => ({ ids: hits.map((hit) => hit.id), selected: hits[selectedIndex]?.id ?? null }),
+    searchCoefficient: GENERALITY_PENALTY,
+    clusterPriorCoefficient: CLUSTER_PRIOR,
+    attractRatio: ATTRACT_RATIO,
+    searchGeometry: () => view?.searchGeometry(),
+    searchHole: () => view?.searchHole() ?? null,
+    setConstellationLinesVisible: (visible: boolean) => view?.setConstellationLinesVisible(visible),
+    setConstellationTestOpacity: (value: number | null) => view?.setConstellationTestOpacity(value),
+    setConstellationTestLine: (enabled: boolean) => view?.setConstellationTestLine(enabled),
+    starScreen: (id: string) => view?.starScreen(id),
+    starPosition: (id: string) => view?.starPosition(id),
+    starVisual: (id: string) => view?.starVisual(id),
+    traceGeometry: () => view?.traceGeometry(),
+    labelStats: () => view?.labelStats(),
+    resetLabelTiming: () => view?.resetLabelTiming(),
+    cameraTilt: () => view?.cameraTilt(),
+    measureLexical: (text: string) => { const t = performance.now(); rankSearch(state.items, text); return performance.now() - t; },
+    constellationState: () => ({ rows: constellations, active: activeConstellationId,
+      editing: editing ? { query: editing.query, automatic: editing.automatic,
+        pinned: [...editing.pinned], excluded: [...editing.excluded], members: currentEditMembers() } : null,
+      geometry: view?.constellationGeometry(), animation: view?.constellationAnimationState() }),
+    toggleEditMember: handleStarClick,
+    /** 確認用：ページを開く関数そのもの（http(s) 以外は開かないことの確かめ） */
+    openUrl: (url: string, newTab = false) => openPage(url, { newTab, beforeLeave: saveReturnState }),
+    /** 確認用：「戻る」用の保存状態の場所と版 */
+    returnStateInfo: () => ({ key: RETURN_STATE_KEY, version: RETURN_STATE_VERSION }),
+    /** 確認用：星団へ寄る（1,000 文字のタイトルのラベルを近距離で見るため） */
+    focusCluster: (index: number) => view?.focusCluster(index),
+    recallConstellation: toggleConstellation,
+    mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
+    /** Web のデモに同梱する計算済みのサンプル（`npm run sample:precompute` が使う） */
+    exportSampleCache: () => (state.kind === "sample" && state.layout && state.mean ? encodeSampleCache(state.items, MODEL_ID,
+      { vectors: state.vectors, mean: state.mean, generality: state.generality, layout: state.layout }) : null),
+    modelReady: () => modelReady,
 
-  // --- 測定（docs/BENCHMARK.md、scripts/bench/）---
-  /** 起動の節目の時刻（performance.now、ミリ秒） */
-  marks: () => ({ ...benchMarks }),
-  /** 今の入力で配置をもう一度計算し、段ごとの時間を返す（保存も表示もしない） */
-  layoutTimings() {
-    if (!state.mean) return null;
-    const steps = startTiming();
-    const start = performance.now();
-    const layout = computeLayout(state.items, state.vectors, state.mean);
-    const total = performance.now() - start;
-    stopTiming();
-    return { n: layout.stars.length, clusters: layout.clusters.length, total, steps: { ...steps } };
-  },
-  /** 検索の内訳：検索語の埋め込み・意味のスコア・順位づけ（文字一致を含む）の時間 */
-  async searchTimings(text: string) {
-    if (!embedder || !state.mean) return null;
-    const t0 = performance.now();
-    const [query] = await embedder.embed([queryText(text)]);
-    const t1 = performance.now();
-    const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality,
-      GENERALITY_PENALTY, state.layout, CLUSTER_PRIOR);
-    const t2 = performance.now();
-    const ranked = rankSearch(state.items, text, semantic);
-    const t3 = performance.now();
-    return { embedMs: t1 - t0, scoreMs: t2 - t1, rankMs: t3 - t2, totalMs: t3 - t0, hits: ranked.length };
-  },
-  /** 検索語 1 つの埋め込みの時間 */
-  async embedTimed(text: string) {
-    if (!embedder) return null;
-    const start = performance.now();
-    await embedder.embed([queryText(text)]);
-    return performance.now() - start;
-  },
-  /** 汎用度の計算の時間（全件） */
-  generalityTiming() {
-    const vectors = state.items.flatMap((item) => state.vectors.get(item.id) ?? []);
-    const start = performance.now();
-    standardize(generalityScores(vectors));
-    return performance.now() - start;
-  },
-  wasmMemory: () => (embedder instanceof WorkerEmbedder ? embedder.wasmMemory() : null),
-  storageEstimate: () => navigator.storage.estimate(),
-  renderInfo: () => view?.renderInfo(),
-  setProfiling: (on: boolean) => view?.setProfiling(on),
-  takeProfile: () => view?.takeProfile() ?? [],
-  setLoopPaused: (paused: boolean) => view?.setLoopPaused(paused),
-  /** 動きがあるときだけ描く方式の確認用：止めずに描く・いまの状態で 1 コマ描く・ループが回っているか */
-  setContinuousRender: (on: boolean) => view?.setContinuousRender(on),
-  renderNow: () => view?.renderNow(),
-  isRendering: () => view?.isRendering ?? false,
-  dtype: () => DTYPE ?? "q8",
-};
-if (new URLSearchParams(location.search).get("debug") === "1") {
-  (globalThis as unknown as { __bukusupe: typeof debugApi }).__bukusupe = debugApi;
+    // --- 測定（docs/BENCHMARK.md、scripts/bench/）---
+    /** 起動の節目の時刻（performance.now、ミリ秒） */
+    marks: () => ({ ...benchMarks }),
+    /** 今の入力で配置をもう一度計算し、段ごとの時間を返す（保存も表示もしない） */
+    layoutTimings() {
+      if (!state.mean) return null;
+      const steps = startTiming();
+      const start = performance.now();
+      const layout = computeLayout(state.items, state.vectors, state.mean);
+      const total = performance.now() - start;
+      stopTiming();
+      return { n: layout.stars.length, clusters: layout.clusters.length, total, steps: { ...steps } };
+    },
+    /** 検索の内訳：検索語の埋め込み・意味のスコア・順位づけ（文字一致を含む）の時間 */
+    async searchTimings(text: string) {
+      if (!embedder || !state.mean) return null;
+      const t0 = performance.now();
+      const [query] = await embedder.embed([queryText(text)]);
+      const t1 = performance.now();
+      const semantic = semanticScores(query, state.items, state.vectors, state.mean, state.generality,
+        GENERALITY_PENALTY, state.layout, CLUSTER_PRIOR);
+      const t2 = performance.now();
+      const ranked = rankSearch(state.items, text, semantic);
+      const t3 = performance.now();
+      return { embedMs: t1 - t0, scoreMs: t2 - t1, rankMs: t3 - t2, totalMs: t3 - t0, hits: ranked.length };
+    },
+    /** 検索語 1 つの埋め込みの時間 */
+    async embedTimed(text: string) {
+      if (!embedder) return null;
+      const start = performance.now();
+      await embedder.embed([queryText(text)]);
+      return performance.now() - start;
+    },
+    /** 汎用度の計算の時間（全件） */
+    generalityTiming() {
+      const vectors = state.items.flatMap((item) => state.vectors.get(item.id) ?? []);
+      const start = performance.now();
+      standardize(generalityScores(vectors));
+      return performance.now() - start;
+    },
+    wasmMemory: () => (embedder instanceof WorkerEmbedder ? requestWasmMemory(embedder) : null),
+    storageEstimate: () => navigator.storage.estimate(),
+    renderInfo: () => (view ? viewDebug(view).renderInfo() : null),
+    setProfiling: (on: boolean) => (view ? viewDebug(view).setProfiling(on) : undefined),
+    takeProfile: () => (view ? viewDebug(view).takeProfile() : []),
+    setLoopPaused: (paused: boolean) => (view ? viewDebug(view).setLoopPaused(paused) : undefined),
+    /** 動きがあるときだけ描く方式の確認用：止めずに描く・いまの状態で 1 コマ描く・ループが回っているか */
+    setContinuousRender: (on: boolean) => (view ? viewDebug(view).setContinuousRender(on) : undefined),
+    renderNow: () => (view ? viewDebug(view).renderNow() : undefined),
+    isRendering: () => view?.isRendering ?? false,
+    dtype: () => DTYPE ?? "q8",
+  };
+  if (DEBUG) {
+    (globalThis as unknown as { __bukusupe: typeof debugApi }).__bukusupe = debugApi;
+  }
 }
 
 main().catch((err) => {

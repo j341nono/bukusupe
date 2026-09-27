@@ -7,7 +7,6 @@
   "minimum_chrome_version": "114",
   "permissions": [
     "bookmarks",
-    "storage",
     "unlimitedStorage",
     "favicon"
   ],

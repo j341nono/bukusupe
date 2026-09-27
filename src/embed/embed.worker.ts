@@ -9,7 +9,7 @@ import type { EmbedDtype, EmbedRequest, EmbedResponse } from "./protocol";
  * 通常の起動では何もしない。
  */
 const wasmMemories: WebAssembly.Memory[] = [];
-if (self.name === "bukusupe-debug") {
+if (__DEBUG__ && self.name === "bukusupe-debug") {
   const remember = (instance: WebAssembly.Instance) => {
     for (const value of Object.values(instance.exports)) {
       if (value instanceof WebAssembly.Memory && !wasmMemories.includes(value)) wasmMemories.push(value);
@@ -61,7 +61,8 @@ self.onmessage = async (event: MessageEvent<EmbedRequest>) => {
   try {
     if (msg.type === "init") {
       configureOrt(msg.ortBaseUrl);
-      extractor = load(msg.model, msg.dtype ?? "q8");
+      // 量子化の切り替えは確認用のビルドだけ（配布用は常に q8）
+      extractor = load(msg.model, __DEBUG__ ? msg.dtype ?? "q8" : "q8");
       await extractor;
       post({ type: "ready", model: msg.model });
       return;
@@ -81,7 +82,7 @@ self.onmessage = async (event: MessageEvent<EmbedRequest>) => {
       post({ type: "vectors", requestId: msg.requestId, vectors });
     }
 
-    if (msg.type === "memory") {
+    if (__DEBUG__ && msg.type === "memory") {
       const bytes = wasmMemories.reduce((sum, memory) => sum + memory.buffer.byteLength, 0);
       post({ type: "memory", requestId: msg.requestId, bytes, memories: wasmMemories.length });
     }

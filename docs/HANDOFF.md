@@ -1,4 +1,4 @@
-# 引き継ぎ（最終更新 2026-09-27・Claude）
+# 引き継ぎ（最終更新 2026-09-28・Claude）
 
 このファイルは、開発を引き継ぐエージェント・人のためのもの。
 **まず `docs/RELEASE.md`（正式公開までの計画と版の番号の決まり）、`docs/SPEC.md`（仕様の正典）、`docs/DESIGN.md`（見た目の規則と案）を読むこと。**
@@ -24,7 +24,7 @@
 | 段階 | 内容 | 状態 |
 |---|---|---|
 | 1 | 安全性の調査と修正（ブックマークのタイトルの表示、特殊な URL の扱い、極端な文字列、`docs/SECURITY.md`） | **完了（2026-09-28）** |
-| 2 | ストア向けのビルド（測定用・確認用の仕組みを取り除く、Hugging Face の権限をなくすか絞る、`storage` 権限を外す、`npm run build:store` と zip、`CHANGELOG.md`） | **次に行う** |
+| 2 | ストア向けのビルド（測定用・確認用の仕組みを取り除く、Hugging Face の権限をなくすか絞る、`storage` 権限を外す、`npm run package` と zip、`CHANGELOG.md`） | **進行中（2026-09-28）** |
 | 3 | プライバシーポリシーのページ、ストアの掲載文、権限ごとの説明文、掲載用の画像 | 未着手 |
 | 4 | 限定公開（0.9.x）で申請し、試してもらう | 未着手（ストアの登録は使う人） |
 | 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 未着手 |
@@ -65,11 +65,21 @@
 - Web のデモの index.html に CSP（`vite.config.ts` の `WEB_CSP`、`--mode web` のときだけ）。
 - 確認用の窓口に `openUrl`・`returnStateInfo`・`focusCluster` を足した（`?debug=1` のときだけ。段階 2 で配布物から取り除く）。
 
-### 注意（段階 2 に入る前に）
+### 段階 2 でしたこと（2026-09-28。詳しくは `docs/RELEASE.md` 段階 2 の「結果」）
 
-- 開発用の `dist/`（リポジトリに含めている）は、確認用の窓口（`?debug=1` のときだけ公開）や測定用の仕組みを含む。ストアには出さない。
-  ストア向けのビルドは段階 2 で別に作る。
-- 確認（`check:ext`）は開発用のビルドで行う。ストア向けのビルドには、段階 2 で別の確認を足す。
+- **`host_permissions` を外した**。Hugging Face は CORS を許すので、拡張機能の画面と Worker から権限なしで重みを取れる（転送先 `us.aws.cdn.hf.co` を含む）。
+  インストール時の「多数のウェブサイト上にある自分のデータの読み取りと変更」の警告がなくなった。
+- **配布用と確認用のビルドを分けた**。`npm run build` → `dist/` が配布用（ストアの zip の元。リポジトリに含める）、`npm run build:debug` →
+  `dist-debug/` が確認用（`storage` 権限を足す。`check:ext`・`bench`・`sample:precompute` はこちら）。Web のデモも `build:web` / `build:web:debug`。
+  - ビルドの定数 `__DEBUG__`（確認用だけ true）と `__WEB__`（Web のデモだけ true）を `vite.config.ts` の `define` で入れる（`src/debug/globals.d.ts`）。
+    **確認用・測定用のコードは `if (__DEBUG__) { … }` で囲む。** クラスのメソッドはビルドで消えないので、`SpaceView` の測定用の操作は
+    `viewDebug(view)`（`src/render/scene.ts`）、Worker のメモリは `requestWasmMemory(embedder)`（`src/embed/embedder.ts`）という関数に分けた。
+  - `import.meta.env.MODE === "web"` の判定は `web-debug` で外れ、`startsWith("web")` にすると定数にならず、拡張機能に Web のデモ用の計算済みのサンプルが
+    入ってしまった。ビルドの定数 `__WEB__` にした（`check-release` が `sample-precomputed` を見張る）。
+- **版の番号**：`public/manifest.json` と `package.json` がずれていると、配布用のビルドが失敗する（`vite.config.ts` の `checkVersion`）。
+- **`npm run package`**（`scripts/package.mjs`）：`dist/` から `release/bukusupe-X.Y.Z.zip`。問い合わせのメール（`src/config.ts` の `SUPPORT_EMAIL`）が
+  仮の値だと失敗する。**使う人からメールアドレスを受け取ったら `SUPPORT_EMAIL` を直す。**
+- 確認：`scripts/check-release.mjs`（新規、`check:ext` の 2 番目）と `check-fresh` の追加（権限なしで意味検索、`?debug=1` でも窓口が無い）。
 
 ---
 
@@ -427,6 +437,11 @@ npm run icons      # アイコン PNG を作り直す
   `simulateAdd` / `benchmark` / `restore` / `setZoomTier` / `setTopDown` / `relayout` / `frames`）。
 
 ### `check:ext` が見ている項目
+
+`check:ext` は、はじめに確認用のビルド（`dist-debug/`・`dist-web-debug/`）を作ってから、次の順に動かす：`check-dist`（コミットされる `dist/` が
+配布用のビルドと一致）→ `check-release`（配布用の中身・版・zip）→ `check-fresh`（配布用の `dist/` をまっさらなプロファイルで。権限なしで意味検索、
+`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web`（ここから確認用のビルド）。
+以下の番号は `check-extension` の項目。
 
 1. 拡張機能として読み込め、専用ページが開く
 2. 埋め込みが全件終わって星が並ぶ（`body.dataset.phase === "ready"`）

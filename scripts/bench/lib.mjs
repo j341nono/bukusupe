@@ -11,7 +11,8 @@ export { sleep };
 export const ROOT = resolve(new URL("../..", import.meta.url).pathname);
 // 環境変数は、スクリプト自体の試運転（少ない回数・別の保存先）のためだけに使う
 export const RESULTS = process.env.BENCH_RESULTS ?? join(ROOT, "docs/bench/results");
-export const DIST = join(ROOT, "dist");
+// 確認用のビルド（?debug=1 の窓口と測定用の仕組みが入っている）。配布用の dist/ には入っていない
+export const DIST = join(ROOT, "dist-debug");
 /** 測定用の使い回すプロファイル（モデルのキャッシュと埋め込みを残す）。リポジトリの外に置く */
 export const PROFILE = process.env.BENCH_PROFILE ?? join(tmpdir(), "bukusupe-bench-profile");
 export const COUNTS = [100, 500, 1000, 2000, 5000];

@@ -11,7 +11,7 @@
 import { resolve } from "node:path";
 import { createChecker, decodePng, launchExtension, sleep } from "./lib/harness.mjs";
 
-const DIST = resolve(process.argv[2] ?? "dist");
+const DIST = resolve(process.argv[2] ?? "dist-debug");
 const { check, problems } = createChecker();
 const app = await launchExtension(DIST);
 const { send, evalIn, tryEval, waitUntil, key, press, screenshot } = app;

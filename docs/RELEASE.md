@@ -13,7 +13,7 @@
 |---|---|---|
 | 0 | ハッカソンの提出（`v0.1.0-hacksonic`） | 完了（2026-09-27） |
 | 1 | 安全性の調査と修正 | **完了（2026-09-28）**。`docs/SECURITY.md`。調査の #3・#9・#10 は段階 2 へ |
-| 2 | ストア向けのビルド | 未着手 |
+| 2 | ストア向けのビルド | **進行中（2026-09-28）**。`host_permissions` を外した・配布用と確認用のビルドを分けた・`npm run package` |
 | 3 | プライバシーポリシー・掲載文・権限の説明・画像 | 未着手 |
 | 4 | 限定公開で申請し、試してもらう（0.9.x） | 未着手 |
 | 5 | 利用者のための修正 | 未着手（方針は「決めたこと」で決定済み） |
@@ -93,15 +93,34 @@
   zip に入るファイルの一覧を出す（ソースマップ・`.DS_Store`・確認用のファイルが入っていないこと）。
 - `CHANGELOG.md` を作る。
 
+**結果（2026-09-28）**
+- **権限**：`host_permissions` を外しても、まっさらなプロファイルでモデルの取得 → 埋め込み → 意味検索まで通った（通信先は `huggingface.co` と
+  転送先の `us.aws.cdn.hf.co`、失敗 0 件）。外したままにした。インストール時の警告（`chrome.management.getPermissionWarningsByManifest`）：
+  - 変更前：「多数のウェブサイト上にある自分のデータの読み取りと変更」「アクセスしたウェブサイトのアイコンの読み取り」「ブックマークの読み取りと変更」
+  - 変更後：「アクセスしたウェブサイトのアイコンの読み取り」「ブックマークの読み取りと変更」
+  `storage` も配布用から外したが、`storage` は警告を出さない権限なので、警告の数は変わらない。
+- **ビルドを分けた**（予定の `build:store` / `dist-store/` ではなく、配布用を今までの名前にした。審査員が読み込む `dist/` がそのままストアに出すものになるため）：
+  - `npm run build` → `dist/`（配布用。リポジトリに含める）。確認用・測定用のコードは `if (__DEBUG__) { … }` の中にあり、ビルド時に消える。
+  - `npm run build:debug` → `dist-debug/`（確認用。`storage` 権限と名前の「（確認用）」を足す。`check:ext`・`bench`・`sample:precompute` が使う）。
+  - `npm run build:web` / `build:web:debug` → `dist-web/` / `dist-web-debug/`（`check:web` は確認用を使う）。
+  - `npm run package` → `release/bukusupe-X.Y.Z.zip`（配布用の `dist/` から。manifest.json が直下）。版がずれている・問い合わせのメールが仮の値・
+    確認用の名前が残っている、のどれかで失敗する。問い合わせ先は `src/config.ts` の `SUPPORT_EMAIL`。
+  - 版の番号：`public/manifest.json` と `package.json` がずれていると、配布用のビルド（`vite.config.ts` の `checkVersion`）が失敗する。
+    git のタグはストアに上げたコミットに後から付けるものなので、ビルドでは比べない（上げる手順で付ける）。
+- **確認**（`scripts/check-release.mjs`、`check:ext` の 2 番目）：配布用の `dist/` と Web のデモに確認用・測定用の名前が無い／manifest に
+  `host_permissions` と `storage` が無い／版ずれで配布用のビルドと `package` が失敗する／仮のメールで `package` が失敗する／本物の値なら zip ができる。
+  `check-fresh`：配布用のビルドを権限なしのまま読み込み、検索欄からの意味検索（文字としては一致しない「夜空を眺めたい」）で星が引き寄せられる／
+  `?debug=1` を付けても確認用の窓口が無い。どれも、変更前の `dist/` で NG になるのを確かめてから直した。
+
 完了条件
-- [ ] 自動確認：ストア向けのビルドの中に `__bukusupe`・`exportSampleCache`・`setContinuousRender`・`renderNow`・`bench:`・`bukusupe-debug`・
-      `sample-precomputed` の文字列が無い。
-- [ ] 自動確認：ストア向けのビルドを使い捨てのプロファイルに読み込み、`?debug=1` を付けても確認用の窓口が現れず、初回のモデル取得 → 埋め込み →
-      星空まで通る（`check-fresh` と同じ内容をストア向けのビルドで）。
-- [ ] 権限を外せたかどうかを実測で確かめ、結果が記録されている。外せた場合：ストア向けのビルドの manifest に `host_permissions` が無く、
+- [x] 自動確認：ストア向けのビルドの中に `__bukusupe`・`exportSampleCache`・`setContinuousRender`・`renderNow`・`bench:`・`bukusupe-debug`・
+      `sample-precomputed` の文字列が無い（`check-release`）。
+- [x] 自動確認：ストア向けのビルドを使い捨てのプロファイルに読み込み、`?debug=1` を付けても確認用の窓口が現れず、初回のモデル取得 → 埋め込み →
+      星空まで通る（`check-fresh`。`dist/` が配布用になった）。
+- [x] 権限を外せたかどうかを実測で確かめ、結果が記録されている。外せた場合：ストア向けのビルドの manifest に `host_permissions` が無く、
       まっさらなプロファイルでモデルの取得まで通る（自動確認）。外せない場合：外部へ出る通信が、すべて `host_permissions` の範囲に入っている
       （範囲に入っていない通信が 1 件でもあれば NG。自動確認）。
-- [ ] 自動確認：manifest・`package.json`・タグの版が一致しないと `build:store` が失敗する。
+- [x] 自動確認：manifest・`package.json` の版が一致しないと配布用のビルドと `npm run package` が失敗する（タグは上げた後に付けるので比べない）。
 - [ ] `chrome://extensions` でストア向けのビルドを読み込んだときの権限の警告の文言が、段階 3 の説明文と一致している（スクリーンショットで確認）。
 - [ ] zip の大きさと、ファイルの一覧が `docs/RELEASE.md` の付録に記録されている。
 

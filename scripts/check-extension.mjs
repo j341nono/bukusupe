@@ -31,7 +31,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const CHROME = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const DIST = resolve(process.argv[2] ?? "dist");
+const DIST = resolve(process.argv[2] ?? "dist-debug");
 const SHOT = process.argv[3] ?? null;
 const profile = mkdtempSync(join(tmpdir(), "bukusupe-"));
 

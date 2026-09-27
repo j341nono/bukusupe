@@ -15,7 +15,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { createChecker, decodePng, launchExtension, sleep } from "./lib/harness.mjs";
 
-const ROOT = resolve(process.argv[2] ?? "dist-web");
+const ROOT = resolve(process.argv[2] ?? "dist-web-debug");
 const BASE = "/bukusupe/";
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
   ".wasm": "application/wasm", ".png": "image/png", ".json": "application/json", ".css": "text/css" };
@@ -36,7 +36,7 @@ const PAGE = `${origin}${BASE}?debug=1`;
 
 const { check, problems } = createChecker();
 check(existsSync(join(ROOT, "index.html")) && !existsSync(join(ROOT, "manifest.json")) && !existsSync(join(ROOT, "background.js")),
-  "dist-web/ に画面があり、拡張機能のマニフェストと service worker は無い");
+  "dist-web-debug/ に画面があり、拡張機能のマニフェストと service worker は無い");
 
 // モデルの重み（Hugging Face）への通信は、確認 1・2 の間だけ差し止める（ブラウザ全体で。Worker の通信も止まる）
 const held = [];
