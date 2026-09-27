@@ -48,6 +48,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── SPEC.md              # 仕様書（正典）
 │   ├── PLAN.md              # ハッカソンまでの実装計画・完了条件（M0〜M6）
 │   ├── RELEASE.md           # 正式公開までの計画・版の番号の決まり・決めたこと
+│   ├── SECURITY.md          # 安全性（表示と遷移の経路、保存データの確かめ、設定、依存関係）
 │   ├── HANDOFF.md           # 引き継ぎ資料（0 章に今の状態と残りのタスク、6 章にハッカソン期間の記録）
 │   ├── DESIGN.md            # 見た目の規則と案
 │   └── screens/             # check:ext が保存する画面と結果。before/ はデザイン見直し前
@@ -66,6 +67,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
 │   ├── check-idle.mjs       # 動きがあるときだけ描く（止まる・すぐ再開する・止まった画面が正しい）
 │   ├── check-today.mjs      # 星の新しさの「今日」（サンプルは基準日に固定、自分のブックマークは実際の今日）
+│   ├── check-safety.mjs     # 安全性（HTML として解釈しない・http(s) だけ開く・保存状態の確かめ・書字の向き・長いタイトル）
 │   ├── precompute-sample.mjs  # Web のデモに同梱する計算済みのサンプルを作る
 │   ├── gen-notices.mjs      # THIRD_PARTY_NOTICES を作る
 │   ├── bench/               # 時間とメモリの測定（npm run bench → docs/bench/results/、npm run bench:report → docs/BENCHMARK.md）
@@ -95,7 +97,7 @@ npm run dev        # http://localhost:5173 で画面を確認（サンプルデ�
 npm run build      # dist/ を生成
 npm run typecheck  # tsc --noEmit
 npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
-npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → Web のデモ。20 分ほど）
+npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ。20 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 npm run check:web    # Web のデモの確認だけ
 npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す

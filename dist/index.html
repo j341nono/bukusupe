@@ -410,6 +410,8 @@
         text-shadow: 0 0 6px rgba(4, 6, 16, 0.95);
       }
       #constellation-list > button:hover { color: #f0dcb0; }
+      /* 長い星座の名前は「…」で省略する（全文は title） */
+      #constellation-list > button { max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #constellation-list > button.is-active { color: #f4e2b8; border-bottom-color: var(--gold); }
       /* 選んでいる星座の横の「…」。押すと小さなメニュー（名前を変える／削除）が開く */
       #constellation-more {
@@ -428,6 +430,7 @@
         color: #f2dcaa; font-family: var(--font-name); font-size: 19px; letter-spacing: 0.32em;
         white-space: nowrap; text-shadow: 0 0 10px rgba(4, 6, 16, 0.95), 0 0 18px rgba(216, 184, 120, 0.25);
         opacity: 0; transition: opacity 600ms ease; will-change: transform, opacity;
+        max-width: min(70vw, 640px); overflow: hidden; text-overflow: ellipsis;
       }
       #constellation-name.is-visible { opacity: 1; }
       [hidden] { display: none !important; }
@@ -445,6 +448,20 @@
       #star-card[hidden] { display: none; }
       #star-card-title { font-size: 14px; font-weight: 600; }
       #star-card-url, #star-card-folder { margin-top: 7px; color: var(--dim); font-size: 11px; overflow-wrap: anywhere; }
+      /* 長いタイトル・フォルダ名・URL は行数を限って「…」で省略する（全文はマウスを乗せたときの title で見られる）。
+         URL は先頭（ドメイン）が必ず見えるよう、左から右の向きに固定する（docs/SECURITY.md） */
+      #star-card-title, #star-card-folder, #star-card-url {
+        display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+      }
+      #star-card-title { -webkit-line-clamp: 3; }
+      #star-card-folder { -webkit-line-clamp: 2; }
+      #star-card-url { -webkit-line-clamp: 3; direction: ltr; text-align: left; }
+      /* ページやブックマークから来た文字列（タイトル・フォルダ名・星座の名前）を表示する要素は、書字の向きを周りと区切る。
+         右から左へ書く制御文字が、周りの文字や記号の並びを入れ替えないように（docs/SECURITY.md） */
+      .label, .flight-window-title, .flight-window-domain, .flight-far-label, .flight-sign,
+      #star-card-title, #star-card-folder, #star-card-url, #constellation-name, #constellation-list > button {
+        unicode-bidi: isolate;
+      }
       #star-card-open { margin-top: 13px; padding: 6px 16px; border: 1px solid var(--hairline); border-radius: 999px;
         background: none; color: var(--ink); font: inherit; font-size: 12px; letter-spacing: 0.1em; cursor: pointer; }
       #star-card-open:hover { border-color: rgba(214, 205, 180, 0.6); }
@@ -497,7 +514,7 @@
     <div id="flight-windows"></div>
     <div id="flight-flash"></div>
     <div id="search-box">
-      <input id="search-input" type="search" autocomplete="off" placeholder="星を探す" aria-label="ブックマークを検索" />
+      <input id="search-input" type="search" autocomplete="off" maxlength="200" placeholder="星を探す" aria-label="ブックマークを検索" />
       <div id="model-status" hidden>意味の検索を準備している（それまでは文字の一致で探す）</div>
       <button id="constellation-create" hidden>星座にする</button>
       <div id="constellation-editor" hidden>
@@ -511,7 +528,7 @@
     <div id="constellation-manage" role="menu" aria-label="星座の操作" hidden><button id="constellation-rename" role="menuitem">名前を変える</button><button id="constellation-delete" role="menuitem">削除</button></div>
     <aside id="star-card" hidden>
       <div id="star-card-title"></div>
-      <div id="star-card-url"></div>
+      <div id="star-card-url" dir="ltr"></div>
       <div id="star-card-folder"></div>
       <button id="star-card-open">開く</button>
     </aside>

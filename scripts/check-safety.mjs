@@ -10,6 +10,8 @@
  *     カメラの位置と距離が有限の値で、例外が 0 件
  *  5. 右から左へ書く制御文字を含むタイトルで、表示の要素が書字の向きを周りと区切り、カードに本当のドメインが表示されている
  *  6. 1,000 文字のタイトルで、地図のラベル（検索中を含む）とカードが画面からはみ出さない
+ *  7. タイトル・フォルダ名に HTML を含むブックマークが、地図・検索中・カード・飛行中の窓のどこでも文字として表示され、スクリプトが動かない
+ *     （今のコードに穴は無かったので、修正前も通る。HTML として解釈する処理が入り込んだときに気づくための見張り）
  * 確認用のブックマークは、?debug=1&bench=… の注入（chrome.storage.local）で入れる。拡張機能はブックマークを変えない。
  */
 import { readdirSync, readFileSync } from "node:fs";
@@ -102,8 +104,10 @@ try {
   ];
   const rtl = { id: "rtl-1", title: "‮moc.elgoog//:sptth", url: "https://evil.example/phish", folderPath: ["‮redlof"] };
   const long = { id: "long-1", title: "長い".repeat(500), url: "https://example.com/very-long-title", folderPath: ["長い".repeat(200)] };
+  const html = { id: "xss-1", title: '<img src=x onerror="window.__xss=1">宇宙の写真 xyzzyhtml', url: "https://example.com/xss",
+    folderPath: ['<img src=x onerror="window.__xss=2">フォルダ'] };
   await gotoManifest();
-  await evalIn(`chrome.storage.local.set({ "bench:safety": ${JSON.stringify([...sample, ...special, rtl, long])} })`);
+  await evalIn(`chrome.storage.local.set({ "bench:safety": ${JSON.stringify([...sample, ...special, rtl, long, html])} })`);
   const injected = await openApp("debug=1&bench=safety");
   check(injected.ready, "確認用のブックマークを注入して開ける");
 
@@ -216,6 +220,29 @@ try {
     "1,000 文字のタイトルでも、地図のラベル（検索中を含む）とカードが画面からはみ出さない",
     `カード 上 ${card?.top?.toFixed(0)}・下 ${card?.bottom?.toFixed(0)}（画面の高さ ${card?.vh}）・検索中のラベルの幅 ${searchLabel?.width?.toFixed(0) ?? "表示なし"}・` +
     `地図のラベルの幅 ${mapLabel?.width?.toFixed(0) ?? "表示なし"}（画面の幅 ${card?.vw}）`);
+
+  // --- 7. HTML を含むタイトル・フォルダ名は、どこでも文字として表示される ---
+  const injectedNow = () => json(`{ elements: document.querySelectorAll('img[src="x"]').length, xss: window.__xss ?? null }`);
+  await evalIn(`(async () => { await ${b}.searchNow('xyzzyhtml'); })()`);
+  await sleep(2000);
+  const inSearch = await json(`[...document.querySelectorAll('.label-star')].some((el) => el.dataset.key === 'xss-1' && el.textContent.includes('<img'))`);
+  await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
+  await evalIn(`${b}.toggleEditMember('xss-1')`);
+  await sleep(300);
+  const inCard = await json(`document.getElementById('star-card-title').textContent.includes('<img') && document.getElementById('star-card-folder').textContent.includes('<img')`);
+  await evalIn("document.getElementById('star-card').hidden = true");
+  await evalIn(`${b}.enterFlight()`);
+  await waitUntil(`${b}.flightState().phase === 'flying'`, 8000, 100);
+  await evalIn(`${b}.flightTeleport('xss-1', 12)`);
+  await sleep(1500);
+  const inWindow = await json(`[...document.querySelectorAll('.flight-window')].some((el) => el.dataset.key === 'xss-1' && el.textContent.includes('<img'))`);
+  await evalIn(`${b}.exitFlight()`);
+  await waitUntil(`${b}.flightState().phase === 'idle'`, 8000, 100);
+  const after = await injectedNow();
+  check(inSearch && inCard && inWindow && after?.elements === 0 && after.xss === null,
+    "タイトル・フォルダ名の HTML は、検索中のタイトル・カード・飛行中の窓で文字として表示され、スクリプトが動かない",
+    `検索中 ${inSearch ? "文字" : "見つからない"}・カード ${inCard ? "文字" : "見つからない"}・飛行中の窓 ${inWindow ? "文字" : "見つからない"}・` +
+    `差し込まれた要素 ${after?.elements ?? "?"}・検知用の値 ${after?.xss ?? "書き換わらない"}`);
 
   // --- 4. 「戻る」用の保存状態が壊れていても、いつもどおり開く ---
   await openApp();

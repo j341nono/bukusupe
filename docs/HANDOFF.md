@@ -23,8 +23,8 @@
 
 | 段階 | 内容 | 状態 |
 |---|---|---|
-| 1 | 安全性の調査と修正（ブックマークのタイトルの表示、特殊な URL の扱い、極端な文字列、`docs/SECURITY.md`） | **次に行う** |
-| 2 | ストア向けのビルド（測定用・確認用の仕組みを取り除く、Hugging Face の権限を絞る、`npm run build:store` と zip、`CHANGELOG.md`） | 未着手 |
+| 1 | 安全性の調査と修正（ブックマークのタイトルの表示、特殊な URL の扱い、極端な文字列、`docs/SECURITY.md`） | **完了（2026-09-28）** |
+| 2 | ストア向けのビルド（測定用・確認用の仕組みを取り除く、Hugging Face の権限をなくすか絞る、`storage` 権限を外す、`npm run build:store` と zip、`CHANGELOG.md`） | **次に行う** |
 | 3 | プライバシーポリシーのページ、ストアの掲載文、権限ごとの説明文、掲載用の画像 | 未着手 |
 | 4 | 限定公開（0.9.x）で申請し、試してもらう | 未着手（ストアの登録は使う人） |
 | 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 未着手 |
@@ -51,9 +51,22 @@
 - 利用者のデータを外部に送る処理、分析用のデータを集める処理を書かない。
 - 配布物（ストア向けのビルド）に、測定用・確認用の仕組みを含めない（段階 2 で分ける。それまでは開発用の `dist/` に残っている）。
 
-### 注意（段階 1・2 に入る前に）
+### 段階 1 でしたこと（2026-09-28）
 
-- `src/ui/hud.ts` の 2 か所で `innerHTML` を使っている。中身は固定の文言と `escape()` 済みの状態の文字列だけだが、規則 9 に合わせて段階 1 で置き換える。
+詳しくは `docs/SECURITY.md`。確認は `scripts/check-safety.mjs`（新規）と `scripts/check-web.mjs`（`check:ext` の中）。
+- ページを開く処理を `src/ui/open-page.ts` の `openPage` 1 つにまとめ、`http:` / `https:` 以外は開かない。判定は `src/bookmarks/validate.ts`
+  （`isOpenableUrl`・`parseBookmarkItem`）の 1 か所で、ブックマークを読み込む側（Chrome・サンプル・確認用の注入）も同じ判定を通す。
+- 「戻る」用の保存状態は `src/ui/return-state.ts`（版の番号 2、場所は `bukusupe:return-state`）。`parseReturnState` で確かめ、合わなければ捨てる。
+- 星座の行は `src/constellation/index.ts` の `parseConstellation` で確かめ、合わない行は読み飛ばして警告を残す。名前は保存・名前の変更のときに 80 文字まで。
+  検索欄は 200 文字まで。
+- 表示：タイトル・フォルダ名・星座の名前の要素に `unicode-bidi: isolate`。カードの URL は `dir="ltr"`。長いものは「…」で省略し、全文は title。
+  地図のタイトルは近距離 40・検索中 32・マウスを乗せたとき 80 まで（全角を 1）。
+- `hud.ts` の `innerHTML` を要素の組み立てに替えた（`src/` に HTML として解釈する処理は無い）。
+- Web のデモの index.html に CSP（`vite.config.ts` の `WEB_CSP`、`--mode web` のときだけ）。
+- 確認用の窓口に `openUrl`・`returnStateInfo`・`focusCluster` を足した（`?debug=1` のときだけ。段階 2 で配布物から取り除く）。
+
+### 注意（段階 2 に入る前に）
+
 - 開発用の `dist/`（リポジトリに含めている）は、確認用の窓口（`?debug=1` のときだけ公開）や測定用の仕組みを含む。ストアには出さない。
   ストア向けのビルドは段階 2 で別に作る。
 - 確認（`check:ext`）は開発用のビルドで行う。ストア向けのビルドには、段階 2 で別の確認を足す。
