@@ -44,7 +44,12 @@ let holding = true;
 const hfPattern = [{ urlPattern: "*huggingface.co*" }, { urlPattern: "*hf.co*" }];
 const app = await launchExtension(null, {
   url: PAGE,
-  beforeOpen: async ({ send }) => { await send("Fetch.enable", { patterns: hfPattern }); },
+  beforeOpen: async ({ send, sessionId }) => {
+    await send("Fetch.enable", { patterns: hfPattern });
+    // CSP の違反を、ページのスクリプトより先に数え始める
+    await send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__csp = [];
+      document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));` }, sessionId);
+  },
 });
 const { send, evalIn, tryEval, waitUntil, screenshot } = app;
 const b = "globalThis.__bukusupe";
@@ -196,6 +201,23 @@ try {
   writeFileSync("docs/screens/web-mobile.png", Buffer.from(mobileShot.data, "base64"));
   console.log("  画面: docs/screens/web-mobile.png");
   await send("Target.closeTarget", { targetId: mobileId }).catch(() => {});
+
+  // --- CSP：Web 版の index.html に CSP があり、違反が 0 件（モデルの取得と意味検索まで通った後で） ---
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const csp = html.match(/<meta[^>]+http-equiv="Content-Security-Policy"[^>]+content="([^"]+)"/i)?.[1] ?? null;
+  const violations = await json("window.__csp ?? null");
+  check(csp && /script-src[^;]*'self'/.test(csp) && !/script-src[^;]*'unsafe-inline'/.test(csp) && /connect-src/.test(csp) &&
+    Array.isArray(violations) && violations.length === 0,
+  "Web 版の index.html に CSP があり、モデルの取得と意味検索まで通して、CSP の違反が 0 件",
+  `CSP ${csp ? csp.slice(0, 90) + "…" : "なし"}・違反 ${violations ? violations.length : "数えられない"}${violations?.length ? "（" + violations.slice(0, 2).join(" / ") + "）" : ""}`);
+  // 保存領域の名前に、ブクスペ専用の接頭辞が付いている
+  const namesAsync = JSON.parse((await evalIn(`(async () => JSON.stringify({ idb: (await indexedDB.databases()).map((d) => d.name),
+    local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))()`)) ?? "null");
+  const unprefixed = namesAsync ? [...namesAsync.idb.filter((n) => !n.startsWith("bukusupe-")),
+    ...namesAsync.local.filter((k) => !k.startsWith("bukusupe:")), ...namesAsync.session.filter((k) => !k.startsWith("bukusupe:"))] : ["測れない"];
+  check(namesAsync && namesAsync.idb.length > 0 && unprefixed.length === 0,
+    "Web 版の保存領域（IndexedDB・localStorage・sessionStorage）の名前に、ブクスペ専用の接頭辞が付いている",
+    namesAsync ? `IndexedDB ${namesAsync.idb.join(", ")}・localStorage ${namesAsync.local.join(", ") || "なし"}・sessionStorage ${namesAsync.session.join(", ") || "なし"}${unprefixed.length ? "・接頭辞なし " + unprefixed.join(", ") : ""}` : "測れない");
 
   // --- 6. 外部から読むのはモデルの重みだけ。コンソールにエラー・警告が無い ---
   const requests = app.events.filter((e) => e.method === "Network.requestWillBeSent").map((e) => e.params.request.url);

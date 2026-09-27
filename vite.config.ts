@@ -31,12 +31,45 @@ function dropManifest(): Plugin {
   };
 }
 
+/**
+ * Web のデモ（`--mode web`）の CSP（docs/SECURITY.md）。拡張機能は manifest の CSP で守られるが、GitHub Pages には無いので、
+ * index.html に meta で入れる。許すのは、Web 版が動くのに必要なものだけ：
+ * - script-src：同じ場所のスクリプト（本体・計算済みのサンプル・同梱の ONNX Runtime の .mjs）と、WebAssembly のコンパイル
+ * - worker-src：埋め込みの Worker（同じ場所）
+ * - connect-src：同じ場所（ONNX Runtime の .wasm）と、モデルの重みの取得先（Hugging Face と、その配信の転送先 *.hf.co）
+ * - style-src：index.html の中の <style>（'unsafe-inline'。スクリプトには許さない）
+ * - img-src：同じ場所の画像と、canvas から作る data: の画像
+ * 外部のスクリプト・フォーム・フレーム・プラグインは許さない。
+ */
+export const WEB_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "worker-src 'self'",
+  "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+].join("; ");
+
+function webCsp(): Plugin {
+  return {
+    name: "web-content-security-policy",
+    apply: "build",
+    transformIndexHtml(html) {
+      return html.replace(/(<meta charset="utf-8" \/>)/, `$1\n    <meta http-equiv="Content-Security-Policy" content="${WEB_CSP}" />`);
+    },
+  };
+}
+
 // 素の Vite で MV3 を組む。プラグインを使わないのは、CSP と
 // ONNX Runtime の補助ファイル（M1 で同梱）の配置を自分で握るため。
 // `--mode web` は Web のデモ（M6）：サンプルだけで動く版を dist-web/ に出す（service worker もマニフェストも無い）。
 export default defineConfig(({ mode }) => ({
   base: "./",
-  plugins: mode === "web" ? [dropDuplicateOrtWasm(), dropManifest()] : [dropDuplicateOrtWasm()],
+  plugins: mode === "web" ? [dropDuplicateOrtWasm(), dropManifest(), webCsp()] : [dropDuplicateOrtWasm()],
   build: {
     target: "es2022",
     outDir: mode === "web" ? "dist-web" : "dist",
