@@ -118,7 +118,7 @@ async function cpuTimes(app, pids) {
     browser: info.find((p) => p.type === "browser")?.cpuTime ?? null };
 }
 
-export async function render({ mode = "headless", counts = COUNTS, allowLoad = false, idle = true }) {
+export async function render({ mode = "headless", counts = COUNTS, allowLoad = false, idle = true, scenesToo = true }) {
   const headless = mode === "headless";
   const app = await launch({ profileDir: PROFILE, startPath: "manifest.json", headless, width: 1280, height: 800 });
   const env = captureEnvironment({ headless, mode });
@@ -144,7 +144,7 @@ export async function render({ mode = "headless", counts = COUNTS, allowLoad = f
       env.viewport ??= await app.evalIn("`${innerWidth}x${innerHeight}`");
       await app.evalIn("globalThis.__bukusupe.resetCamera()");
       await sleep(1500);
-      for (const scene of scenes) {
+      for (const scene of scenesToo ? scenes : []) {
         if (scene.setup) await scene.setup(app);
         for (let i = 0; i <= REPEATS; i++) {
           // 移動の場面は、実際にカメラが動いたか（cameraMoved）も控える（入力が効かずに止まった地図を測っていないか）
@@ -167,15 +167,19 @@ export async function render({ mode = "headless", counts = COUNTS, allowLoad = f
         await app.evalIn("globalThis.__bukusupe.resetCamera()");
         await sleep(2000);
         const pids = processMemory(app);
+        env.renderMode ??= await app.evalIn("typeof globalThis.__bukusupe.isRendering === 'function' ? 'on-demand' : 'continuous'");
         for (const paused of [false, true]) {
           await app.evalIn(`globalThis.__bukusupe.setLoopPaused(${paused})`);
           for (let i = 0; i <= REPEATS; i++) {
             const a = await cpuTimes(app, { renderer: pids.rendererPid, gpu: pids.gpuPid });
+            const f0 = await app.evalIn("globalThis.__bukusupe.frames()");
             await sleep(IDLE_MS);
             const b = await cpuTimes(app, { renderer: pids.rendererPid, gpu: pids.gpuPid });
+            const drawn = (await app.evalIn("globalThis.__bukusupe.frames()")) - f0;
             if (i === 0) continue;
             const pct = (k) => (a[k] != null && b[k] != null ? ((b[k] - a[k]) / (IDLE_MS / 1000)) * 100 : null);
-            idleRows.push({ n, loop: paused ? "paused" : "running", run: i, renderer: pct("renderer"), gpu: pct("gpu"), browser: pct("browser") });
+            idleRows.push({ n, loop: paused ? "paused" : "running", run: i, renderer: pct("renderer"), gpu: pct("gpu"), browser: pct("browser"),
+              framesPerSecond: drawn / (IDLE_MS / 1000) });
           }
           await app.evalIn("globalThis.__bukusupe.setLoopPaused(false)");
           const r = idleRows.filter((x) => x.n === n && x.loop === (paused ? "paused" : "running"));
@@ -187,7 +191,7 @@ export async function render({ mode = "headless", counts = COUNTS, allowLoad = f
     await app.close();
   }
   const loadSamples = load.stop();
-  saveResult(`render-${mode}`, { env, loadSamples, warnings, sceneMs: SCENE_MS, frames }, frames.flatMap((f) => [
+  if (scenesToo) saveResult(`render-${mode}`, { env, loadSamples, warnings, sceneMs: SCENE_MS, frames }, frames.flatMap((f) => [
     { metric: "fps", condition: f.scene, n: f.n, run: f.run, value: f.fps, unit: "fps" },
     ...["intervals", "total", "overlay", "render"].flatMap((k) => {
       const s = summarize(f[k]);

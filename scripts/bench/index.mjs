@@ -19,8 +19,10 @@ import { render } from "./render.mjs";
 import { report } from "./report.mjs";
 
 const CORE = ["startup", "query", "layout", "search", "add", "disk"];
-const SUITES = ["size", "fresh", ...CORE, "memory", "web", "quant", "render-headless", "render-headful"];
-const ALIASES = { run1: SUITES.filter((s) => s !== "render-headful"), run2: ["render-headful"], all: SUITES };
+const SUITES = ["size", "fresh", ...CORE, "memory", "web", "quant", "render-headless", "render-headful", "idle-headless", "idle-headful"];
+// idle は、何もしていない地図の CPU 使用率だけ（描画の場面は測らない）。render-* は場面と CPU 使用率の両方
+const ALIASES = { run1: SUITES.filter((s) => !["render-headful", "idle-headless", "idle-headful"].includes(s)), run2: ["render-headful"],
+  idle: ["idle-headless", "idle-headful"], all: SUITES.filter((s) => !s.startsWith("idle-")) };
 
 /** 所要時間の目安（分）。埋め込みは 1 秒あたり約 16 件（1 スレッド）で見積もる */
 function estimateMinutes(suite, counts) {
@@ -33,6 +35,7 @@ function estimateMinutes(suite, counts) {
     case "quant": return 35;
     case "memory": return (6 * items) / 16 / 60 + counts.length * 2.5;
     case "render-headless": case "render-headful": return counts.length * 6.5;
+    case "idle-headless": case "idle-headful": return counts.length * 2.5;
     default: return counts.length * 0.8;
   }
 }
@@ -59,7 +62,7 @@ const end = new Date(start.getTime() + minutes * 60_000);
 const hhmm = (d) => d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 console.log(`測定：${requested.join(", ")}（件数 ${counts.join(" / ")}）`);
 console.log(`開始 ${hhmm(start)}・終了の目安 ${hhmm(end)}（約 ${Math.round(minutes)} 分）`);
-if (requested.includes("render-headful")) console.log("画面ありの描画の測定中は Chrome の窓が前面に出ます。終わるまで Mac を操作しないでください。");
+if (requested.includes("render-headful") || requested.includes("idle-headful")) console.log("画面ありの描画の測定中は Chrome の窓が前面に出ます。終わるまで Mac を操作しないでください。");
 
 const failures = [];
 async function step(name, fn) {
@@ -78,6 +81,8 @@ if (requested.includes("web")) await step("web", () => web({ allowLoad }));
 if (requested.includes("quant")) await step("quant", () => quant({ allowLoad }));
 if (requested.includes("render-headless")) await step("render-headless", () => render({ mode: "headless", counts, allowLoad }));
 if (requested.includes("render-headful")) await step("render-headful", () => render({ mode: "headful", counts, allowLoad }));
+if (requested.includes("idle-headless")) await step("idle-headless", () => render({ mode: "headless", counts, allowLoad, scenesToo: false }));
+if (requested.includes("idle-headful")) await step("idle-headful", () => render({ mode: "headful", counts, allowLoad, scenesToo: false }));
 if (!args["no-report"]) await step("report", () => report());
 
 console.log(`\n終了 ${hhmm(new Date())}` + (failures.length ? `・失敗 ${failures.length} 件：\n  ${failures.join("\n  ")}` : "・すべて完了"));

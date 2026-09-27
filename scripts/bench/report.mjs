@@ -10,7 +10,8 @@ import { lineChart, renderCharts } from "./charts.mjs";
 
 export async function report() {
 const R = Object.fromEntries(["size", "fresh", "startup", "query", "layout", "search", "add", "memory", "disk", "web", "quant",
-  "render-headful", "render-headless", "idle-headful", "idle-headless"].map((name) => [name, loadResult(name)]));
+  "render-headful", "render-headless", "idle-headful", "idle-headless", "idle-headful-continuous", "idle-headless-continuous"]
+  .map((name) => [name, loadResult(name)]));
 
 // ---------- 書式 ----------
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -64,6 +65,10 @@ const headfulEnv = R["render-headful"]?.env ?? null;
 const refreshHz = Number(headfulEnv?.gpu?.looksLike?.match(/@\s*([\d.]+)\s*Hz/)?.[1]) || null;
 const frameBudget = refreshHz ? 1000 / refreshHz : null;
 const idleS = R["idle-headless"]?.runs ?? [];
+// 変更前（常に描いていたとき）の結果。動きがあるときだけ描く方式に変えたあとは、変更前後を比べる
+const idleHBefore = R["idle-headful-continuous"]?.runs ?? [];
+const idleSBefore = R["idle-headless-continuous"]?.runs ?? [];
+const onDemand = R["idle-headful"]?.env?.renderMode === "on-demand" || R["idle-headless"]?.env?.renderMode === "on-demand";
 const idleMed = (rows, n, loop, key) => med(rows.filter((r) => r.n === n && r.loop === loop).map((r) => r[key]));
 const mem = R.memory?.runs ?? [];
 const memMed = (n, point, key) => med(mem.filter((r) => r.n === n && r.point === point).map((r) => r[key]));
@@ -95,8 +100,11 @@ out("## 要約", "");
       `${num(med(headful.filter((f) => f.n === fN && f.scene === "flight").map((f) => f.fps)), 0)} コマ/秒。1 コマの JS ${msf(sceneStat(headful, fN, "flight", "total").median)}`]);
   }
   const iN = bigN(idleH);
-  if (iN) rows.push([`何もしていない地図の CPU 使用率（${iN} 件、画面あり）`, pct(idleMed(idleH, iN, "running", "renderer") + (idleMed(idleH, iN, "running", "gpu") ?? 0)),
-    `ページ＋GPU のプロセス。描画のループを止めると ${pct(idleMed(idleH, iN, "paused", "renderer") + (idleMed(idleH, iN, "paused", "gpu") ?? 0))}`]);
+  const both = (rows, n, loop) => (idleMed(rows, n, loop, "renderer") ?? 0) + (idleMed(rows, n, loop, "gpu") ?? 0);
+  if (iN && onDemand && idleHBefore.length) rows.push([`何もしていない地図の CPU 使用率（${iN} 件、画面あり）`, pct(both(idleH, iN, "running")),
+    `ページ＋GPU のプロセス。動きがあるときだけ描く方式にする前は ${pct(both(idleHBefore, iN, "running"))}`]);
+  else if (iN) rows.push([`何もしていない地図の CPU 使用率（${iN} 件、画面あり）`, pct(both(idleH, iN, "running")),
+    `ページ＋GPU のプロセス。描画のループを止めると ${pct(both(idleH, iN, "paused"))}`]);
   out(rows.length ? table(["項目", "値", "補足"], rows) : "（まだ測定していない）", "");
 }
 
@@ -250,6 +258,7 @@ const sceneLabels = [["static", "止まっている地図"], ["drag", "ドラッ
 for (const [frames, label, key] of [[headful, "画面あり（GPU あり）", "render-headful"], [headless, "ヘッドレス（ソフトウェア描画。参考）", "render-headless"]]) {
   out(`### ${label}`, "");
   if (!frames.length) { out(missing(key), ""); continue; }
+  if (onDemand) out("> この節の場面ごとの測定は、動きがあるときだけ描く方式に変える前（常に描いていたとき）のもの。動いている場面の描画の重さは変わらない。", "");
   const env = R[key].env;
   out(`描画：${env.webgl ?? "—"}、窓 ${env.viewport ?? "—"}（devicePixelRatio ${env.devicePixelRatio ?? "—"}）。` +
     "「間隔」は requestAnimationFrame の間隔（画面の書き換えの間隔で頭打ち）、「JS」は 1 コマの中で JS が使った時間、" +
@@ -293,12 +302,20 @@ if (R.size) {
   out("配布物の大きさ：", "", table(["", "合計", "大きいファイル（上位 5）"], Object.entries(R.size.builds).map(([k, list]) => [k, mb(R.size.totals[k]),
     list.slice(0, 5).map((f) => `${f.file} ${kb(f.bytes)}`).join("、")])), "");
 } else out(missing("size"), "");
-out("何もしていない地図の CPU 使用率（10 秒ごと。1 コアを 100%。ページ＝拡張機能のページのプロセス）：", "");
-for (const [rows, label] of [[idleH, "画面あり"], [idleS, "ヘッドレス（参考）"]]) {
-  if (!rows.length) { out(`${label}：${missing(label === "画面あり" ? "render-headful" : "render-headless")}`, ""); continue; }
-  out(`**${label}**`, "", table(["件数", "ループあり：ページ", "ループあり：GPU", "ループ停止：ページ", "ループ停止：GPU"], counts(rows).map((n) => [n,
-    stat(rows.filter((r) => r.n === n && r.loop === "running").map((r) => r.renderer), pct), pct(idleMed(rows, n, "running", "gpu")),
-    stat(rows.filter((r) => r.n === n && r.loop === "paused").map((r) => r.renderer), pct), pct(idleMed(rows, n, "paused", "gpu"))])), "");
+out("何もしていない地図の CPU 使用率（10 秒ごと。1 コアを 100%。ページ＝拡張機能のページのプロセス。" +
+  (onDemand ? "「変更前」は常に描いていたとき、「変更後」は動きがあるときだけ描く方式、「ループ停止」は描画のループを止めたとき（下限の目安）" : "") + "）：", "");
+for (const [rows, before, label, key] of [[idleH, idleHBefore, "画面あり", "idle-headful"], [idleS, idleSBefore, "ヘッドレス（参考）", "idle-headless"]]) {
+  if (!rows.length) { out(`${label}：${missing(key)}`, ""); continue; }
+  if (onDemand && before.length) {
+    out(`**${label}**`, "", table(["件数", "変更前：ページ", "変更前：GPU", "変更後：ページ", "変更後：GPU", "変更後の描画（コマ/秒）", "ループ停止：ページ", "ループ停止：GPU"],
+      counts(rows).map((n) => [n, pct(idleMed(before, n, "running", "renderer")), pct(idleMed(before, n, "running", "gpu")),
+        stat(rows.filter((r) => r.n === n && r.loop === "running").map((r) => r.renderer), pct), pct(idleMed(rows, n, "running", "gpu")),
+        num(idleMed(rows, n, "running", "framesPerSecond"), 1), pct(idleMed(rows, n, "paused", "renderer")), pct(idleMed(rows, n, "paused", "gpu"))])), "");
+  } else {
+    out(`**${label}**`, "", table(["件数", "ループあり：ページ", "ループあり：GPU", "ループ停止：ページ", "ループ停止：GPU"], counts(rows).map((n) => [n,
+      stat(rows.filter((r) => r.n === n && r.loop === "running").map((r) => r.renderer), pct), pct(idleMed(rows, n, "running", "gpu")),
+      stat(rows.filter((r) => r.n === n && r.loop === "paused").map((r) => r.renderer), pct), pct(idleMed(rows, n, "paused", "gpu"))])), "");
+  }
 }
 
 // 6. 量子化
@@ -334,6 +351,16 @@ out("## 測定の方法と限界", "",
     "（拡張機能のページのプロセスが 100 件で数 GB、件数が増えるほど小さいという逆の傾き。空のページと 4 回行き来するだけで 947 MB → 1,171 MB に増えることも確かめた）。" +
     "そこで、測るたびにブラウザを起動し直してアプリを 1 回だけ開く方法で測り直し、表はその結果にした（はじめの結果は `results/memory-navigating.*` に残した）。" +
     "JS のヒープと WebAssembly のメモリは、ページと Worker ごとに測るので、この影響を受けない。量子化の比較の WebAssembly のメモリも同じ理由で使える。"] : []),
+  ...(onDemand ? (() => {
+    const rows = [...idleH, ...idleS].filter((r) => r.loop === "running");
+    const high = rows.filter((r) => (r.renderer ?? 0) > 1);
+    const drew = high.filter((r) => (r.framesPerSecond ?? 0) > 1);
+    return [`- **何もしていない地図の CPU 使用率（変更後）の外れ値**：${rows.length} 回のうち、ページが 1% を超えた回が ${high.length} 回あった。` +
+      `そのうち ${high.length - drew.length} 回は描画が 0 回で、ページのプロセスの描画以外の処理によるもの（多くは各件数の 2 回目、ページを開いてから` +
+      "20〜30 秒ほどの時間帯に集まっていた。ブラウザの中の定期的な処理とみられるが、原因は特定していない）。" +
+      `${drew.length} 回は描画が再開していた（画面ありの測定中に他のアプリを使っていたため、窓の上をマウスが通るなどの入力で再開したとみられる）。` +
+      "表の値は中央値なので、これらの影響は小さい。"];
+  })() : []),
   "- **画面ありの測定と「他のアプリの CPU」**：画面ありでは、Chrome の窓を画面に合成する WindowServer の負荷も「他のアプリ」に数えている（測定そのものの負荷を一部含む）。",
   "- **負荷の判定（計画から変えた点）**：計画では「1 分平均のロードアベレージが 4 を超えたら中断」としていたが、試運転でロードアベレージが測定そのもの" +
   "（埋め込みの計算やソフトウェア描画）で 5〜12 に上がり、次の段が止まった。そこで中断の判断は「この測定のスクリプトと、それが起動した Chrome を除いた" +
@@ -354,7 +381,18 @@ out("## 結果からわかる改善の余地", "");
   const items = [];
   const iN = bigN(idleH.length ? idleH : idleS);
   const idleRows = idleH.length ? idleH : idleS;
-  if (iN) {
+  const idleBefore = idleH.length ? idleHBefore : idleSBefore;
+  if (iN && onDemand && idleBefore.length) {
+    const b1 = idleMed(idleBefore, iN, "running", "renderer"), b2 = idleMed(idleBefore, iN, "running", "gpu");
+    const a1 = idleMed(idleRows, iN, "running", "renderer"), a2 = idleMed(idleRows, iN, "running", "gpu");
+    const s1 = idleMed(idleRows, iN, "paused", "renderer"), s2 = idleMed(idleRows, iN, "paused", "gpu");
+    items.push(`**何もしていないときも描き続けていた → 直した**：描画のループ（\`setAnimationLoop\`）は、止まっている地図でも毎コマ描いていた。` +
+      "カメラ・星・検索・演出・ラベルの判断・入力のどれかがあるときだけ描き、すべて落ち着いたら（12 コマ続けて変化が無ければ）ループを止める方式に変えた" +
+      "（入力・ブックマークの更新・Worker からの通知・画面を変える操作ですぐに再開。飛行中と埋め込みの計算中は毎コマ描く）。" +
+      `${iN} 件の地図で、何もしていないときの CPU 使用率は、変更前のページ ${pct(b1)}・GPU ${pct(b2)} から、変更後はページ ${pct(a1)}・GPU ${pct(a2)} になった` +
+      `（${idleH.length ? "画面あり" : "ヘッドレス"}。ループを止めたときの下限はページ ${pct(s1)}・GPU ${pct(s2)}）。ノートの電池の持ちに効く。` +
+      "星のわずかな瞬きや星雲の揺らぎのように、止まっていても動く演出を今後入れる場合は、その分だけ描き続ける必要がある。");
+  } else if (iN) {
     const run = idleMed(idleRows, iN, "running", "renderer"), stop = idleMed(idleRows, iN, "paused", "renderer");
     const runG = idleMed(idleRows, iN, "running", "gpu"), stopG = idleMed(idleRows, iN, "paused", "gpu");
     items.push(`**何もしていないときも描き続けている**：描画のループ（\`setAnimationLoop\`）は、止まっている地図でも毎コマ描いている。` +
