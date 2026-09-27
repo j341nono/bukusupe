@@ -24,6 +24,7 @@ import type { EmbedDtype } from "./embed/protocol";
 import { lastTouched, touchAppearance } from "./render/magnitude";
 import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, setSourceSwitch, settleHud, setupHudControls } from "./ui/hud";
+import { openPage } from "./ui/open-page";
 import type { ZoomTier } from "./ui/labels";
 
 const META_MEAN = "mean-vector";
@@ -640,15 +641,8 @@ async function searchResults(text: string, coefficient = GENERALITY_PENALTY,
 function openBookmark(id: string, newTab = false): void {
   const item = state.items.find((row) => row.id === id);
   if (!item) return;
-  if (typeof chrome !== "undefined" && chrome.tabs?.create) {
-    if (newTab) { void chrome.tabs.create({ url: item.url }); return; }
-    saveReturnState();
-    void chrome.tabs.getCurrent().then((tab) => {
-      if (tab?.id != null) return chrome.tabs.update(tab.id, { url: item.url });
-      location.href = item.url;
-    });
-  } else if (newTab) window.open(item.url, "_blank", "noopener");
-  else { saveReturnState(); location.href = item.url; }
+  // ページを開く処理はすべて openPage を通る（http(s) 以外は開かない）
+  openPage(item.url, { newTab, beforeLeave: saveReturnState });
 }
 
 function showCard(id: string): void {
@@ -1026,6 +1020,8 @@ const debugApi = {
       pinned: [...editing.pinned], excluded: [...editing.excluded], members: currentEditMembers() } : null,
     geometry: view?.constellationGeometry(), animation: view?.constellationAnimationState() }),
   toggleEditMember: handleStarClick,
+  /** 確認用：ページを開く関数そのもの（http(s) 以外は開かないことの確かめ） */
+  openUrl: (url: string, newTab = false) => openPage(url, { newTab, beforeLeave: saveReturnState }),
   recallConstellation: toggleConstellation,
   mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
   /** Web のデモに同梱する計算済みのサンプル（`npm run sample:precompute` が使う） */

@@ -1,4 +1,5 @@
 import type { BookmarkItem } from "./types";
+import { parseBookmarkItem } from "./validate";
 import sample from "../data/sample-bookmarks.json";
 
 /**
@@ -12,5 +13,6 @@ import sample from "../data/sample-bookmarks.json";
 export const SAMPLE_TODAY = Date.parse("2026-09-26T12:00:00+09:00");
 
 export function loadSampleBookmarks(): BookmarkItem[] {
-  return sample as BookmarkItem[];
+  // 同梱のデータでも、同じ判定を通す（http(s) だけ）
+  return (sample as unknown[]).map(parseBookmarkItem).filter((item): item is BookmarkItem => item !== null);
 }

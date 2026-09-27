@@ -1,6 +1,8 @@
 import type { BookmarkSnapshot } from "./types";
 import { hasChromeBookmarks, loadChromeBookmarks } from "./chrome-source";
 import { loadSampleBookmarks } from "./sample-source";
+import { parseBookmarkItem } from "./validate";
+import type { BookmarkItem } from "./types";
 
 /** ⓘ のパネルで「サンプルの宇宙で試す」を選んだか（このブラウザに覚える。ブックマーク自体には触らない） */
 const PREFER_SAMPLE_KEY = "bukusupe:prefer-sample";
@@ -50,9 +52,13 @@ async function loadBenchBookmarks(): Promise<(BookmarkSnapshot & { chromeCount: 
   const bench = params.get("debug") === "1" ? params.get("bench") : null;
   if (!bench || typeof chrome === "undefined" || !chrome.storage?.local) return null;
   const key = `bench:${bench}`;
-  const items = (await chrome.storage.local.get(key))[key];
-  return Array.isArray(items) ? { kind: "sample", items, chromeCount: 0, bench } : null;
+  const raw = (await chrome.storage.local.get(key))[key];
+  if (!Array.isArray(raw)) return null;
+  // 注入した値も、同じ判定を通す（http(s) の URL と形の合うものだけ）
+  const items = raw.map(parseBookmarkItem).filter((item): item is BookmarkItem => item !== null);
+  return { kind: "sample", items, chromeCount: 0, bench };
 }
 
 export { SAMPLE_TODAY } from "./sample-source";
+export { isOpenableUrl, parseBookmarkItem } from "./validate";
 export * from "./types";

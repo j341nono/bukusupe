@@ -1,4 +1,5 @@
 import type { BookmarkItem } from "./types";
+import { parseBookmarkItem } from "./validate";
 
 /**
  * chrome.bookmarks から読み取るだけ。**書き換え系の API は使わない**
@@ -14,16 +15,10 @@ export async function loadChromeBookmarks(): Promise<BookmarkItem[]> {
 
   const walk = (node: chrome.bookmarks.BookmarkTreeNode, path: string[]) => {
     if (node.url) {
-      // ブックマークレットや chrome:// は星にしない
-      if (!/^https?:/i.test(node.url)) return;
-      items.push({
-        id: node.id,
-        title: node.title || node.url,
-        url: node.url,
-        folderPath: path,
-        dateAdded: node.dateAdded,
-        dateLastUsed: (node as { dateLastUsed?: number }).dateLastUsed,
-      });
+      // http(s) だけを星にする（ブックマークレット・data:・file:・chrome:// などは読み飛ばす。判定は validate.ts の 1 か所）
+      const item = parseBookmarkItem({ id: node.id, title: node.title, url: node.url, folderPath: path,
+        dateAdded: node.dateAdded, dateLastUsed: (node as { dateLastUsed?: number }).dateLastUsed });
+      if (item) items.push(item);
       return;
     }
     // ルート（id "0"）と「ブックマークバー」などの直下は、名前をパスに入れる。
