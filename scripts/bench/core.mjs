@@ -5,11 +5,11 @@
  *  layout  … 配置の段ごとの時間と合計、汎用度
  *  search  … 文字一致の 1 文字ごとの応答、意味のスコア計算、検索全体の応答
  *  add     … ブックマークを 1 件足したときの埋め込みと配置
- *  memory  … 起動直後・全件の埋め込みの後・検索中・飛行中のメモリ、three.js の描画の資源
+ *  （メモリは memory.mjs。測るたびにブラウザを起動し直す）
  *  disk    … モデルのキャッシュと IndexedDB の容量
  */
-import { COUNTS, PROFILE, REPEATS, SEARCH_CASES, captureEnvironment, clearSearch, deleteBenchDb, guardLoad, launch, memorySnapshot,
-  openApp, saveResult, sleep, startupMetrics, summarize, watchLoad, writeDataset } from "./lib.mjs";
+import { COUNTS, PROFILE, REPEATS, SEARCH_CASES, captureEnvironment, clearSearch, deleteBenchDb, guardLoad, launch,
+  openApp, saveResult, startupMetrics, summarize, watchLoad, writeDataset } from "./lib.mjs";
 import { dataset, describe } from "./generate.mjs";
 
 const SHORT = "宇宙";
@@ -20,7 +20,7 @@ export async function core({ parts, counts = COUNTS, allowLoad = false }) {
   const want = (part) => parts.includes(part);
   const env = captureEnvironment({ headless: true, profile: "使い回し（モデルは取得済み）" });
   const load = watchLoad();
-  const out = { startup: [], query: [], layout: [], search: [], add: [], memory: [], disk: [], render: [], datasets: [] };
+  const out = { startup: [], query: [], layout: [], search: [], add: [], disk: [], datasets: [] };
   const warnings = [];
   const app = await launch({ profileDir: PROFILE, startPath: "manifest.json" });
   try {
@@ -37,7 +37,7 @@ export async function core({ parts, counts = COUNTS, allowLoad = false }) {
       await writeDataset(app, bench, items);
 
       // (b) モデルは取得済み・埋め込みはまだ（DB を消して開く）
-      if (want("startup") || want("memory")) {
+      if (want("startup")) {
         for (let run = 0; run <= REPEATS; run++) {
           await deleteBenchDb(app, bench);
           const { marks, wallMs } = await openApp(app, { bench });
@@ -45,7 +45,6 @@ export async function core({ parts, counts = COUNTS, allowLoad = false }) {
           console.log(`  (b) ${run === 0 ? "捨てる" : run} 準備 ${(metrics.ready / 1000).toFixed(1)} 秒・埋め込み ${(metrics.embedAll / 1000).toFixed(1)} 秒`);
           if (run === 0) continue;
           out.startup.push({ n, state: "b", run, ...metrics, wallMs, marks });
-          if (want("memory")) out.memory.push({ n, point: "afterEmbed", run, ...(await memorySnapshot(app)) });
         }
       } else {
         await openApp(app, { bench });   // 埋め込みが無ければここで計算される
@@ -64,7 +63,6 @@ export async function core({ parts, counts = COUNTS, allowLoad = false }) {
         if (run === 0) continue;
         out.startup.push({ n, state: "c", run, ...metrics, wallMs, marks });
         if (first) out.query.push({ n, run, order: "first", ...first });
-        if (want("memory")) out.memory.push({ n, point: "afterStartup", run, ...(await memorySnapshot(app)) });
       }
 
       if (want("query")) {
@@ -131,29 +129,6 @@ export async function core({ parts, counts = COUNTS, allowLoad = false }) {
         }
       }
 
-      if (want("memory")) {
-        out.render.push({ n, scene: "map", ...(await app.json("globalThis.__bukusupe.renderInfo()")) });
-        for (let run = 0; run <= REPEATS; run++) {
-          await app.json(`globalThis.__bukusupe.searchNow('宇宙を感じたい').then(() => true)`);
-          await sleep(1500);
-          if (run > 0) out.memory.push({ n, point: "searching", run, ...(await memorySnapshot(app)) });
-          if (run === REPEATS) out.render.push({ n, scene: "search", ...(await app.json("globalThis.__bukusupe.renderInfo()")) });
-          await clearSearch(app);
-          await sleep(500);
-        }
-        for (let run = 0; run <= REPEATS; run++) {
-          await app.evalIn("globalThis.__bukusupe.enterFlight()");
-          await app.waitUntil("globalThis.__bukusupe.flightState().phase === 'flying'", 10_000, 100);
-          const star = await app.evalIn("globalThis.__bukusupe.layout().stars[0].id");
-          await app.evalIn(`globalThis.__bukusupe.flightTeleport(${JSON.stringify(star)}, 16)`);
-          await sleep(1500);
-          if (run > 0) out.memory.push({ n, point: "flying", run, ...(await memorySnapshot(app)) });
-          if (run === REPEATS) out.render.push({ n, scene: "flight", ...(await app.json("globalThis.__bukusupe.renderInfo()")) });
-          await app.evalIn("globalThis.__bukusupe.exitFlight()");
-          await app.waitUntil("globalThis.__bukusupe.flightState().phase === 'idle'", 10_000, 100);
-        }
-      }
-
       if (want("disk")) {
         const estimate = await app.json("globalThis.__bukusupe.storageEstimate()");
         // この件数の DB の中身の大きさ（論理的な大きさ：ベクトルのバイト数＋文字列と JSON の長さ）。
@@ -196,8 +171,6 @@ export async function core({ parts, counts = COUNTS, allowLoad = false }) {
       ? ["embedMs", "scoreMs", "rankMs", "totalMs"].map((m) => ({ metric: `semantic-${m}`, condition: r.query, n: r.n, run: r.run, value: r[m], unit: "ms" }))
       : [{ metric: r.kind, condition: r.query ?? `${r.index} 文字目`, n: r.n, run: r.run, value: r.ms, unit: "ms" }]));
   if (want("add")) saveResult("add", { ...meta, runs: out.add }, out.add.map((r) => ({ metric: "add", n: r.n, run: r.run, value: r.ms, unit: "ms" })));
-  if (want("memory")) saveResult("memory", { ...meta, runs: out.memory, renderInfo: out.render },
-    out.memory.flatMap((r) => ["pageHeap", "workerHeap", "wasm", "renderer", "gpu", "total"].map((m) => ({ metric: m, condition: r.point, n: r.n, run: r.run, value: r[m], unit: "bytes" }))));
   if (want("disk")) saveResult("disk", { ...meta, runs: out.disk },
     out.disk.flatMap((r) => ["caches", "dbLogical", "vectorBytes", "metaBytes", "indexedDBOrigin", "usage"].map((m) => ({ metric: m, n: r.n, value: r[m], unit: "bytes" }))));
 }

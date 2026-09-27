@@ -1,0 +1,362 @@
+{
+  "env": {
+    "measuredAt": "2026-09-26T21:34:25.750Z",
+    "machine": {
+      "model": "MacBook Pro",
+      "identifier": "Mac14,9",
+      "chip": "Apple M2 Pro",
+      "cores": "10 (6 Performance and 4 Efficiency)",
+      "memory": "16 GB"
+    },
+    "gpu": {
+      "model": "Apple M2 Pro",
+      "cores": "16",
+      "metal": "Metal 4",
+      "display": "2560 x 1440 (QHD/WQHD - Wide Quad High Definition)"
+    },
+    "os": "macOS 26.5.2 (25F84)",
+    "chrome": "Google Chrome 153.0.8010.53",
+    "node": "v22.22.2",
+    "power": {
+      "source": "AC Power",
+      "battery": "-InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true",
+      "lowPowerMode": false
+    },
+    "load": [
+      10.12,
+      11.29,
+      11.5
+    ],
+    "otherCpu": {
+      "total": 86.39999999999998,
+      "top": [
+        "WindowServer 55.2%",
+        "usbaudiod 6%",
+        "ghostty 5%"
+      ]
+    },
+    "headless": true
+  },
+  "loadSamples": [
+    {
+      "at": "2026-09-26T21:34:30.850Z",
+      "load1": 9.388671875,
+      "otherCpu": 77.9
+    },
+    {
+      "at": "2026-09-26T21:34:35.849Z",
+      "load1": 8.716796875,
+      "otherCpu": 82.99999999999996
+    },
+    {
+      "at": "2026-09-26T21:34:40.849Z",
+      "load1": 8.3388671875,
+      "otherCpu": 147.7999999999999
+    },
+    {
+      "at": "2026-09-26T21:34:45.852Z",
+      "load1": 8.4716796875,
+      "otherCpu": 19.200000000000006
+    },
+    {
+      "at": "2026-09-26T21:34:50.854Z",
+      "load1": 8.673828125,
+      "otherCpu": 120.89999999999998
+    },
+    {
+      "at": "2026-09-26T21:34:55.855Z",
+      "load1": 7.97900390625,
+      "otherCpu": 12.599999999999998
+    },
+    {
+      "at": "2026-09-26T21:35:00.855Z",
+      "load1": 8.4609375,
+      "otherCpu": 23.9
+    },
+    {
+      "at": "2026-09-26T21:35:05.856Z",
+      "load1": 9.224609375,
+      "otherCpu": 16.2
+    }
+  ],
+  "runs": [
+    {
+      "state": "a",
+      "run": 1,
+      "firstStars": 404.5,
+      "ready": 238.69999980926514,
+      "searchReady": 456.19999980926514,
+      "semanticReady": 8961.39999961853,
+      "modelInit": 8722.699999809265,
+      "embedAll": null,
+      "wallMs": 8988,
+      "marks": {
+        "bookmarks": 47.39999961853027,
+        "embedderStart": 238.69999980926514,
+        "ready": 238.69999980926514,
+        "firstStars": 404.5,
+        "searchReady": 456.19999980926514,
+        "modelReady": 8961.39999961853
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1553,
+          "requests": 1,
+          "seconds": 0.5827550003305078,
+          "mbps": 0.021319422386686968,
+          "startOffset": 2542949.730075,
+          "endOffset": 2542950.31283
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1979,
+          "requests": 2,
+          "seconds": 1.881620999891311,
+          "mbps": 0.008414021740251895,
+          "startOffset": 2542950.315713,
+          "endOffset": 2542952.197334
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374468,
+          "requests": 2,
+          "seconds": 6.811548000201583,
+          "mbps": 139.0279777771476,
+          "startOffset": 2542950.706312,
+          "endOffset": 2542957.51786
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093173,
+          "requests": 2,
+          "seconds": 3.564203000161797,
+          "mbps": 38.36632873991533,
+          "startOffset": 2542950.706442,
+          "endOffset": 2542954.270645
+        }
+      ]
+    },
+    {
+      "state": "a",
+      "run": 2,
+      "firstStars": 366.2999997138977,
+      "ready": 230.69999980926514,
+      "searchReady": 391.7999997138977,
+      "semanticReady": 8602.5,
+      "modelInit": 8371.800000190735,
+      "embedAll": null,
+      "wallMs": 8812,
+      "marks": {
+        "bookmarks": 44.90000009536743,
+        "embedderStart": 230.69999980926514,
+        "ready": 230.69999980926514,
+        "firstStars": 366.2999997138977,
+        "searchReady": 391.7999997138977,
+        "modelReady": 8602.5
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1560,
+          "requests": 1,
+          "seconds": 0.41389100020751357,
+          "mbps": 0.03015286631925524,
+          "startOffset": 2542961.893069,
+          "endOffset": 2542962.30696
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1985,
+          "requests": 2,
+          "seconds": 1.6077429996803403,
+          "mbps": 0.009877200524684195,
+          "startOffset": 2542962.309915,
+          "endOffset": 2542963.917658
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374467,
+          "requests": 2,
+          "seconds": 6.963252000045031,
+          "mbps": 135.99906135723305,
+          "startOffset": 2542962.537858,
+          "endOffset": 2542969.50111
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093174,
+          "requests": 2,
+          "seconds": 3.6540780002251267,
+          "mbps": 37.422680082793846,
+          "startOffset": 2542962.538055,
+          "endOffset": 2542966.192133
+        }
+      ]
+    },
+    {
+      "state": "a",
+      "run": 3,
+      "firstStars": 359.90000009536743,
+      "ready": 227.5,
+      "searchReady": 385.09999990463257,
+      "semanticReady": 8901.5,
+      "modelInit": 8674,
+      "embedAll": null,
+      "wallMs": 8921,
+      "marks": {
+        "bookmarks": 46.40000009536743,
+        "embedderStart": 227.5,
+        "ready": 227.5,
+        "firstStars": 359.90000009536743,
+        "searchReady": 385.09999990463257,
+        "modelReady": 8901.5
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1559,
+          "requests": 1,
+          "seconds": 0.30812699999660254,
+          "mbps": 0.040476816378108765,
+          "startOffset": 2542973.952381,
+          "endOffset": 2542974.260508
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1985,
+          "requests": 2,
+          "seconds": 1.469960999675095,
+          "mbps": 0.010803007701231495,
+          "startOffset": 2542974.263629,
+          "endOffset": 2542975.73359
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374450,
+          "requests": 2,
+          "seconds": 7.3559799999929965,
+          "mbps": 128.73819667819944,
+          "startOffset": 2542974.48291,
+          "endOffset": 2542981.83889
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093191,
+          "requests": 2,
+          "seconds": 3.6419220003299415,
+          "mbps": 37.54762677169129,
+          "startOffset": 2542974.483063,
+          "endOffset": 2542978.124985
+        }
+      ]
+    },
+    {
+      "state": "c",
+      "run": 1,
+      "firstStars": 286.40000009536743,
+      "ready": 168.2000002861023,
+      "searchReady": 319.1000003814697,
+      "semanticReady": 1204.9000000953674,
+      "modelInit": 1036.6999998092651,
+      "embedAll": null,
+      "wallMs": 1338,
+      "marks": {
+        "bookmarks": 38.90000009536743,
+        "embedderStart": 168.2000002861023,
+        "ready": 168.2000002861023,
+        "firstStars": 286.40000009536743,
+        "searchReady": 319.1000003814697,
+        "modelReady": 1204.9000000953674
+      }
+    },
+    {
+      "state": "c",
+      "run": 2,
+      "firstStars": 280.19999980926514,
+      "ready": 167.09999990463257,
+      "searchReady": 325.59999990463257,
+      "semanticReady": 1159.7999997138977,
+      "modelInit": 992.6999998092651,
+      "embedAll": null,
+      "wallMs": 1334,
+      "marks": {
+        "bookmarks": 38.69999980926514,
+        "embedderStart": 167.09999990463257,
+        "ready": 167.09999990463257,
+        "firstStars": 280.19999980926514,
+        "searchReady": 325.59999990463257,
+        "modelReady": 1159.7999997138977
+      }
+    },
+    {
+      "state": "c",
+      "run": 3,
+      "firstStars": 275,
+      "ready": 161.30000019073486,
+      "searchReady": 296.5,
+      "semanticReady": 1137.5,
+      "modelInit": 976.1999998092651,
+      "embedAll": null,
+      "wallMs": 1331,
+      "marks": {
+        "bookmarks": 35.19999980926514,
+        "embedderStart": 161.30000019073486,
+        "ready": 161.30000019073486,
+        "firstStars": 275,
+        "searchReady": 296.5,
+        "modelReady": 1137.5
+      }
+    },
+    {
+      "state": "c",
+      "run": 4,
+      "firstStars": 271.90000009536743,
+      "ready": 158.80000019073486,
+      "searchReady": 283.2000002861023,
+      "semanticReady": 1162.5,
+      "modelInit": 1003.6999998092651,
+      "embedAll": null,
+      "wallMs": 1351,
+      "marks": {
+        "bookmarks": 35.5,
+        "embedderStart": 158.80000019073486,
+        "ready": 158.80000019073486,
+        "firstStars": 271.90000009536743,
+        "searchReady": 283.2000002861023,
+        "modelReady": 1162.5
+      }
+    },
+    {
+      "state": "c",
+      "run": 5,
+      "firstStars": 276.30000019073486,
+      "ready": 161.80000019073486,
+      "searchReady": 297.6000003814697,
+      "semanticReady": 1137.6000003814697,
+      "modelInit": 975.8000001907349,
+      "embedAll": null,
+      "wallMs": 1314,
+      "marks": {
+        "bookmarks": 35.30000019073486,
+        "embedderStart": 161.80000019073486,
+        "ready": 161.80000019073486,
+        "firstStars": 276.30000019073486,
+        "searchReady": 297.6000003814697,
+        "modelReady": 1137.6000003814697
+      }
+    }
+  ]
+}

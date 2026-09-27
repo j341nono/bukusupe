@@ -1,0 +1,133 @@
+{
+  "env": {
+    "measuredAt": "2026-09-26T20:30:41.378Z",
+    "machine": {
+      "model": "MacBook Pro",
+      "identifier": "Mac14,9",
+      "chip": "Apple M2 Pro",
+      "cores": "10 (6 Performance and 4 Efficiency)",
+      "memory": "16 GB"
+    },
+    "gpu": {
+      "model": "Apple M2 Pro",
+      "cores": "16",
+      "metal": "Metal 4",
+      "display": "2560 x 1440 (QHD/WQHD - Wide Quad High Definition)"
+    },
+    "os": "macOS 26.5.2 (25F84)",
+    "chrome": "Google Chrome 153.0.8010.53",
+    "node": "v22.22.2",
+    "power": {
+      "source": "AC Power",
+      "battery": "-InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true",
+      "lowPowerMode": false
+    },
+    "load": [
+      2.13,
+      3.04,
+      3.25
+    ],
+    "otherCpu": {
+      "total": 62.7,
+      "top": [
+        "syspolicyd 13.7%",
+        "trustd 7.7%",
+        "usbaudiod 6.5%"
+      ]
+    }
+  },
+  "builds": {
+    "dist": [
+      {
+        "file": "ort/ort-wasm-simd-threaded.asyncify.wasm",
+        "bytes": 26861777
+      },
+      {
+        "file": "index.js",
+        "bytes": 673035
+      },
+      {
+        "file": "assets/embed.worker-9SMErfvP.js",
+        "bytes": 549292
+      },
+      {
+        "file": "ort/ort-wasm-simd-threaded.asyncify.mjs",
+        "bytes": 53057
+      },
+      {
+        "file": "index.html",
+        "bytes": 23893
+      },
+      {
+        "file": "icons/icon128.png",
+        "bytes": 17423
+      },
+      {
+        "file": "icons/icon48.png",
+        "bytes": 4392
+      },
+      {
+        "file": "icons/icon32.png",
+        "bytes": 2485
+      },
+      {
+        "file": "manifest.json",
+        "bytes": 1233
+      },
+      {
+        "file": "icons/icon16.png",
+        "bytes": 911
+      },
+      {
+        "file": "background.js",
+        "bytes": 106
+      }
+    ],
+    "dist-web": [
+      {
+        "file": "ort/ort-wasm-simd-threaded.asyncify.wasm",
+        "bytes": 26861777
+      },
+      {
+        "file": "index.js",
+        "bytes": 676101
+      },
+      {
+        "file": "assets/embed.worker-9SMErfvP.js",
+        "bytes": 549292
+      },
+      {
+        "file": "assets/sample-precomputed-BsCsS5GR.js",
+        "bytes": 360044
+      },
+      {
+        "file": "ort/ort-wasm-simd-threaded.asyncify.mjs",
+        "bytes": 53057
+      },
+      {
+        "file": "index.html",
+        "bytes": 23893
+      },
+      {
+        "file": "icons/icon128.png",
+        "bytes": 17423
+      },
+      {
+        "file": "icons/icon48.png",
+        "bytes": 4392
+      },
+      {
+        "file": "icons/icon32.png",
+        "bytes": 2485
+      },
+      {
+        "file": "icons/icon16.png",
+        "bytes": 911
+      }
+    ]
+  },
+  "totals": {
+    "dist": 28187604,
+    "dist-web": 28549375
+  }
+}

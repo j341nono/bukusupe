@@ -72,7 +72,10 @@ export function captureEnvironment(extra = {}) {
     machine: { model: field(hw, "Model Name"), identifier: field(hw, "Model Identifier"), chip: field(hw, "Chip"),
       cores: field(hw, "Total Number of Cores"), memory: field(hw, "Memory") },
     gpu: { model: field(gpu, "Chipset Model"), cores: gpu.match(/Type: GPU[\s\S]*?Total Number of Cores:\s*(\d+)/)?.[1] ?? null,
-      metal: field(gpu, "Metal Support"), display: field(gpu, "Resolution") },
+      metal: field(gpu, "Metal Support"), display: field(gpu, "Resolution"),
+      // 表示に使っている画面（蓋を閉じて外部ディスプレイを使う場合はその画面）とリフレッシュレート
+      displayName: gpu.match(/\n\s+Displays:\s*\n\s*([^\n]+):/)?.[1]?.trim() ?? null, looksLike: field(gpu, "UI Looks like"),
+      clamshellClosed: /"AppleClamshellState" = Yes/.test(run("ioreg", ["-r", "-k", "AppleClamshellState", "-d", "4"])) },
     os: `${run("sw_vers", ["-productName"])} ${run("sw_vers", ["-productVersion"])} (${run("sw_vers", ["-buildVersion"])})`,
     chrome: run(chrome, ["--version"]),
     node: process.version,

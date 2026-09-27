@@ -59,6 +59,10 @@ const headful = R["render-headful"]?.frames ?? [];
 const headless = R["render-headless"]?.frames ?? [];
 const sceneStat = (frames, n, scene, key) => summarize(frames.filter((f) => f.n === n && f.scene === scene).flatMap((f) => f[key]));
 const idleH = R["idle-headful"]?.runs ?? [];
+// 画面ありの測定で使った画面のリフレッシュレート（記録の「UI Looks like … @ 144.00Hz」から）と、1 コマの持ち時間
+const headfulEnv = R["render-headful"]?.env ?? null;
+const refreshHz = Number(headfulEnv?.gpu?.looksLike?.match(/@\s*([\d.]+)\s*Hz/)?.[1]) || null;
+const frameBudget = refreshHz ? 1000 / refreshHz : null;
 const idleS = R["idle-headless"]?.runs ?? [];
 const idleMed = (rows, n, loop, key) => med(rows.filter((r) => r.n === n && r.loop === loop).map((r) => r[key]));
 const mem = R.memory?.runs ?? [];
@@ -113,7 +117,9 @@ out("## 測定の環境と条件", "");
   const e = Object.values(R).find((v) => v?.env)?.env;
   if (e) {
     out(table(["項目", "値"], [["機種", `${e.machine.model}（${e.machine.identifier}）`], ["CPU", `${e.machine.chip}（${e.machine.cores}）`],
-      ["メモリ", e.machine.memory], ["GPU", `${e.gpu.model}（${e.gpu.cores} コア、${e.gpu.metal}）`], ["OS", e.os], ["Chrome", e.chrome], ["Node.js", e.node]]), "");
+      ["メモリ", e.machine.memory], ["GPU", `${e.gpu.model}（${e.gpu.cores} コア、${e.gpu.metal}）`],
+      ["画面（画面ありの描画）", headfulEnv ? `${headfulEnv.gpu.displayName ?? "—"}、${headfulEnv.gpu.looksLike ?? "—"}${headfulEnv.gpu.clamshellClosed ? "（本体の蓋を閉じ、外部ディスプレイだけで表示）" : ""}` : "—"],
+      ["OS", e.os], ["Chrome", e.chrome], ["Node.js", e.node]]), "");
     out("測定ごとの日時・描画の方法・電源・負荷。「他のアプリの CPU」は、この測定のスクリプトと、それが起動した Chrome を除いたプロセスの CPU 使用率の合計" +
       `（1 コア＝100%、5 秒ごと。${OTHER_CPU_LIMIT}% を超えたら ⚠。測定の各段の前に超えていたら、下がるまで待ち、下がらなければ測定を止める）。` +
       "ロードアベレージ（1 分平均）は測定そのもの（埋め込みの計算など）の負荷も含むので参考：", "",
@@ -257,14 +263,17 @@ for (const [frames, label, key] of [[headful, "画面あり（GPU あり）", "r
   }
   charts[key] = lineChart({ title: `1 コマの間隔の p95（ms、${label}）`, yLabel: "ms", series: sceneLabels.map(([scene, name]) => ({ name,
     points: counts(frames).map((n) => [n, sceneStat(frames, n, scene, "intervals").p95]) })) });
-  out(`![描画 ${label}](bench/${key}.png)`, "");
+  charts[`${key}-js`] = lineChart({ title: `1 コマの JS の時間の p95（ms、${label}）`, yLabel: "ms", series: sceneLabels.map(([scene, name]) => ({ name,
+    points: counts(frames).map((n) => [n, sceneStat(frames, n, scene, "total").p95]) })) });
+  out(`![描画 ${label}](bench/${key}.png)`, "", `![1 コマの JS ${label}](bench/${key}-js.png)`, "");
 }
 
 // 5. 資源
 out("## 5. 資源", "");
 if (mem.length) {
   const points = [["afterStartup", "起動直後（(c)）"], ["afterEmbed", "全件の埋め込みの後（(b)）"], ["searching", "検索中"], ["flying", "飛行中"]];
-  out("メモリ（中央値。JS のヒープは GC の後の使用量、WebAssembly は ONNX Runtime のメモリの確保量、プロセスは RSS）：", "",
+  out("メモリ（中央値。JS のヒープは GC の後の使用量、WebAssembly は ONNX Runtime のメモリの確保量、プロセスは RSS。" +
+    (R.memory.method === "isolated" ? "測るたびにブラウザを起動し直し、アプリを 1 回だけ開いた状態で測った" : "") + "）：", "",
     table(["件数", "時点", "JS ヒープ（ページ）", "JS ヒープ（Worker）", "WebAssembly", "拡張機能のページのプロセス", "GPU のプロセス"],
       counts(mem).flatMap((n) => points.map(([p, name]) => [n, name, mb(memMed(n, p, "pageHeap")), mb(memMed(n, p, "workerHeap")), mb(memMed(n, p, "wasm")),
         mb(memMed(n, p, "renderer")), mb(memMed(n, p, "gpu"))]))), "");
@@ -310,7 +319,7 @@ out("## 測定の方法と限界", "",
   "- **時間の測り方**：起動の節目は、ページの中の `performance.now()`（ページを開いた時点が 0）で控えた（`?debug=1` のときだけ）。" +
   "「最初に星が見える」は、最初に星を表示した後の 2 コマ目。埋め込みが無いとき（(a)・(b)）は、意味で並べる前の仮の配置で星が出る。",
   "- **ヘッドレスと画面あり**：ヘッドレスは GPU を使わないソフトウェア描画（SwiftShader）なので、描画の時間は実際より大きく、コマ数は少なく出る。" +
-  "画面ありでは、コマの間隔が画面の書き換えの間隔（この機種は最大 120Hz で約 8.3 ms）で頭打ちになるため、余裕の大きさは「1 コマの JS の時間」で見る。" +
+  `画面ありでは、コマの間隔が画面の書き換えの間隔（測定に使った画面 ${headfulEnv?.gpu?.displayName ?? "—"} は ${refreshHz ?? "—"}Hz で約 ${num(frameBudget, 1)} ms）で頭打ちになるため、余裕の大きさは「1 コマの JS の時間」で見る。` +
   "GPU の処理時間は、WebGL の時間計測の拡張が通常は使えないため測っていない。",
   "- **通信の速さ**：モデルの取得の時間は、測った時点の回線と Hugging Face の配信の状態に左右される。容量から計算した 10・50・100 Mbps の目安を併記した。",
   "- **生成したブックマークの偏り**：500 件以上は、サンプル 156 件の分野の比率とタイトルの語を組み合わせて作った。分野はサンプルの 12 系統に限られ、" +
@@ -320,6 +329,23 @@ out("## 測定の方法と限界", "",
   "（確保量で、実際に使っている量ではない）。プロセスは `ps` の RSS で、共有のページを含み、GPU のプロセスは他のタブの分も含みうる。",
   "- **ディスク**：モデルのキャッシュは `navigator.storage.estimate()` の caches。IndexedDB は DB の中身から数えた論理的な大きさで、実際のファイル（LevelDB）の大きさは圧縮や余白で変わる。",
   "- **単位**：容量とメモリは 10 進（1 MB = 1,000,000 バイト）。ページの中の時刻は 0.1 ms 刻みに粗められているため、それより短い時間は「< 0.1 ms」と書いた。",
+  ...(R.memory?.method === "isolated" ? ["- **メモリの測り方（途中で変えた点）**：はじめは件数ごとの測定と同じブラウザで、ページを行き来しながら測ったが、" +
+    "前に開いたアプリのページが「戻る」のためのキャッシュ（bfcache）などで同じプロセスに残り、プロセス全体のメモリが積み上がって見えた" +
+    "（拡張機能のページのプロセスが 100 件で数 GB、件数が増えるほど小さいという逆の傾き。空のページと 4 回行き来するだけで 947 MB → 1,171 MB に増えることも確かめた）。" +
+    "そこで、測るたびにブラウザを起動し直してアプリを 1 回だけ開く方法で測り直し、表はその結果にした（はじめの結果は `results/memory-navigating.*` に残した）。" +
+    "JS のヒープと WebAssembly のメモリは、ページと Worker ごとに測るので、この影響を受けない。量子化の比較の WebAssembly のメモリも同じ理由で使える。"] : []),
+  "- **画面ありの測定と「他のアプリの CPU」**：画面ありでは、Chrome の窓を画面に合成する WindowServer の負荷も「他のアプリ」に数えている（測定そのものの負荷を一部含む）。",
+  "- **負荷の判定（計画から変えた点）**：計画では「1 分平均のロードアベレージが 4 を超えたら中断」としていたが、試運転でロードアベレージが測定そのもの" +
+  "（埋め込みの計算やソフトウェア描画）で 5〜12 に上がり、次の段が止まった。そこで中断の判断は「この測定のスクリプトと、それが起動した Chrome を除いた" +
+  `他のプロセスの CPU 使用率の合計が ${OTHER_CPU_LIMIT}% を超えたとき」に変え（最大 2 分待ち、下がらなければ止める）、ロードアベレージは参考として記録した。`,
+  ...(() => {
+    const re = Object.entries(R).flatMap(([name, v]) => (v?.remeasured ?? []).map((m) => `${name}：${m.item}。理由：${m.reason}。測り直した日時 ${m.at?.slice(0, 16).replace("T", " ")}（UTC）`));
+    const skipped = Object.entries(R).flatMap(([name, v]) => (v?.skipped ?? []).map((m) => `${name}：${m.item}。理由：${m.reason}`));
+    return [
+      ...(re.length ? [`- **測り直した項目**：${re.join("／")}。表の値は測り直した結果に差し替えた（元の値も結果のファイルの \`remeasured\` に残した）。`] : []),
+      ...(skipped.length ? [`- **飛ばした項目**：${skipped.join("／")}。`] : []),
+    ];
+  })(),
   "- **その他**：件数ごとの測定は、同じプロファイルで順に行った（ディスクのキャッシュは温まっている）。1 件の追加は、確認用の窓口（`simulateAdd`）で本物と同じ関数を通した。", "");
 
 // 改善の余地
@@ -340,17 +366,25 @@ out("## 結果からわかる改善の余地", "");
   const n = bigN(startup);
   if (n && isNum(rate(n))) items.push(`**全件の埋め込みは 1 スレッド**：ONNX Runtime を 1 スレッド（\`numThreads = 1\`、MV3 の制約で追加の Worker を blob から起こさない）で動かしており、` +
     `${n} 件で ${sec(st(n, "b", "embedAll"))}（1 秒あたり ${num(rate(n), 1)} 件）かかる。初回だけの処理だが、件数に比例して延びる。` +
-    "埋め込みの Worker を複数立てて分担すれば短くできる見込み（その分メモリは増える。下の WebAssembly のメモリを参照）。");
+    "埋め込みの Worker を複数立てて分担すれば短くできる見込み（その分メモリは増える。5 章の WebAssembly のメモリを参照）。");
   if (R.quant) {
     const q = Object.fromEntries(R.quant.results.map((r) => [r.dtype, r]));
-    if (q.q8?.quality && q.fp32?.quality) items.push(`**量子化**：int8（今の設定）の正解数は ${q.q8.quality.total}、fp32 は ${q.fp32.quality.total}（最大 ${q.q8.quality.max}）。` +
-      `埋め込みの時間は int8 ${sec(med(q.q8.runs.map((r) => r.embedAll)))}、fp32 ${sec(med(q.fp32.runs.map((r) => r.embedAll)))}。容量と時間の差に見合う精度の差があるかで判断できる。`);
+    if (q.q8?.quality && q.fp32?.quality) {
+      const t8 = med(q.q8.runs.map((r) => r.embedAll)), t32 = med(q.fp32.runs.map((r) => r.embedAll));
+      const w8 = med(q.q8.memory.map((r) => r.wasm)), w32 = med(q.fp32.memory.map((r) => r.wasm));
+      const s32 = med(q.fp32.files.map((f) => f.bytes)), s8 = modelFiles.find((f) => f.file.endsWith("model_quantized.onnx"))?.bytes;
+      items.push(`**量子化は今の int8 のままでよい**：この WebAssembly（1 スレッド）の実行では、埋め込みの時間は int8 ${sec(t8)}、fp32 ${sec(t32)}` +
+        `（差 ${num(((t8 - t32) / t32) * 100, 0)}%）で、int8 にしても速くはならない。一方で、容量は int8 ${mb(s8)}・fp32 ${mb(s32)}、` +
+        `WebAssembly のメモリは int8 ${mb(w8)}・fp32 ${mb(w32)} と大きな差がある。既存の 9 語の正解数は int8 ${q.q8.quality.total}、fp32 ${q.fp32.quality.total}` +
+        `（最大 ${q.q8.quality.max}）で、精度でも劣らない（検索の係数は int8 の埋め込みで調整してきたので、int8 に有利な可能性はある）。` +
+        "速さを上げたいなら、量子化ではなく、スレッドや Worker の数を見直すほうが効く見込み。");
+    }
   }
   const fN = bigN(headful);
   if (fN) {
     const worst = sceneLabels.map(([scene, name]) => ({ name, p95: sceneStat(headful, fN, scene, "total").p95 })).sort((a, b) => b.p95 - a.p95)[0];
     items.push(`**描画の余裕**：画面ありの ${fN} 件で、1 コマの JS の p95 がいちばん大きい場面は「${worst.name}」の ${msf(worst.p95)}。` +
-      `120Hz の 1 コマ（約 8.3 ms）${worst.p95 > 8.3 ? "を超えることがあり、コマ落ちの原因になりうる" : "に収まっている"}。`);
+      `${refreshHz ?? "—"}Hz の 1 コマ（約 ${num(frameBudget, 1)} ms）${isNum(frameBudget) && worst.p95 > frameBudget ? "を超えることがあり、コマ落ちの原因になりうる" : "に収まっている"}。`);
   }
   out(items.length ? items.map((t) => `- ${t}`).join("\n") : "（測定の後に書く）", "");
 }

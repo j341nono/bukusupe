@@ -1,0 +1,546 @@
+{
+  "env": {
+    "measuredAt": "2026-09-26T20:30:42.274Z",
+    "machine": {
+      "model": "MacBook Pro",
+      "identifier": "Mac14,9",
+      "chip": "Apple M2 Pro",
+      "cores": "10 (6 Performance and 4 Efficiency)",
+      "memory": "16 GB"
+    },
+    "gpu": {
+      "model": "Apple M2 Pro",
+      "cores": "16",
+      "metal": "Metal 4",
+      "display": "2560 x 1440 (QHD/WQHD - Wide Quad High Definition)"
+    },
+    "os": "macOS 26.5.2 (25F84)",
+    "chrome": "Google Chrome 153.0.8010.53",
+    "node": "v22.22.2",
+    "power": {
+      "source": "AC Power",
+      "battery": "-InternalBattery-0 (id=22413411)\t100%; charged; 0:00 remaining present: true",
+      "lowPowerMode": false
+    },
+    "load": [
+      2.13,
+      3.04,
+      3.25
+    ],
+    "otherCpu": {
+      "total": 52.300000000000004,
+      "top": [
+        "duetexpertd 7.1%",
+        "usbaudiod 5.8%",
+        "syspolicyd 5.3%"
+      ]
+    },
+    "headless": true,
+    "profile": "毎回まっさら"
+  },
+  "loadSamples": [
+    {
+      "at": "2026-09-26T20:30:47.352Z",
+      "load1": 2.603515625,
+      "otherCpu": 58.7
+    },
+    {
+      "at": "2026-09-26T20:30:52.353Z",
+      "load1": 3.35595703125,
+      "otherCpu": 28.200000000000006
+    },
+    {
+      "at": "2026-09-26T20:30:57.354Z",
+      "load1": 3.7275390625,
+      "otherCpu": 40.1
+    },
+    {
+      "at": "2026-09-26T20:31:02.354Z",
+      "load1": 3.7490234375,
+      "otherCpu": 46.500000000000014
+    },
+    {
+      "at": "2026-09-26T20:31:07.356Z",
+      "load1": 3.84912109375,
+      "otherCpu": 14.799999999999997
+    },
+    {
+      "at": "2026-09-26T20:31:12.356Z",
+      "load1": 4.42138671875,
+      "otherCpu": 39.20000000000001
+    },
+    {
+      "at": "2026-09-26T20:31:17.357Z",
+      "load1": 5.02783203125,
+      "otherCpu": 42.000000000000014
+    },
+    {
+      "at": "2026-09-26T20:31:22.359Z",
+      "load1": 5.90625,
+      "otherCpu": 116.79999999999998
+    },
+    {
+      "at": "2026-09-26T20:31:27.359Z",
+      "load1": 6.71435546875,
+      "otherCpu": 25.700000000000017
+    },
+    {
+      "at": "2026-09-26T20:31:32.360Z",
+      "load1": 6.73681640625,
+      "otherCpu": 43.69999999999999
+    },
+    {
+      "at": "2026-09-26T20:31:37.362Z",
+      "load1": 8.19921875,
+      "otherCpu": 22.400000000000006
+    },
+    {
+      "at": "2026-09-26T20:31:42.362Z",
+      "load1": 8.42333984375,
+      "otherCpu": 19.700000000000006
+    },
+    {
+      "at": "2026-09-26T20:31:47.363Z",
+      "load1": 8.70947265625,
+      "otherCpu": 37.90000000000001
+    },
+    {
+      "at": "2026-09-26T20:31:52.364Z",
+      "load1": 8.171875,
+      "otherCpu": 18.500000000000014
+    },
+    {
+      "at": "2026-09-26T20:31:57.364Z",
+      "load1": 8.31787109375,
+      "otherCpu": 30.700000000000017
+    },
+    {
+      "at": "2026-09-26T20:32:02.365Z",
+      "load1": 8.8525390625,
+      "otherCpu": 592.7000000000007
+    },
+    {
+      "at": "2026-09-26T20:32:07.367Z",
+      "load1": 13.9892578125,
+      "otherCpu": 134.39999999999986
+    },
+    {
+      "at": "2026-09-26T20:32:12.369Z",
+      "load1": 14.47021484375,
+      "otherCpu": 102.29999999999995
+    },
+    {
+      "at": "2026-09-26T20:32:17.371Z",
+      "load1": 14.35205078125,
+      "otherCpu": 18.10000000000002
+    },
+    {
+      "at": "2026-09-26T20:32:22.371Z",
+      "load1": 14.48388671875,
+      "otherCpu": 16.200000000000003
+    },
+    {
+      "at": "2026-09-26T20:32:27.373Z",
+      "load1": 14.28466796875,
+      "otherCpu": 34.30000000000001
+    },
+    {
+      "at": "2026-09-26T20:32:32.374Z",
+      "load1": 14.1015625,
+      "otherCpu": 38.300000000000004
+    },
+    {
+      "at": "2026-09-26T20:32:37.377Z",
+      "load1": 13.21240234375,
+      "otherCpu": 15
+    },
+    {
+      "at": "2026-09-26T20:32:42.378Z",
+      "load1": 13.275390625,
+      "otherCpu": 10.899999999999997
+    },
+    {
+      "at": "2026-09-26T20:32:47.379Z",
+      "load1": 13.1728515625,
+      "otherCpu": 12.299999999999999
+    },
+    {
+      "at": "2026-09-26T20:32:52.379Z",
+      "load1": 12.51806640625,
+      "otherCpu": 15.299999999999997
+    },
+    {
+      "at": "2026-09-26T20:32:57.380Z",
+      "load1": 12.396484375,
+      "otherCpu": 33.90000000000002
+    },
+    {
+      "at": "2026-09-26T20:33:02.382Z",
+      "load1": 12.4443359375,
+      "otherCpu": 39.00000000000001
+    },
+    {
+      "at": "2026-09-26T20:33:07.382Z",
+      "load1": 12.48876953125,
+      "otherCpu": 14.499999999999998
+    },
+    {
+      "at": "2026-09-26T20:33:12.385Z",
+      "load1": 11.80859375,
+      "otherCpu": 10.999999999999996
+    },
+    {
+      "at": "2026-09-26T20:33:17.387Z",
+      "load1": 11.82373046875,
+      "otherCpu": 14.999999999999996
+    },
+    {
+      "at": "2026-09-26T20:33:22.387Z",
+      "load1": 11.83740234375,
+      "otherCpu": 12.899999999999999
+    },
+    {
+      "at": "2026-09-26T20:33:27.388Z",
+      "load1": 11.93017578125,
+      "otherCpu": 12.599999999999996
+    },
+    {
+      "at": "2026-09-26T20:33:32.390Z",
+      "load1": 11.935546875,
+      "otherCpu": 31.60000000000001
+    },
+    {
+      "at": "2026-09-26T20:33:37.391Z",
+      "load1": 12.2607421875,
+      "otherCpu": 12.799999999999997
+    },
+    {
+      "at": "2026-09-26T20:33:42.392Z",
+      "load1": 12.47998046875,
+      "otherCpu": 38.50000000000001
+    },
+    {
+      "at": "2026-09-26T20:33:47.393Z",
+      "load1": 12.6015625,
+      "otherCpu": 12.799999999999999
+    },
+    {
+      "at": "2026-09-26T20:33:52.394Z",
+      "load1": 12.63330078125,
+      "otherCpu": 12.599999999999998
+    },
+    {
+      "at": "2026-09-26T20:33:57.395Z",
+      "load1": 12.42236328125,
+      "otherCpu": 12.799999999999999
+    },
+    {
+      "at": "2026-09-26T20:34:02.396Z",
+      "load1": 12.38818359375,
+      "otherCpu": 30.30000000000001
+    }
+  ],
+  "warnings": [],
+  "runs": [
+    {
+      "n": 156,
+      "run": 1,
+      "firstStars": 304.7000002861023,
+      "ready": 17282,
+      "searchReady": 17282.300000190735,
+      "semanticReady": 17282.300000190735,
+      "modelInit": 8586,
+      "embedAll": 8564.199999809265,
+      "wallMs": 17299,
+      "marks": {
+        "bookmarks": 68.5,
+        "embedderStart": 78.7000002861023,
+        "firstStars": 304.7000002861023,
+        "embed:model": 2096.6000003814697,
+        "modelReady": 8664.700000286102,
+        "embed:embed": 8664.800000190735,
+        "embed:done": 17229,
+        "ready": 17282,
+        "searchReady": 17282.300000190735
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1409,
+          "requests": 1,
+          "seconds": 0.4877260001376271,
+          "mbps": 0.023111337096688004,
+          "startOffset": 2539126.282209,
+          "endOffset": 2539126.769935
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1991,
+          "requests": 2,
+          "seconds": 1.4356229999102652,
+          "mbps": 0.011094834786706255,
+          "startOffset": 2539126.77565,
+          "endOffset": 2539128.211273
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374459,
+          "requests": 2,
+          "seconds": 6.865385999903083,
+          "mbps": 137.93771712375218,
+          "startOffset": 2539126.995502,
+          "endOffset": 2539133.860888
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093182,
+          "requests": 2,
+          "seconds": 3.5406359997577965,
+          "mbps": 38.621721071964,
+          "startOffset": 2539126.995657,
+          "endOffset": 2539130.536293
+        }
+      ],
+      "memory": {
+        "pageHeap": 3901616,
+        "workerHeap": 106219532,
+        "wasm": 346095616,
+        "renderer": 772243456,
+        "rendererPid": 81303,
+        "gpu": 236093440,
+        "gpuPid": 81285,
+        "browser": 237305856,
+        "total": 1967964160
+      }
+    },
+    {
+      "n": 156,
+      "run": 2,
+      "firstStars": 333.40000009536743,
+      "ready": 16957.700000286102,
+      "searchReady": 16958.099999904633,
+      "semanticReady": 16958.099999904633,
+      "modelInit": 8217.400000095367,
+      "embedAll": 8472,
+      "wallMs": 17059,
+      "marks": {
+        "bookmarks": 192.7000002861023,
+        "embedderStart": 200.80000019073486,
+        "firstStars": 333.40000009536743,
+        "embed:model": 2053,
+        "modelReady": 8418.200000286102,
+        "embed:embed": 8418.200000286102,
+        "embed:done": 16890.200000286102,
+        "ready": 16957.700000286102,
+        "searchReady": 16958.099999904633
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1555,
+          "requests": 1,
+          "seconds": 0.30592000018805265,
+          "mbps": 0.04066422591642581,
+          "startOffset": 2539146.863916,
+          "endOffset": 2539147.169836
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1991,
+          "requests": 2,
+          "seconds": 1.59163699997589,
+          "mbps": 0.01000730694262654,
+          "startOffset": 2539147.172731,
+          "endOffset": 2539148.764368
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374450,
+          "requests": 2,
+          "seconds": 6.847291999962181,
+          "mbps": 138.302207647232,
+          "startOffset": 2539147.392366,
+          "endOffset": 2539154.239658
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093209,
+          "requests": 2,
+          "seconds": 3.676565000321716,
+          "mbps": 37.193867642224234,
+          "startOffset": 2539147.392493,
+          "endOffset": 2539151.069058
+        }
+      ],
+      "memory": {
+        "pageHeap": 3903828,
+        "workerHeap": 106180976,
+        "wasm": 346095616,
+        "renderer": 1142128640,
+        "rendererPid": 81556,
+        "gpu": 228704256,
+        "gpuPid": 81539,
+        "browser": 231604224,
+        "total": 2280423424
+      }
+    },
+    {
+      "n": 156,
+      "run": 3,
+      "firstStars": 346.5,
+      "ready": 16875.099999904633,
+      "searchReady": 16877.099999904633,
+      "semanticReady": 16877.099999904633,
+      "modelInit": 7961.800000190735,
+      "embedAll": 8653,
+      "wallMs": 17073,
+      "marks": {
+        "bookmarks": 197.69999980926514,
+        "embedderStart": 206.19999980926514,
+        "firstStars": 346.5,
+        "embed:model": 1771.5999999046326,
+        "modelReady": 8168,
+        "embed:embed": 8168,
+        "embed:done": 16821,
+        "ready": 16875.099999904633,
+        "searchReady": 16877.099999904633
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1555,
+          "requests": 1,
+          "seconds": 0.41292899986729026,
+          "mbps": 0.030126244473016053,
+          "startOffset": 2539167.248592,
+          "endOffset": 2539167.661521
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1990,
+          "requests": 2,
+          "seconds": 1.200563999824226,
+          "mbps": 0.013260434264504717,
+          "startOffset": 2539167.664011,
+          "endOffset": 2539168.864575
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374450,
+          "requests": 2,
+          "seconds": 6.459981999825686,
+          "mbps": 146.59415460067123,
+          "startOffset": 2539167.890217,
+          "endOffset": 2539174.350199
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093173,
+          "requests": 2,
+          "seconds": 3.189938999712467,
+          "mbps": 42.86771126730821,
+          "startOffset": 2539167.890335,
+          "endOffset": 2539171.080274
+        }
+      ],
+      "memory": {
+        "pageHeap": 3905704,
+        "workerHeap": 106932208,
+        "wasm": 346095616,
+        "renderer": 1124204544,
+        "rendererPid": 81772,
+        "gpu": 233111552,
+        "gpuPid": 81756,
+        "browser": 234225664,
+        "total": 2316107776
+      }
+    },
+    {
+      "n": 2000,
+      "run": 1,
+      "firstStars": 343.40000009536743,
+      "ready": 134428.80000019073,
+      "searchReady": 134451.80000019073,
+      "semanticReady": 134451.80000019073,
+      "modelInit": 8077.5,
+      "embedAll": 125500.59999990463,
+      "wallMs": 134657,
+      "marks": {
+        "bookmarks": 189.09999990463257,
+        "embedderStart": 201.2000002861023,
+        "firstStars": 343.40000009536743,
+        "embed:model": 1844.2000002861023,
+        "modelReady": 8278.700000286102,
+        "embed:embed": 8278.700000286102,
+        "embed:done": 133779.30000019073,
+        "ready": 134428.80000019073,
+        "searchReady": 134451.80000019073
+      },
+      "files": [
+        {
+          "file": "config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/config.json",
+          "bytes": 1556,
+          "requests": 1,
+          "seconds": 0.30965099995955825,
+          "mbps": 0.04020009624262723,
+          "startOffset": 2539192.741775,
+          "endOffset": 2539193.051426
+        },
+        {
+          "file": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer_config.json",
+          "bytes": 1992,
+          "requests": 2,
+          "seconds": 1.3534029996953905,
+          "mbps": 0.011774763321484217,
+          "startOffset": 2539193.054347,
+          "endOffset": 2539194.40775
+        },
+        {
+          "file": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/onnx/model_quantized.onnx",
+          "bytes": 118374459,
+          "requests": 2,
+          "seconds": 6.642359999939799,
+          "mbps": 142.5691579511774,
+          "startOffset": 2539193.279017,
+          "endOffset": 2539199.921377
+        },
+        {
+          "file": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/multilingual-e5-small/resolve/main/tokenizer.json",
+          "bytes": 17093173,
+          "requests": 2,
+          "seconds": 3.323816000018269,
+          "mbps": 41.141081214859184,
+          "startOffset": 2539193.279148,
+          "endOffset": 2539196.602964
+        }
+      ],
+      "memory": {
+        "pageHeap": 5835600,
+        "workerHeap": 87377264,
+        "wasm": 346095616,
+        "renderer": 828325888,
+        "rendererPid": 82050,
+        "gpu": 236781568,
+        "gpuPid": 82033,
+        "browser": 267894784,
+        "total": 1845428224
+      }
+    }
+  ]
+}

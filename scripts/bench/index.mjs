@@ -12,13 +12,14 @@ import { COUNTS } from "./lib.mjs";
 import { size } from "./size.mjs";
 import { fresh } from "./fresh.mjs";
 import { core } from "./core.mjs";
+import { memory } from "./memory.mjs";
 import { web } from "./web.mjs";
 import { quant } from "./quant.mjs";
 import { render } from "./render.mjs";
 import { report } from "./report.mjs";
 
-const CORE = ["startup", "query", "layout", "search", "add", "memory", "disk"];
-const SUITES = ["size", "fresh", ...CORE, "web", "quant", "render-headless", "render-headful"];
+const CORE = ["startup", "query", "layout", "search", "add", "disk"];
+const SUITES = ["size", "fresh", ...CORE, "memory", "web", "quant", "render-headless", "render-headful"];
 const ALIASES = { run1: SUITES.filter((s) => s !== "render-headful"), run2: ["render-headful"], all: SUITES };
 
 /** 所要時間の目安（分）。埋め込みは 1 秒あたり約 16 件（1 スレッド）で見積もる */
@@ -30,6 +31,7 @@ function estimateMinutes(suite, counts) {
     case "startup": return (6 * items) / 16 / 60 + counts.length * 1.5;
     case "web": return 4;
     case "quant": return 35;
+    case "memory": return (6 * items) / 16 / 60 + counts.length * 2.5;
     case "render-headless": case "render-headful": return counts.length * 6.5;
     default: return counts.length * 0.8;
   }
@@ -71,6 +73,7 @@ if (requested.includes("size")) await step("size", () => size());
 if (requested.includes("fresh")) await step("fresh", () => fresh({ allowLoad }));
 const coreParts = CORE.filter((p) => requested.includes(p));
 if (coreParts.length) await step(`core（${coreParts.join(", ")}）`, () => core({ parts: coreParts, counts, allowLoad }));
+if (requested.includes("memory")) await step("memory", () => memory({ counts, allowLoad }));
 if (requested.includes("web")) await step("web", () => web({ allowLoad }));
 if (requested.includes("quant")) await step("quant", () => quant({ allowLoad }));
 if (requested.includes("render-headless")) await step("render-headless", () => render({ mode: "headless", counts, allowLoad }));
