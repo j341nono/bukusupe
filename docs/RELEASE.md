@@ -107,6 +107,7 @@
     確認用の名前が残っている、のどれかで失敗する。問い合わせ先は `src/config.ts` の `SUPPORT_EMAIL`。
   - 版の番号：`public/manifest.json` と `package.json` がずれていると、配布用のビルド（`vite.config.ts` の `checkVersion`）が失敗する。
     git のタグはストアに上げたコミットに後から付けるものなので、ビルドでは比べない（上げる手順で付ける）。
+- **版を `0.9.0` にした**（`public/manifest.json`・`package.json`）。`CHANGELOG.md` を作った。
 - **確認**（`scripts/check-release.mjs`、`check:ext` の 2 番目）：配布用の `dist/` と Web のデモに確認用・測定用の名前が無い／manifest に
   `host_permissions` と `storage` が無い／版ずれで配布用のビルドと `package` が失敗する／仮のメールで `package` が失敗する／本物の値なら zip ができる。
   `check-fresh`：配布用のビルドを権限なしのまま読み込み、検索欄からの意味検索（文字としては一致しない「夜空を眺めたい」）で星が引き寄せられる／
