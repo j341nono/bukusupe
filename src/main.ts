@@ -25,6 +25,7 @@ import { lastTouched, touchAppearance } from "./render/magnitude";
 import { deleteConstellation, onDbBlocked, readConstellations, readMeta, useDataSource, writeConstellation, writeMeta } from "./store/db";
 import { renderHud, renderHudMessage, setSourceSwitch, settleHud, setupHudControls } from "./ui/hud";
 import { openPage } from "./ui/open-page";
+import { RETURN_STATE_KEY, RETURN_STATE_VERSION, parseReturnState, storeReturnState, takeReturnState } from "./ui/return-state";
 import type { ZoomTier } from "./ui/labels";
 
 const META_MEAN = "mean-vector";
@@ -82,36 +83,30 @@ let constellations: Constellation[] = [];
 let activeConstellationId: string | null = null;
 let editing: { query: string; automatic: string[]; pinned: Set<string>; excluded: Set<string> } | null = null;
 let savingAnimation = false;
-const RETURN_STATE_KEY = "bukusupe:return-state-v1";
-type ReturnState = {
-  source: BookmarkSourceKind;
-  flying: boolean;
-  ship: { x: number; y: number; z: number; yaw: number; pitch: number; speed: number } | null;
-  camera: { x: number; y: number; distance: number; tilt: number };
-  query: string;
-  constellationId: string | null;
-};
 let openModifierHeld = false;
 
 function saveReturnState(): void {
   if (!view) return;
   const flight = view.flightState();
-  const value: ReturnState = { source: state.kind, flying: flight.active,
+  storeReturnState({ source: state.kind, flying: flight.active,
     ship: flight.active ? flight.ship : null, camera: view.navigationCamera(),
     query: (document.getElementById("search-input") as HTMLInputElement | null)?.value ?? "",
-    constellationId: activeConstellationId };
-  sessionStorage.setItem(RETURN_STATE_KEY, JSON.stringify(value));
+    constellationId: activeConstellationId });
 }
 
+/**
+ * 「戻る」で開いたときだけ、保存した状態から再開する。保存状態は確かめてから使い（`parseReturnState`）、
+ * 合わなければ丸ごと捨ててふつうに開く。
+ */
 async function restoreReturnState(): Promise<void> {
   const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-  if (navigation?.type !== "back_forward") return;
-  const raw = sessionStorage.getItem(RETURN_STATE_KEY);
-  if (!raw || !view) return;
-  sessionStorage.removeItem(RETURN_STATE_KEY);
-  let saved: ReturnState;
-  try { saved = JSON.parse(raw) as ReturnState; } catch { return; }
-  if (saved.source !== state.kind || !saved.camera) return;
+  const raw = takeReturnState();
+  if (navigation?.type !== "back_forward" || !raw || !view) return;
+  const saved = parseReturnState(raw, state.kind);
+  if (!saved) {
+    console.warn("[ブクスペ] 「戻る」用の保存状態が壊れていたので、ふつうに開いた");
+    return;
+  }
   if (saved.constellationId && constellations.some((row) => row.id === saved.constellationId)) {
     await toggleConstellation(saved.constellationId);
   }
@@ -1022,6 +1017,10 @@ const debugApi = {
   toggleEditMember: handleStarClick,
   /** 確認用：ページを開く関数そのもの（http(s) 以外は開かないことの確かめ） */
   openUrl: (url: string, newTab = false) => openPage(url, { newTab, beforeLeave: saveReturnState }),
+  /** 確認用：「戻る」用の保存状態の場所と版 */
+  returnStateInfo: () => ({ key: RETURN_STATE_KEY, version: RETURN_STATE_VERSION }),
+  /** 確認用：星団へ寄る（1,000 文字のタイトルのラベルを近距離で見るため） */
+  focusCluster: (index: number) => view?.focusCluster(index),
   recallConstellation: toggleConstellation,
   mstFor: (ids: string[]) => minimumSpanningTree(pointsFor(state.layout, ids)),
   /** Web のデモに同梱する計算済みのサンプル（`npm run sample:precompute` が使う） */
