@@ -113,6 +113,13 @@ npm run check:ext        # 自動確認（dist/ の一致、配布用のビル�
 npm run sample:precompute  # Web のデモに同梱する計算済みのサンプルを作り直す（サンプルや配置の計算を変えたとき）
 ```
 
+## 問い合わせ
+
+- 不具合や要望：[GitHub の Issues](https://github.com/j341nono/bukusupe/issues)
+- メール：j341nono.dev@gmail.com
+
+報告にブックマークの内容を書く必要はありません。
+
 ## ライセンス
 ブクスペのコードは [MIT License](LICENSE) です。
 

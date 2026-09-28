@@ -7,14 +7,14 @@
  *  3. Web のデモの配布用のビルドにも、確認用・測定用の仕組みの名前が残っていない
  *  4. manifest と package.json の版がずれていると、配布用のビルドが失敗する
  *  5. npm run package：問い合わせのメールアドレスが仮の値なら失敗し、版がずれていても失敗し、
- *     本物の値なら manifest.json が直下にある zip（ファイル名に版）を作る
+ *     src/config.ts の本物の問い合わせ先のままなら manifest.json が直下にある zip（ファイル名に版）を作る
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChecker } from "./lib/harness.mjs";
-import { FORBIDDEN_EXTENSION, findForbidden, versions } from "./lib/release.mjs";
+import { FORBIDDEN_EXTENSION, PLACEHOLDER_EMAIL, findForbidden, supportEmail, versions } from "./lib/release.mjs";
 
 const { check, problems } = createChecker();
 const tmp = mkdtempSync(join(tmpdir(), "bukusupe-release-"));
@@ -57,20 +57,22 @@ try {
   // --- 5. npm run package ---
   const pack = (env) => run("node", ["scripts/package.mjs"],
     { BUKUSUPE_PACKAGE_DIST: dist, BUKUSUPE_PACKAGE_OUT: join(tmp, "release"), ...env });
-  const placeholder = pack({});
+  // 仮の値に戻したときに失敗すること（本物の値は src/config.ts に入っているので、道具の中だけで仮の値に差し替える）
+  const placeholder = pack({ BUKUSUPE_TEST_SUPPORT_EMAIL: PLACEHOLDER_EMAIL });
   check(placeholder.status !== 0 && /仮の値/.test(placeholder.stderr) && !existsSync(join(tmp, "release", `bukusupe-${pkg}.zip`)),
     "問い合わせのメールアドレスが仮の値なら、npm run package が失敗する", `終了コード ${placeholder.status}`);
   const skew = pack({ BUKUSUPE_TEST_SUPPORT_EMAIL: "someone@example.com", BUKUSUPE_TEST_PACKAGE_VERSION: "0.0.1-mismatch" });
   check(skew.status !== 0 && /版の番号がそろっていない/.test(skew.stderr),
     "版がずれていると、npm run package が失敗する", `終了コード ${skew.status}`);
-  const ok = pack({ BUKUSUPE_TEST_SUPPORT_EMAIL: "someone@example.com" });
+  // 差し替えずに（src/config.ts の本物の問い合わせ先で）作れる
+  const ok = pack({});
   const zip = join(tmp, "release", `bukusupe-${pkg}.zip`);
   const entries = ok.status === 0 && existsSync(zip) ? execFileSync("unzip", ["-Z1", zip], { encoding: "utf8" }).trim().split("\n") : [];
   const zipped = entries.includes("manifest.json") ? JSON.parse(execFileSync("unzip", ["-p", zip, "manifest.json"], { encoding: "utf8" })) : null;
   check(ok.status === 0 && zipped?.version === pkg && entries.includes("index.html") && entries.includes("background.js") &&
     !entries.some((e) => e.startsWith("dist/") || e.endsWith(".DS_Store")),
     "npm run package が、manifest.json を直下に置いた zip（ファイル名に版）を作る",
-    ok.status === 0 ? `bukusupe-${pkg}.zip・${entries.length} ファイル・直下の manifest の版 ${zipped?.version}` : ok.stderr.slice(0, 200));
+    ok.status === 0 ? `bukusupe-${pkg}.zip・${entries.length} ファイル・直下の manifest の版 ${zipped?.version}・問い合わせ先 ${supportEmail(".")}` : ok.stderr.slice(0, 200));
 } catch (err) {
   console.error(err);
   problems.push(String(err));

@@ -80,7 +80,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   └── lib/                 # harness.mjs（確認スクリプトの共通の土台）、release.mjs（配布物に残ってはいけない名前・版・問い合わせ先）
 ├── src/
 │   ├── main.ts              # 画面の入口（読み込み → 埋め込み → 配置 → 検索・星座）
-│   ├── config.ts            # 問い合わせ先（SUPPORT_EMAIL は仮の値。本物にするまで npm run package が失敗する）
+│   ├── config.ts            # 問い合わせ先（SUPPORT_EMAIL と Issues の URL。仮の値に戻すと npm run package が失敗する）
 │   ├── background.ts        # service worker（アイコン → 専用タブ）
 │   ├── bookmarks/           # ブックマークの取得（Chrome / サンプルの 2 系統。読み取りのみ）
 │   ├── embed/               # 埋め込み（Worker、入力文の組み立て、ドメイン辞書、大分類、ORT 設定）

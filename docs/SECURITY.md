@@ -4,6 +4,12 @@
 「外から来た値」として扱う。ここに、表示と遷移の経路、保存データの扱い、拡張機能の設定、依存関係の状態をまとめる。
 自動確認は `scripts/check-safety.mjs` と `scripts/check-web.mjs`（どちらも `check:ext` の中）。
 
+## 問題・脆弱性の報告
+
+- GitHub の Issues（https://github.com/j341nono/bukusupe/issues）か、メール（j341nono.dev@gmail.com）で受け付ける。
+  脆弱性の詳細を公開の Issue に書きたくない場合はメールで送ってもらう。
+- 問い合わせ先は `src/config.ts`（`SUPPORT_EMAIL`・`ISSUES_URL`）。仮の値に戻すと `npm run package` が失敗する（`check-release`）。
+
 ## 規則（`CLAUDE.md` / `AGENTS.md` の 9〜11）
 
 - ページやブックマークから来た文字列を HTML として解釈させない（`innerHTML` などに入れない）。
