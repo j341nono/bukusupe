@@ -5,7 +5,7 @@ import { layoutExtent } from "../layout";
 import { LabelLayer, type PlacedLabel, type ScreenCircle, type ZoomTier } from "../ui/labels";
 import { Nebulae } from "./nebula";
 import { FLIGHT_MAX_POINT, FLIGHT_SIZE_SCALE, MAP_MAX_POINT, StarField, createBackdrop, nebulaColor, type AppearanceFn, type EmphasisMode, type RenderStar } from "./stars";
-import { FLIGHT_SCALE, Flight, type FlightInput } from "./flight";
+import { FLIGHT_SCALE, Flight, anglesOf, type FlightInput } from "./flight";
 import { createShip } from "./ship";
 import { FlightNebulae, FlightSky } from "./sky";
 import { FlightObstacles } from "./flight-obstacles";
@@ -48,6 +48,9 @@ const KEY_EASE = 9;
 const MOVE_KEYS: Record<string, [number, number]> = {
   KeyW: [0, 1], KeyS: [0, -1], KeyA: [-1, 0], KeyD: [1, 0],
 };
+
+/** 飛行中だけ使う矢印キー（W・A・S・D と同じ働き）。地図では使わない */
+const FLIGHT_ARROWS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
 /** 文字を打っている最中か（キー操作を無効にする） */
 function typing(): boolean {
@@ -165,6 +168,13 @@ export class SpaceView {
   /** 星の芯に入ったとき（突入の演出の後）に呼ばれる。main がそのページを新しいタブで開く */
   onEnterStar: ((id: string) => void) | null = null;
   /** 飛行中のマウスの位置（画面中央からのずれ、-1〜1）。入った直後は 0（動かすまで機首は動かない） */
+  /**
+   * 飛行中のマウスのドラッグ（SPEC 13 章）。ボタンを押している間だけ、押した点からのずれ（-1〜1）で機首の向きを変える。
+   * ボタンを離しているときのマウスの位置では曲がらない。
+   */
+  private flightDrag: { pointerId: number; x: number; y: number } | null = null;
+  /** 最後に入った星。宇宙船は止まらないので、一度離れる（PUSH_BACK の 1.6 倍より遠くへ出る）まで、その星には入り直さない */
+  private reentryBlocked: string | null = null;
   private readonly flightMouse = new THREE.Vector2();
   private flightSearch: string[] | null = null;
   private heights = new Map<string, number>();
@@ -308,11 +318,25 @@ export class SpaceView {
     this.scene.add(this.obstacles.object);
     this.obstacles.object.visible = false;
     document.body.classList.remove("flight-boost");
-    window.addEventListener("mousemove", (event: MouseEvent) => {
-      if (!this.flight.active) return;
-      this.flightMouse.set(event.clientX / innerWidth * 2 - 1, event.clientY / innerHeight * 2 - 1);
+    window.addEventListener("pointerdown", (event: PointerEvent) => {
+      if (!this.flight.active || event.button !== 0) return;
+      // 画面の部品（ボタン・入力欄など）を押したときは、機首の操作にしない
+      if ((event.target as Element | null)?.closest?.("button, input, a, [role=menu]")) return;
+      this.flightDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      this.flightMouse.set(0, 0);
     });
-    document.addEventListener("mouseleave", () => this.flightMouse.set(0, 0));
+    window.addEventListener("pointermove", (event: PointerEvent) => {
+      if (!this.flight.active || !this.flightDrag || event.pointerId !== this.flightDrag.pointerId) return;
+      // 画面の短い辺の 3 割ずらすと最大
+      const reach = Math.max(80, Math.min(innerWidth, innerHeight) * 0.3);
+      this.flightMouse.set(
+        THREE.MathUtils.clamp((event.clientX - this.flightDrag.x) / reach, -1, 1),
+        THREE.MathUtils.clamp((event.clientY - this.flightDrag.y) / reach, -1, 1));
+    });
+    const endDrag = () => { this.flightDrag = null; this.flightMouse.set(0, 0); };
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+    document.addEventListener("mouseleave", endDrag);
     addEventListener("keydown", this.onKeyDown);
     addEventListener("keyup", this.onKeyUp);
     // 入力（マウス・キー・ホイール・タッチ）があったら、すぐに描画を再開する（止まっていても）
@@ -328,7 +352,7 @@ export class SpaceView {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (typing() || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.code in MOVE_KEYS) this.keys.add(event.code);
+    if (event.code in MOVE_KEYS || FLIGHT_ARROWS.has(event.code)) this.keys.add(event.code);
     else if (event.code === "Space") {
       this.keys.add("Space");
       event.preventDefault();   // ページのスクロールや、フォーカス中のボタンの押下を止める
@@ -336,12 +360,16 @@ export class SpaceView {
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
-    if (event.code in MOVE_KEYS) this.keys.delete(event.code);
+    if (event.code in MOVE_KEYS || FLIGHT_ARROWS.has(event.code)) this.keys.delete(event.code);
     else if (event.code === "Space") { this.keys.delete("Space"); event.preventDefault(); }
     else if (event.key === "Shift") this.keys.delete("Shift");
   };
 
-  private readonly releaseKeys = (): void => { this.keys.clear(); };
+  private readonly releaseKeys = (): void => {
+    this.keys.clear();
+    this.flightDrag = null;
+    this.flightMouse.set(0, 0);
+  };
 
   /** W・A・S・D で移動、Space で縮小、Shift で拡大。押している間は連続で、始まりと終わりはなめらかに。 */
   private applyKeys(dt: number): void {
@@ -610,11 +638,11 @@ export class SpaceView {
   }
 
   /** 保存した船の位置から、突入アニメーションを挟まずに再開する。座標は地図の単位。 */
-  resumeFlight(saved: { x: number; y: number; z: number; yaw: number; pitch: number; speed: number }): void {
+  resumeFlight(saved: { x: number; y: number; z: number; yaw: number; pitch: number; roll?: number; speed: number }): void {
     this.wake();
     if (!this.enterFlight()) return;
     this.flight.resume(new THREE.Vector3(saved.x * FLIGHT_SCALE, saved.z * FLIGHT_SCALE, -saved.y * FLIGHT_SCALE),
-      saved.yaw, saved.pitch, saved.speed, this.camera, this.flightLook);
+      { yaw: saved.yaw, pitch: saved.pitch, roll: saved.roll ?? 0 }, saved.speed, this.camera, this.flightLook);
     this.field.setLift(1);
     this.field.object.scale.setScalar(FLIGHT_SCALE);
     this.constellations.object.scale.setScalar(FLIGHT_SCALE);
@@ -648,6 +676,7 @@ export class SpaceView {
     this.constellationName?.classList.remove("is-visible");
     this.setFlightMaterial(true);
     const distance = this.camera.position.distanceTo(this.controls.target);
+    this.flightDrag = null;
     this.flightMouse.set(0, 0);
     this.flight.enter(this.camera, this.controls.target.clone(), distance, 3, this.extent);
     this.ship.group.visible = true;
@@ -792,17 +821,24 @@ export class SpaceView {
     diving: boolean; lastEntry: string | null; entryDistance: number | null; scale: number;
     searchStashed: number; bumps: number; boosts: number; boostCap: number; maxSpeed: number; farLabelLimit: number;
     lastBump: { speedBefore: number; speedAfter: number; distanceAfter: number; minDistance: number } | null;
-    ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number } } {
+    minSpeed: number; homing: boolean; range: { bound: number; ceiling: number };
+    ship: { x: number; y: number; z: number; speed: number; yaw: number; pitch: number; roll: number; level: number;
+      forward: number[]; up: number[]; cameraUp: number[] } } {
     const ship = this.flight.ship;
+    const angles = anglesOf(ship.orientation);
+    // 向きは three の座標のまま返す（forward・up・cameraUp。y が上）
+    const vec = (v: THREE.Vector3) => [v.x, v.y, v.z];
     return { active: this.flight.active, phase: this.flight.phase, transitioning: this.flight.transitioning,
       lift: this.flight.lift, nearby: this.windows.nearby, windows: this.windows.visibleIds, nebulae: this.flightNebulae.count,
       diving: !!this.dive, lastEntry: this.lastEntry, entryDistance: this.entryDistance(),
       scale: FLIGHT_SCALE, searchStashed: this.flightSearch?.length ?? 0,
       bumps: this.bumps, boosts: this.boosts, boostCap: this.flight.boostCap,
       maxSpeed: this.flight.normalMaxSpeed, lastBump: this.lastBump, farLabelLimit: this.farLabels.limit,
-      // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す
+      minSpeed: this.flight.minSpeed, homing: this.flight.homing, range: this.flight.range,
+      // 宇宙船の位置は地図の座標（広げた空間の座標を FLIGHT_SCALE で割ったもの）で返す。level は地図の面を基準にした左右の傾き
       ship: { x: ship.position.x / FLIGHT_SCALE, y: -ship.position.z / FLIGHT_SCALE, z: ship.position.y / FLIGHT_SCALE,
-        speed: ship.speed, yaw: ship.yaw, pitch: ship.pitch } };
+        speed: ship.speed, yaw: angles.yaw, pitch: angles.pitch, roll: angles.roll, level: this.flight.roll,
+        forward: vec(this.flight.forward()), up: vec(this.flight.up()), cameraUp: vec(this.flight.cameraUp()) } };
   }
 
   /** 入力を始めたら真上から、やめたら斜めから（SPEC 7 章）。 */
@@ -1346,14 +1382,15 @@ export class SpaceView {
   private flightTick(dt: number): void {
     if (typing()) this.keys.clear();
     // 突入の演出の間は操作を受け付けず、宇宙船を止めておく
+    const held = (...codes: string[]) => (codes.some((code) => this.keys.has(code)) ? 1 : 0);
     const input: FlightInput = this.dive
-      ? { thrust: 0, turn: 0, climb: 0, mouseX: 0, mouseY: 0 }
+      ? { throttle: 0, pitch: 0, yaw: 0, dragX: 0, dragY: 0 }
       : {
-        thrust: (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0),
-        turn: (this.keys.has("KeyA") ? 1 : 0) - (this.keys.has("KeyD") ? 1 : 0),
-        climb: (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") ? 1 : 0),
-        mouseX: this.flightMouse.x,
-        mouseY: this.flightMouse.y,
+        throttle: held("Space") - held("Shift"),
+        pitch: held("KeyW", "ArrowUp") - held("KeyS", "ArrowDown"),
+        yaw: held("KeyA", "ArrowLeft") - held("KeyD", "ArrowRight"),
+        dragX: this.flightDrag ? this.flightMouse.x : 0,
+        dragY: this.flightDrag ? this.flightMouse.y : 0,
       };
     if (this.dive) this.flight.ship.speed = 0;
     const previous = this.flight.ship.position.clone();
@@ -1385,7 +1422,7 @@ export class SpaceView {
     }
     const ship = this.flight.ship;
     this.ship.group.position.copy(ship.position);
-    this.ship.group.rotation.set(ship.pitch, ship.yaw, 0);
+    this.ship.group.quaternion.copy(ship.orientation);
     this.ship.setThrust(this.flight.thrustLevel);
     this.camera.updateMatrixWorld();
     this.phase("overlay", () => {
@@ -1461,6 +1498,10 @@ export class SpaceView {
     let best: { id: string; t: number } | null = null;
     for (const star of this.collisionStars) {
       if ((this.entryCooldown.get(star.id) ?? 0) > now) continue;
+      if (star.id === this.reentryBlocked) {
+        if (Math.hypot(star.x - b.x, star.y - b.y, star.z - b.z) > PUSH_BACK * 1.6) this.reentryBlocked = null;
+        else continue;
+      }
       if (Math.abs(star.x - b.x) > reach || Math.abs(star.y - b.y) > reach || Math.abs(star.z - b.z) > reach) continue;
       const t = len2 > 0 ? THREE.MathUtils.clamp(((star.x - a.x) * abx + (star.y - a.y) * aby + (star.z - a.z) * abz) / len2, 0, 1) : 0;
       const dx = star.x - a.x - abx * t, dy = star.y - a.y - aby * t, dz = star.z - a.z - abz * t;
@@ -1491,8 +1532,10 @@ export class SpaceView {
     this.entryCooldown.set(dive.id, performance.now() + ENTRY_COOLDOWN_MS);
     this.lastEntry = dive.id;
     // 開いた後は、来た方向へ少し押し戻して止める
+    // 宇宙船は止まらない（SPEC 13 章）ので、いちばん遅い速さにする。入った星は、一度離れるまで入り直さない
     this.flight.ship.position.addScaledVector(this.flight.forward(), -PUSH_BACK);
-    this.flight.ship.speed = 0;
+    this.flight.slowDown();
+    this.reentryBlocked = dive.id;
     this.onEnterStar?.(dive.id);
   }
 
@@ -1719,9 +1762,14 @@ export function viewDebug(view: SpaceView) {
   const inner = view as unknown as {
     profile: { frames: FrameProfile[]; current: { overlay: number; render: number } } | null;
     continuous: boolean; paused: boolean; renderer: THREE.WebGLRenderer; clock: THREE.Clock;
-    step(): void; sleepLoop(): void;
+    step(): void; sleepLoop(): void; flight: Flight;
   };
   return {
+    /** 飛行中の機体の向きを角度で直接決める（左右の傾きが水平に戻るかの確認） */
+    flightSetAngles(yaw: number, pitch: number, roll: number): void {
+      inner.flight.setAngles(yaw, pitch, roll);
+      view.wake();
+    },
     /** 1 コマごとの時間の記録を始める・止める */
     setProfiling(on: boolean): void {
       inner.profile = on ? { frames: [], current: { overlay: 0, render: 0 } } : null;

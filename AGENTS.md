@@ -28,7 +28,7 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 |---|---|
 | 拡張機能 | Manifest V3（`public/manifest.json` を手書き。crxjs 等のプラグインは使わない） |
 | 言語・ビルド | TypeScript + Vite（`index.html` と `src/background.ts` の 2 エントリ） |
-| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄、C で選択モード（星を選んで星座にする。Shift＋ドラッグで範囲選択、その間は Shift で拡大しない）、F で飛行モード（入力中は無効、Ctrl は使わない） |
+| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄、C で選択モード（星を選んで星座にする。Shift＋ドラッグで範囲選択、その間は Shift で拡大しない）、F で飛行モード（入力中は無効、Ctrl は使わない）。飛行中は宇宙船が常に前進し、W・S（↑↓）で機首の上下、A・D（←→）で左右、Space で加速・Shift で減速、マウスはドラッグ中だけ機首の向き。向きは四元数 |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
 | 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
 | 権限 | `bookmarks`, `unlimitedStorage`, `favicon`（飛行モードの窓のアイコン。インストール時の警告が 1 つ増える）。host_permissions は無し（Hugging Face が CORS を許すので、重みは権限なしで取れる）。確認用のビルドだけ `storage`（確認用の注入） |
@@ -62,6 +62,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── copy-ort.mjs         # ONNX Runtime の補助ファイルを public/ort/ に同梱
 │   ├── check-extension.mjs  # dist/ を Chrome に読み込んで動作確認（CDP）
 │   ├── check-flight.mjs     # 飛行モードの確認
+│   ├── check-flight-controls.mjs  # 飛行モードの操作（常に前進・W/S と矢印で機首・宙返り・加速と減速・ドラッグ・ロールの水平戻し・宇宙の果て）
 │   ├── check-dist.mjs       # コミットされる dist/ が今のソースのビルドと一致するか
 │   ├── check-release.mjs    # 配布用のビルドに確認用の仕組みが残っていない・版ずれと仮の問い合わせ先で失敗する
 │   ├── check-cache.mjs      # モデルのキャッシュの名前（前の版の壊れたキャッシュがあっても動く）

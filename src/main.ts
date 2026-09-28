@@ -104,7 +104,9 @@ function saveReturnState(): void {
   if (!view) return;
   const flight = view.flightState();
   storeReturnState({ source: state.kind, flying: flight.active,
-    ship: flight.active ? flight.ship : null, camera: view.navigationCamera(),
+    ship: flight.active ? { x: flight.ship.x, y: flight.ship.y, z: flight.ship.z, yaw: flight.ship.yaw, pitch: flight.ship.pitch,
+      roll: flight.ship.roll, speed: flight.ship.speed } : null,
+    camera: view.navigationCamera(),
     query: (document.getElementById("search-input") as HTMLInputElement | null)?.value ?? "",
     constellationId: activeConstellationId });
 }
@@ -1196,11 +1198,13 @@ function setupFlight(): void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (view?.inFlight) {
       if (event.key === "Escape") leave();
-      // 飛行中は、地図の操作（/ で検索、Enter、矢印など）を届かせない。飛行の操作は SpaceView が見る
-      if (event.key === "Escape" || event.key === "/" || event.key === "Enter" || event.key.startsWith("Arrow")) {
+      // 飛行中は、地図の操作（/ で検索、Enter など）を届かせない。飛行の操作は SpaceView が見る
+      if (event.key === "Escape" || event.key === "/" || event.key === "Enter") {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
+      // 矢印キーは飛行の操作（機首の向き）に使うので、SpaceView には届ける。ページのスクロールだけ止める
+      if (event.key.startsWith("Arrow")) event.preventDefault();
       return;
     }
     if (event.code === "KeyF" && !typingNow()) {
@@ -1363,6 +1367,7 @@ if (__DEBUG__) {
     flightStars: () => view?.flightStars(),
     flightHeights: () => view?.flightHeights(),
     flightReset: () => view?.flightReset(),
+    flightSetAngles: (yaw: number, pitch: number, roll: number) => (view ? viewDebug(view).flightSetAngles(yaw, pitch, roll) : undefined),
     flightDebris: (again = false) => view?.flightDebris(again),
     flightNebulaRanges: () => view?.flightNebulaRanges(),
     flightRings: () => view?.flightRings(),

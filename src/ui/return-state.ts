@@ -14,7 +14,8 @@ export type ReturnState = {
   version: number;
   source: BookmarkSourceKind;
   flying: boolean;
-  ship: { x: number; y: number; z: number; yaw: number; pitch: number; speed: number } | null;
+  /** 宇宙船の位置と向き（yaw・pitch・roll は YXZ の順の角度。roll は 2026-09-28 から。無ければ 0） */
+  ship: { x: number; y: number; z: number; yaw: number; pitch: number; roll: number; speed: number } | null;
   camera: { x: number; y: number; distance: number; tilt: number };
   query: string;
   constellationId: string | null;
@@ -39,14 +40,14 @@ export function parseReturnState(raw: string, source: BookmarkSourceKind): Retur
     !inRange(camera.distance, 1, COORD) || !inRange(camera.tilt, 0, Math.PI / 2)) return null;
   if (ship !== null && (!isObject(ship) || !inRange(ship.x, -COORD, COORD) || !inRange(ship.y, -COORD, COORD) ||
     !inRange(ship.z, -COORD, COORD) || !inRange(ship.yaw, -1e4, 1e4) || !inRange(ship.pitch, -Math.PI, Math.PI) ||
-    !inRange(ship.speed, 0, 1e5))) return null;
+    !inRange(ship.speed, 0, 1e5) || (ship.roll !== undefined && !inRange(ship.roll, -Math.PI, Math.PI)))) return null;
   if (flying && ship === null) return null;
   if (typeof query !== "string" || query.length > QUERY_MAX) return null;
   if (constellationId !== null && (typeof constellationId !== "string" || constellationId.length > ID_MAX)) return null;
   return {
     version: RETURN_STATE_VERSION, source, flying,
     ship: ship === null ? null : { x: ship.x as number, y: ship.y as number, z: ship.z as number, yaw: ship.yaw as number,
-      pitch: ship.pitch as number, speed: ship.speed as number },
+      pitch: ship.pitch as number, roll: (ship.roll as number | undefined) ?? 0, speed: ship.speed as number },
     camera: { x: camera.x as number, y: camera.y as number, distance: camera.distance as number, tilt: camera.tilt as number },
     query, constellationId: constellationId as string | null,
   };

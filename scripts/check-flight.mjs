@@ -136,36 +136,13 @@ try {
     console.log("  画面: docs/screens/flight-overview.png");
   }
 
-  // --- 宇宙船と操作：W で前進、A で左旋回、Space で上昇・Shift で下降、旋回の速さに上限、操作の説明 ---
-  const ship0 = (await flight())?.ship;
-  await press("KeyW", "w", 900);
-  const ship1 = (await flight())?.ship;
-  const moved = ship0 && ship1 ? Math.hypot(ship1.x - ship0.x, ship1.y - ship0.y) : 0;
-  // 前進は機首の向き（yaw 0 なら地図の上＝+y）へ
-  const forwardOk = ship0 && ship1 && ship1.speed > 0 && moved > 0.5 && ship1.y - ship0.y > moved * 0.9;
-  await press("KeyS", "s", 1500);   // 止まるまで減速
-  await press("KeyA", "a", 700);
-  const ship2 = (await flight())?.ship;
-  await press("Space", " ", 600);
-  const ship3 = (await flight())?.ship;
-  await press("ShiftLeft", "Shift", 600);
-  const ship4 = (await flight())?.ship;
-  // 旋回の上限：マウスを右端に置いたまま D を押し続けても、1 秒あたりの旋回は上限を超えない
-  await evalIn("window.dispatchEvent(new MouseEvent('mousemove', { clientX: innerWidth - 1, clientY: innerHeight / 2 }))");
-  const yawA = (await flight())?.ship.yaw;
-  const tA = Date.now();
-  await press("KeyD", "d", 1000);
-  const yawB = (await flight())?.ship.yaw;
-  const turnRate = yawA != null && yawB != null ? Math.abs(yawB - yawA) / ((Date.now() - tA) / 1000) : NaN;
-  await evalIn("window.dispatchEvent(new MouseEvent('mousemove', { clientX: innerWidth / 2, clientY: innerHeight / 2 }))");
-  await sleep(600);
+  // --- 操作の説明（操作そのものは scripts/check-flight-controls.mjs が確かめる） ---
+  await sleep(300);
   const help = await evalIn(`(() => { const el = document.getElementById('flight-help');
     return el && getComputedStyle(el).display !== 'none' ? el.textContent : ''; })()`);
-  const helpOk = ["W", "S", "A", "D", "Space", "Shift", "Esc"].every((k) => help.includes(k)) && help.includes("マウス");
-  check(!!forwardOk && ship2 && ship2.yaw > ship1.yaw + 0.2 && ship3 && ship3.z > ship2.z + 0.3 && ship4 && ship4.z < ship3.z - 0.3 &&
-    turnRate > 0.3 && turnRate <= 1.5 && helpOk,
-  "宇宙船：W で前進、A で左旋回、Space で上昇・Shift で下降、旋回の速さに上限、操作の説明が出ている",
-  ship1 ? `前進 ${moved.toFixed(1)}・旋回 ${(ship2?.yaw - ship1.yaw).toFixed(2)} rad・上昇 ${(ship3?.z - ship2?.z).toFixed(1)}・下降 ${(ship4?.z - ship3?.z).toFixed(1)}・旋回の速さ ${turnRate.toFixed(2)} rad/秒・説明 ${helpOk ? "あり" : "なし"}` : "測れない");
+  const helpOk = ["W", "S", "A", "D", "↑", "↓", "←", "→", "Space", "Shift", "Esc"].every((k) => help.includes(k)) &&
+    help.includes("ドラッグ") && help.includes("加速") && help.includes("減速");
+  check(helpOk, "飛行中、新しい操作の説明（W・S・A・D と矢印で向き、Space で加速・Shift で減速、ドラッグ、Esc）が出ている", help.trim().replace(/\s+/g, " "));
   // 位置を入った直後に戻す（以降の確認が入った直後の配置を前提にするため）
   await tryEval(`${b}.flightReset?.()`);
 
@@ -265,20 +242,20 @@ try {
   // --- デブリにぶつかると、減速して押し戻される ---
   const rock = debris?.[0];
   if (rock) await tryEval(`${b}.flightPlace(${rock.x}, ${rock.y}, ${rock.z + rock.r + 14}, ${rock.x}, ${rock.y}, ${rock.z})`);
-  await key("keydown", "KeyW", "w");
+  await key("keydown", "Space", " ");
   await waitUntil(`(${b}.flightState?.()?.bumps ?? 0) > 0`, 6000, 50);
-  await key("keyup", "KeyW", "w");
+  await key("keyup", "Space", " ");
   const bump = (await flight())?.lastBump;
   check(bump && bump.speedAfter < bump.speedBefore && bump.distanceAfter >= bump.minDistance - 0.01,
     "デブリにぶつかると、宇宙船が減速して押し戻される",
     bump ? `速さ ${bump.speedBefore.toFixed(1)}→${bump.speedAfter.toFixed(1)}・ぶつかった後の距離 ${bump.distanceAfter.toFixed(1)}（最小 ${bump.minDistance.toFixed(1)}）` : "ぶつからない");
-  await press("KeyS", "s", 1200);
+  await press("ShiftLeft", "Shift", 1200);
 
   // --- 加速リング：くぐると一時的に速くなり、上限を超えない。しばらくすると元の最高速度に戻る ---
   const rings = await json(`${b}.flightRings?.() ?? null`);
   const ring = rings?.[0];
   if (ring) await tryEval(`${b}.flightPlace(${ring.x - ring.nx * 22}, ${ring.y - ring.ny * 22}, ${ring.z - ring.nz * 22}, ${ring.x}, ${ring.y}, ${ring.z})`);
-  await key("keydown", "KeyW", "w");
+  await key("keydown", "Space", " ");
   let peak = 0, boostSeen = 0, cap = 0, normalMax = 0;
   for (let i = 0; i < 40; i++) {
     const st = await flight();
@@ -288,7 +265,7 @@ try {
     normalMax = st?.maxSpeed ?? normalMax;
     await sleep(80);
   }
-  await key("keyup", "KeyW", "w");
+  await key("keyup", "Space", " ");
   await sleep(2500);
   const settled = await flight();
   check(rings && rings.length > 0 && boostSeen > 0 && peak > normalMax * 1.05 && peak <= cap + 1e-6 &&
@@ -331,19 +308,19 @@ try {
       return Promise.resolve({ id: -1 }); };
   })()`);
   const targetUrl = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target?.id)})?.url ?? ''`);
-  // 1 回目：星を正面に置いて W。切り替えたらすぐ離す（その後の押し戻しで止まる）
+  // 1 回目：星を正面に置いて Space で加速。切り替えたらすぐ離す（その後は押し戻され、いちばん遅い速さになる）
   if (target) await teleport(target.id, 6 * S);
-  await key("keydown", "KeyW", "w");
+  await key("keydown", "Space", " ");
   await waitUntil("window.__switched.length + window.__opened.length > 0", 4000, 50);
-  await key("keyup", "KeyW", "w");
+  await key("keyup", "Space", " ");
   await sleep(900);
   const firstSwitch = await json("window.__switched");
   const firstOpen = await json("window.__opened");
   const afterPush = await flight();
   // 2 回目：同じ星へすぐにもう一度入る。数秒間は同じ星を開かない（奥の別の星に入るのは仕様どおり）
   if (target) await teleport(target.id, 4 * S);
-  await press("KeyW", "w", 1300);
-  await press("KeyS", "s", 1200);
+  await press("Space", " ", 1300);
+  await press("ShiftLeft", "Shift", 1200);
   const secondSwitch = await json("window.__switched");
   const sameAgain = (secondSwitch ?? []).filter((url) => url === targetUrl).length;
   check(firstSwitch?.length === 1 && firstSwitch[0] === targetUrl && firstOpen?.length === 0 && sameAgain === 1 &&
@@ -355,9 +332,9 @@ try {
   const target2Url = await evalIn(`${b}.state.items.find((i) => i.id === ${JSON.stringify(target2?.id)})?.url ?? ''`);
   await key("keydown", "ControlLeft", "Control");
   if (target2) await teleport(target2.id, 6 * S);
-  await key("keydown", "KeyW", "w");
+  await key("keydown", "Space", " ");
   await waitUntil("window.__opened.length > 0", 4000, 50);
-  await key("keyup", "KeyW", "w");
+  await key("keyup", "Space", " ");
   await key("keyup", "ControlLeft", "Control");
   await sleep(900);
   const ctrlOpen = await json("window.__opened");
@@ -522,7 +499,7 @@ try {
   await evalIn(`(() => { const orig = chrome.tabs.update.bind(chrome.tabs);
     chrome.tabs.update = (...args) => { sessionStorage.setItem('test:ship', JSON.stringify(${b}.flightState().ship)); return orig(...args); }; })()`);
   await app.send("Fetch.enable", { patterns: [{ urlPattern: "http*://*" }] }, app.sessionId);
-  await key("keydown", "KeyW", "w");
+  await key("keydown", "Space", " ");
   const left = await waitUntil("location.protocol.startsWith('http')", 8000, 100);
   await tryEval("history.back()");
   const resumed = await waitUntil(`document.body.dataset.phase === 'ready' && ${b}?.flightState?.()?.active === true &&
@@ -531,11 +508,20 @@ try {
   await sleep(500);
   const back = await json(`(() => ({ saved: JSON.parse(sessionStorage.getItem('test:ship') ?? 'null'), now: ${b}.flightState().ship,
     input: document.getElementById('search-input').value, stashed: ${b}.flightState().searchStashed ?? null }))()`);
-  const shipBack = back?.saved && back?.now && Math.hypot(back.saved.x - back.now.x, back.saved.y - back.now.y, back.saved.z - back.now.z) < 0.05 &&
-    Math.abs(back.saved.yaw - back.now.yaw) < 1e-3;
+  // 宇宙船は止まらない（SPEC 13 章）ので、再開した後も機首の向きへゆっくり進む。保存した位置から機首の向きの線の上にあり、向きが同じなら元に戻っている
+  const drift = (() => {
+    if (!back?.saved?.forward || !back?.now) return null;
+    const f = [back.saved.forward[0], -back.saved.forward[2], back.saved.forward[1]];   // three の向きを地図の座標（x, y, 高さ）へ
+    const d = [back.now.x - back.saved.x, back.now.y - back.saved.y, back.now.z - back.saved.z];
+    const along = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+    const off = Math.hypot(d[0] - along * f[0], d[1] - along * f[1], d[2] - along * f[2]);
+    return { along, off };
+  })();
+  const shipBack = !!drift && drift.off < 0.05 && drift.along > -0.01 &&
+    Math.abs(back.saved.yaw - back.now.yaw) < 1e-3 && Math.abs(back.saved.pitch - back.now.pitch) < 1e-3;
   check(left && resumed && shipBack && back.input === "宇宙" && (back.stashed ?? 0) > 0,
     "ページに切り替えて「戻る」で戻ると、飛行中の宇宙船の位置・向きと検索語が元に戻る",
-    `移動 ${left ? "した" : "しない"}・再開 ${resumed ? "した" : "しない"}・宇宙船 ${shipBack ? "同じ位置" : "違う位置"}・検索語「${back?.input ?? ""}」・預けた検索 ${back?.stashed ?? "?"} 件`);
+    `移動 ${left ? "した" : "しない"}・再開 ${resumed ? "した" : "しない"}・宇宙船 ${shipBack ? "同じ位置と向きから進んでいる" : "違う位置"}（機首の向きへ ${drift?.along?.toFixed(2)}・横へ ${drift?.off?.toFixed(3)}）・検索語「${back?.input ?? ""}」・預けた検索 ${back?.stashed ?? "?"} 件`);
   // 新しく開いたときは、保存した状態を使わない
   const fresh = await app.send("Target.createTarget", { url: `chrome-extension://${app.extId}/index.html?debug=1` });
   const freshSession = (await app.send("Target.attachToTarget", { targetId: fresh.targetId, flatten: true })).sessionId;
@@ -560,12 +546,12 @@ try {
   await sleep(1000);
   await key("keydown", "KeyF", "f");
   await waitFlight(true);
-  await key("keydown", "KeyW", "w");
+  await key("keydown", "Space", " ");
   const f0 = await evalIn(`${b}.frames()`);
   const t0 = Date.now();
   await sleep(3000);
   const fps = ((await evalIn(`${b}.frames()`)) - f0) / ((Date.now() - t0) / 1000);
-  await key("keyup", "KeyW", "w");
+  await key("keyup", "Space", " ");
   check(fps >= 55, "2000 件で、飛行中も 60 コマ/秒を保つ", `${fps.toFixed(0)} コマ/秒`);
   await key("keydown", "Escape", "Escape");
   await waitFlight(false);
