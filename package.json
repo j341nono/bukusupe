@@ -1,6 +1,6 @@
 {
   "name": "bukusupe",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "description": "Chrome のブックマークを意味で並べた宇宙地図として見る拡張機能",
   "type": "module",

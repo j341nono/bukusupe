@@ -485,3 +485,21 @@ three.js の描画の資源（`renderer.info`。描画の呼び出しは直前�
 - **量子化は今の int8 のままでよい**：この WebAssembly（1 スレッド）の実行では、埋め込みの時間は int8 59.2 秒、fp32 57.6 秒（差 3%）で、int8 にしても速くはならない。一方で、容量は int8 118.4 MB・fp32 470.5 MB、WebAssembly のメモリは int8 346.1 MB・fp32 1337.0 MB と大きな差がある。既存の 9 語の正解数は int8 39、fp32 35（最大 45）で、精度でも劣らない（検索の係数は int8 の埋め込みで調整してきたので、int8 に有利な可能性はある）。速さを上げたいなら、量子化ではなく、スレッドや Worker の数を見直すほうが効く見込み。
 - **描画の余裕**：画面ありの 2000 件で、1 コマの JS の p95 がいちばん大きい場面は「検索（落ち着いた後）」の 2.60 ms。144Hz の 1 コマ（約 6.9 ms）に収まっている。
 
+
+## 7. 段階 3c：英語のサンプルの検索の正解数
+
+`scripts/measure-search-en.mjs`（`npm run build:debug` の後に `node scripts/measure-search-en.mjs`）で、日本語の既存 9 語と同じ趣旨の英語の検索語 9 つを、英語のサンプルの宇宙（`src/data/sample-bookmarks.en.json`）に対して測った。`bench:report` が作る他の章と違い、この章は手で書いた（自動生成ではない）。
+
+| 検索語 | 正解数（上位 5 件） |
+|---|---|
+| I want to feel the vastness of space | 5 |
+| pasta | 3 |
+| recipe | 4 |
+| a relaxing weekend getaway | 2 |
+| React state management | 3 |
+| database design | 5 |
+| generative AI | 4 |
+| how to save money | 4 |
+| improve my sleep | 4 |
+
+合計 34 / 45（日本語の既存 9 語は 39 / 45。`docs/screens/search-results.json`）。日本語と同程度で、大きな不足はない。差の大半は、フォルダ分けの偏り（例：料理の話題でも「あとで読む」に入れたブックマークが日本語・英語のサンプルの両方にあり、フォルダで正解を判定するこの測り方では取りこぼす）によるもので、英語だからという理由ではない。

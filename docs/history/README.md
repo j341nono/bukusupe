@@ -17,5 +17,6 @@
 | [2026-09-28-stage5-selection-mode.md](2026-09-28-stage5-selection-mode.md) | 段階 5 の 2b：選択モード（追記：選択モード中のダブルクリックと「戻る」） |
 | [2026-09-28-stage5-flight-controls.md](2026-09-28-stage5-flight-controls.md) | 段階 5 の 2c：飛行モードの操作の見直し |
 | [2026-09-28-stage3b-language.md](2026-09-28-stage3b-language.md) | 段階 3b：画面の言語の切り替え（英語対応の前倒し）、星団名の保存の形、_locales、英語のストアの素材、確認の Chrome の言語 |
+| [2026-09-29-stage3c-english-sample.md](2026-09-29-stage3c-english-sample.md) | 段階 3c：英語のサンプルの宇宙、言語ごとの DB と Web デモの計算済みデータ、検索の正解数、`aws.amazon.com` の重複のつまずき |
 
 新しく段階を終えたら、`docs/HANDOFF.md` の 0 章に書いていた記録をここへ `YYYY-MM-DD-<段階>.md` として移し、この表に 1 行足す。
