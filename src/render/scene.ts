@@ -134,6 +134,8 @@ export class SpaceView {
   private readonly keyPan = new THREE.Vector2();
   private keyZoom = 0;
   private editIds: string[] = [];
+  /** 選択モード（SPEC 9 章）。editIds が選んだ星。Shift は範囲選択に使うので、拡大に使わない */
+  private selecting = false;
   /** 選んでいる星座の新星（SPEC 9 章）。星座を選んでいて、検索していないときだけ輪を付けて明るくする */
   private novaIds: string[] = [];
   /** 飛行モード（SPEC 13 章）。入る前の検索は flightSearch に預け、出たら掛け直す */
@@ -353,7 +355,8 @@ export class SpaceView {
     const distance = this.camera.position.distanceTo(this.controls.target);
     const ease = 1 - Math.exp(-dt * KEY_EASE);
     this.keyPan.lerp(dir.multiplyScalar(distance * KEY_PAN_SPEED), ease);
-    const zoomWant = (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") ? 1 : 0);
+    // 選択モードでは Shift を範囲選択に使うので、拡大はしない（拡大はホイールで）
+    const zoomWant = (this.keys.has("Space") ? 1 : 0) - (this.keys.has("Shift") && !this.selecting ? 1 : 0);
     this.keyZoom += (zoomWant * KEY_ZOOM_RATE - this.keyZoom) * ease;
 
     const panning = this.keyPan.length() > distance * 0.002;
@@ -412,6 +415,36 @@ export class SpaceView {
   /** 確認用：輪を付けている新星の id */
   novaeShown(): string[] { return this.constellations.novaeIds(); }
 
+  /** 選択モードに入る・抜ける。抜けると選んだ星の輪も消える（setEditMembers([]) は呼ぶ側で） */
+  setSelecting(on: boolean): void {
+    this.wake();
+    this.selecting = on;
+    this.refreshEmphasis();
+  }
+
+  /** 確認用：金の輪を付けている星（選択モードで選んだ星、または選んだ星座の星） */
+  selectionRingIds(): string[] { return this.constellations.ringIdList(); }
+
+  /** 画面の四角（クライアント座標、どの向きのドラッグでも）の中にある星。表示している位置で判定する */
+  starsInRect(x0: number, y0: number, x1: number, y1: number): string[] {
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const rect = this.canvas.getBoundingClientRect();
+    const left = Math.min(x0, x1) - rect.left, right = Math.max(x0, x1) - rect.left;
+    const top = Math.min(y0, y1) - rect.top, bottom = Math.max(y0, y1) - rect.top;
+    const v = new THREE.Vector3();
+    const ids: string[] = [];
+    for (const star of this.field.placed) {
+      const p = this.field.displayPosition(star.id);
+      if (!p) continue;
+      v.set(p.x, 0, -p.y).project(this.camera);
+      if (v.z > 1) continue;
+      const x = (v.x * 0.5 + 0.5) * size.x;
+      const y = (-v.y * 0.5 + 0.5) * size.y;
+      if (x >= left && x <= right && y >= top && y <= bottom) ids.push(star.id);
+    }
+    return ids;
+  }
+
   setEditMembers(points: ConstellationPoint[]): void {
     this.wake();
     this.editIds = points.map((point) => point.id);
@@ -426,12 +459,12 @@ export class SpaceView {
   private refreshEmphasis(): void {
     const searching = this.searchIds.length > 0;
     const selected = this.constellationNameId && !searching ? this.constellations.points(this.constellationNameId) : [];
-    const mode: EmphasisMode = this.editIds.length ? "edit" : selected.length ? "selected" : "none";
+    const mode: EmphasisMode = this.selecting ? "select" : selected.length ? "selected" : "none";
     this.constellations.select(searching ? null : this.constellationNameId);
     if (this.constellationName && !this.constellationNameWait) {
       this.constellationName.classList.toggle("is-visible", !!this.constellationNameId && !searching);
     }
-    const ids = mode === "edit" ? this.editIds : selected.map((point) => point.id);
+    const ids = mode === "select" ? this.editIds : selected.map((point) => point.id);
     // 新星は、星座の星と同じく明るくしてタイトルを優先する（輪は金ではなく淡い白）
     const novae = mode === "selected" ? this.novaIds.filter((id) => !ids.includes(id)) : [];
     const emphasized = [...ids, ...novae];
@@ -442,7 +475,7 @@ export class SpaceView {
       const p = this.field.displayPosition(id);
       return p ? [{ id, ...p }] : [];
     });
-    this.constellations.editMembers(at(ids), mode === "edit");
+    this.constellations.editMembers(at(ids), mode === "select");
     this.constellations.setNovae(at(novae));
     this.labelsDirty = true;
   }
@@ -535,7 +568,7 @@ export class SpaceView {
     };
     const pad = 12;
     const search = rectOf("search-box");
-    const bottoms = ["constellation-list", "constellation-manage", "constellation-novae"].map(rectOf).filter((r) => !!r) as DOMRect[];
+    const bottoms = ["constellation-list", "constellation-manage", "constellation-novae", "selection-bar"].map(rectOf).filter((r) => !!r) as DOMRect[];
     const panel = ["hud", "hud-toggle"].map(rectOf).filter((r) => !!r) as DOMRect[];
     const top = (search?.bottom ?? 0) + pad;
     const bottom = Math.min(size.y, ...bottoms.map((r) => r.top)) - pad;
@@ -1596,12 +1629,14 @@ export class SpaceView {
         priority: -1000 + (1000 - c.count),   // 大きい星団ほど先に置く
         // 遠くでは星団が小さく写るので、名前も 8 割にして星団からはみ出しにくくする
         fontSize: Math.round(clusterSize(c.count) * (tier === "far" ? 0.8 : 1) * 2) / 2,
-        dim: this.emphasisMode !== "none",
+        dim: this.emphasisMode !== "none" && this.emphasisMode !== "select",
       });
     }
 
     const emphasized = this.emphasisIds;
-    const plainMap = !this.searchIds.length && !emphasized.size;
+    // 選択モードは、ふつうの地図の出し方のまま、選んだ星のタイトルだけを優先して明るく出す
+    const selectMode = this.emphasisMode === "select";
+    const plainMap = !this.searchIds.length && (!emphasized.size || selectMode);
     // 中距離では等級の高い星を星団ごとに選ぶ。日時不明の星は近距離かホバーで読める。
     const midBright = new Set<string>();
     if (plainMap && tier === "mid") {
@@ -1632,14 +1667,14 @@ export class SpaceView {
           sy: this.searchIds.length ? at.sy + (at.sy - size.y / 2) / outward * 10 : at.sy,
           kind: "star",
           // 星座の星を最優先。それ以外は暗くする
-          priority: star ? -3000 + s.rank
+          priority: star ? (selectMode ? -4000 : -3000) + s.rank
             : this.searchIds.length ? (searchRank.get(s.id) ?? 99) - 100
               : plainMap && s.id === this.hoveredMapId ? -2000
                 : plainMap ? (1 - recency(s.touched)) * 100 + s.rank * 0.01 : s.rank,
-          dim: emphasized.size > 0 && !star,
+          dim: emphasized.size > 0 && !star && !selectMode,
           searchRank: this.searchIds.length ? searchRank.get(s.id) : undefined,
-          fontSize: plainMap ? Math.round((10 + 2 * recency(s.touched)) * 10) / 10 : undefined,
-          opacity: plainMap ? 0.4 + 0.6 * recency(s.touched) : undefined,
+          fontSize: plainMap ? (star ? 12 : Math.round((10 + 2 * recency(s.touched)) * 10) / 10) : undefined,
+          opacity: plainMap ? (star ? 1 : 0.4 + 0.6 * recency(s.touched)) : undefined,
           cluster: s.cluster,
           side: this.searchIds.length ? (at.sx >= size.x / 2 ? "right" : "left") : !own || s.x >= own.x ? "right" : "left",
         });
@@ -1648,7 +1683,7 @@ export class SpaceView {
 
     // 星座の星のタイトルは省略せず、隣の星団の円に入っても間引かない
     this.labels.render(this.searchIds.length ? items.filter((item) => item.kind === "star") : items,
-      this.searchIds.length || emphasized.size ? "near" : tier, this.searchIds.length ? [] : circles);
+      this.searchIds.length || (emphasized.size && !selectMode) ? "near" : tier, this.searchIds.length ? [] : circles);
   }
 
   private readonly resize = (): void => {

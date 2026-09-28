@@ -928,19 +928,18 @@ try {
     await evalIn("!document.getElementById('constellation-create').hidden"),
   "検索中に星座にする操作が表示される");
   await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',shiftKey:true,bubbles:true}))");
-  const editStart = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().editing)")) ?? "null");
-  check(editStart?.members.length === Math.min(12, initialConstellationSearch.ids.length),
-    "Shift+Enter で上位最大12件を編集状態へ入れる", `${editStart?.members.length ?? 0} 件`);
-  const removedId = editStart?.members[0];
+  const editStart = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().selection)")) ?? "null");
+  check(editStart?.length === Math.min(12, initialConstellationSearch.ids.length),
+    "Shift+Enter で上位最大12件を選んだ状態で選択モードに入る", `${editStart?.length ?? 0} 件`);
+  const removedId = editStart?.[0];
   const firstCluster = layout.stars.find((s) => s.id === removedId)?.cluster;
   const addedId = layout.stars.find((s) => s.cluster === firstCluster &&
     !initialConstellationSearch.ids.includes(s.id))?.id;
   await evalIn(`globalThis.__bukusupe.toggleEditMember(${JSON.stringify(removedId)})`);
   await evalIn(`globalThis.__bukusupe.toggleEditMember(${JSON.stringify(addedId)})`);
-  const editChanged = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().editing)")) ?? "null");
-  check(editChanged.excluded.includes(removedId) && editChanged.pinned.includes(addedId) &&
-    !editChanged.members.includes(removedId) && editChanged.members.includes(addedId),
-  "編集で星を外し、検索圏外の星を加えると excluded / pinned に残る");
+  const editChanged = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState().selection)")) ?? "null");
+  check(!!editChanged && !editChanged.includes(removedId) && editChanged.includes(addedId),
+  "選択モードで星を外し、検索圏外の星を加えると、選んだ星に反映される");
   await evalIn("document.getElementById('constellation-name-input').value='わたしの宇宙'");
   // 星が軌道に着いてタイトルが出るのを待ってから撮る
   await waitForLabel(':not([data-search-rank=""])');
@@ -1042,7 +1041,7 @@ try {
   const recalled = JSON.parse((await evalIn("JSON.stringify(globalThis.__bukusupe.constellationState())")) ?? "null");
   check(recalled.active === constellationId && recalled.geometry.find((row) => row.id === constellationId)?.opacity === 0.85 &&
     !recalled.rows[0].members.includes(removedId) && recalled.rows[0].members.includes(addedId),
-  "呼び出しで明るくなり、excluded は除外・pinned は維持される");
+  "呼び出しで明るくなり、外した星は入らず、加えた星は入っている");
   // カメラが寄り終わり、タイトルの判断（カメラ停止の約 150ms 後）が済むのを待つ
   for (let i = 0; i < 20; i++) {
     const ready = await evalIn(`(() => { const ids = new Set(globalThis.__bukusupe.constellationState().rows[0].members);
@@ -1205,10 +1204,10 @@ try {
     await evalIn(`(async () => { await globalThis.__bukusupe.searchNow(${JSON.stringify(query)}); })()`);
     await sleep(600);
     await evalIn("document.getElementById('search-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',shiftKey:true,bubbles:true}))");
-    // 線の照合が意味を持つよう、編集中に星を加えて星座を大きくする（加えた星は pinned に入る）
+    // 線の照合が意味を持つよう、選択モードで星を加えて星座を大きくする
     await evalIn(`(() => {
       const want = new Set(${JSON.stringify(pinTitles)});
-      const members = new Set(globalThis.__bukusupe.constellationState().editing?.members ?? []);
+      const members = new Set(globalThis.__bukusupe.constellationState().selection ?? []);
       for (const item of globalThis.__bukusupe.state.items) {
         if (want.has(item.title) && !members.has(item.id)) globalThis.__bukusupe.toggleEditMember(item.id);
       }
@@ -1325,6 +1324,8 @@ try {
   // 5. サンプルに戻すと、サンプルの星座と平均ベクトルがそのまま残っている
   await send("Page.navigate", { url: `chrome-extension://${extId}/index.html?sample=1&debug=1` }, sessionId);
   await waitUntil("globalThis.__bukusupe?.state.kind === 'sample' && document.body.dataset.phase === 'ready'", 60000);
+  // 星座は準備完了（ready）の後に読み込むので、読み込み終わるのを待つ
+  await waitUntil(`globalThis.__bukusupe.constellationState().rows.some((row) => row.id === ${JSON.stringify(sampleRow?.id)})`, 10000, 200);
   const backRow = JSON.parse((await tryEval(`JSON.stringify(globalThis.__bukusupe.constellationState().rows
     .find((row) => row.id === ${JSON.stringify(sampleRow?.id)}) ?? null)`)) ?? "null");
   check(backRow && (sampleRow?.members.length ?? 0) > 0 &&

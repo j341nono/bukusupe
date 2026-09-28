@@ -236,6 +236,9 @@ export class ConstellationLayer {
     }
   }
 
+  /** 確認用：金の輪を付けている星の id */
+  ringIdList(): string[] { return [...this.ringIds]; }
+
   /** 確認用：輪を付けている新星の id */
   novaeIds(): string[] { return [...this.novaIds]; }
 

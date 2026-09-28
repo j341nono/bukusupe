@@ -1,7 +1,8 @@
 import * as THREE from "three";
 
 /** 星座の星の強調。selected は描いている・選んでいるとき、edit は編集しているとき。 */
-export type EmphasisMode = "none" | "selected" | "edit";
+/** none：強調なし／selected：選んだ星座の星／select：選択モードで選んだ星（他の星は暗くしない。SPEC 9 章） */
+export type EmphasisMode = "none" | "selected" | "select";
 
 /**
  * 星の見え方。星ごとの基準の大きさ（世界の単位）・明るさ（不透明度）・色。
@@ -329,7 +330,7 @@ export class StarField {
 
   /**
    * 星座の星を強調する（描いているとき・選んでいるとき・編集しているとき）。
-   * 強調した星は少し大きく明るく。編集中は、星座に入っていない星をさらに暗くして差をはっきりさせる。
+   * 強調した星は少し大きく明るく。選択モードでも、選んでいない星は暗くしない（どの星も普段の明るさで選べるように）。
    */
   setEmphasis(ids: string[], mode: EmphasisMode): void {
     this.emphasis = new Set(mode === "none" ? [] : ids);
@@ -365,9 +366,6 @@ export class StarField {
       if (this.emphasis.has(star.id)) {
         this.searchSize[i] = Math.max(this.searchSize[i], this.baseSize[i]) * 1.45;
         this.searchAlpha[i] = Math.min(1, Math.max(this.searchAlpha[i], this.targetAlpha[i]) * 1.4 + 0.1);
-      } else if (this.emphasisMode === "edit") {
-        this.searchAlpha[i] *= 0.45;
-        this.searchSize[i] *= 0.85;
       }
     });
   }
