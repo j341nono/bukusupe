@@ -3,6 +3,7 @@ import { hasChromeBookmarks, loadChromeBookmarks } from "./chrome-source";
 import { loadSampleBookmarks } from "./sample-source";
 import { parseBookmarkItem } from "./validate";
 import type { BookmarkItem } from "./types";
+import { lang } from "../i18n";
 
 /** ⓘ のパネルで「サンプルの宇宙で試す」を選んだか（このブラウザに覚える。ブックマーク自体には触らない） */
 const PREFER_SAMPLE_KEY = "bukusupe:prefer-sample";
@@ -34,12 +35,12 @@ export async function loadBookmarks(): Promise<BookmarkSnapshot & { chromeCount:
     try {
       const items = await loadChromeBookmarks();
       if (!forced && items.length > 0) return { kind: "chrome", items, chromeCount: items.length };
-      return { kind: "sample", items: loadSampleBookmarks(), chromeCount: items.length };
+      return { kind: "sample", items: loadSampleBookmarks(lang()), chromeCount: items.length };
     } catch (err) {
       console.warn("[ブクスペ] ブックマークを読めなかったのでサンプルに切り替える", err);
     }
   }
-  return { kind: "sample", items: loadSampleBookmarks(), chromeCount: 0 };
+  return { kind: "sample", items: loadSampleBookmarks(lang()), chromeCount: 0 };
 }
 
 /**

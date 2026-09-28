@@ -30,7 +30,7 @@ import { renderHud, renderHudMessage, setSourceSwitch, settleHud, setupHudContro
 import { openPage } from "./ui/open-page";
 import { RETURN_STATE_KEY, RETURN_STATE_VERSION, parseReturnState, storeReturnState, takeReturnState } from "./ui/return-state";
 import type { ZoomTier } from "./ui/labels";
-import { applyStaticText, createLangPicker, formatPercent, onLangChange, t, type MessageKey } from "./i18n";
+import { applyStaticText, createLangPicker, formatPercent, lang, onLangChange, t, type MessageKey } from "./i18n";
 import { clusterLabel } from "./i18n/cluster";
 
 const META_MEAN = "mean-vector";
@@ -101,6 +101,10 @@ let novae: string[] = [];
 let selection: Set<string> | null = null;
 let savingAnimation = false;
 let openModifierHeld = false;
+/** 測定用の bench データを使っているか（`?debug=1&bench=…`）。bench はサンプルの言語切り替えの対象にしない */
+let sampleBench: string | undefined;
+/** データ源を決めて読み込み終えたか。初回の説明画面（同意の前）で言語を切り替えても、まだ読み込み直さない */
+let dataLoaded = false;
 
 function saveReturnState(): void {
   if (!view) return;
@@ -173,7 +177,9 @@ async function main(): Promise<void> {
   // サンプル⇄自分のブックマーク（ⓘ のパネル）。自分のブックマークが 1 件も無ければ、戻る先が無いので出さない
   setSourceSwitch(state.kind === "chrome" ? "sample" : snapshot.chromeCount > 0 ? "chrome" : null, switchSource);
   // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）
-  useDataSource(state.kind, snapshot.bench);
+  sampleBench = snapshot.bench;
+  useDataSource(state.kind, snapshot.bench, lang());
+  dataLoaded = true;
   onDbBlocked(() => renderHudMessage("status.dbBlocked"));
 
   if (WEB && (await startFromSampleCache())) {
@@ -227,7 +233,9 @@ function awaitFirstRunConsent(): Promise<void> {
  * 今のサンプル・配置の版・モデルと合わなければ使わず、通常の計算に戻る（`npm run sample:precompute` で作り直す）。
  */
 async function startFromSampleCache(): Promise<boolean> {
-  const file = (await import("./data/sample-precomputed.json")).default as unknown as SampleCacheFile;
+  const file = (lang() === "en"
+    ? (await import("./data/sample-precomputed.en.json")).default
+    : (await import("./data/sample-precomputed.json")).default) as unknown as SampleCacheFile;
   const cache = decodeSampleCache(file, state.items, MODEL_ID);
   if (!cache) {
     console.warn("[ブクスペ] 同梱した計算済みのサンプルが古い（npm run sample:precompute で作り直す）");
@@ -288,8 +296,14 @@ function setModelStatus(key: MessageKey, percent?: number): void {
 /**
  * 言語を切り替えたときに、動く文言を描き直す（静的な文言は applyStaticText が差し替える）。
  * 星団名は表示のときに言語へ直すので、配置は変えずに名前だけ差し替える。
+ * サンプルを表示中は、サンプルのブックマーク自体が言語ごとに違う（段階 3c）ので、読み込み直してその言語のサンプルに切り替える。
+ * 自分のブックマークを表示中は、データは変えず、その場で文言だけ差し替える。
  */
 function refreshLanguage(): void {
+  if (dataLoaded && state.kind === "sample" && !sampleBench) {
+    location.reload();
+    return;
+  }
   if (state.layout) view?.setClusterNames(clusterNamesOf(state.layout));
   renderConstellationList();
   renderNovae();

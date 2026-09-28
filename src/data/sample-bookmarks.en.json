@@ -1,0 +1,1540 @@
+[
+  {
+    "id": "e001",
+    "title": "React – A JavaScript library for building user interfaces",
+    "url": "https://react.dev/",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1712432880000,
+    "dateLastUsed": 1788732720000
+  },
+  {
+    "id": "e002",
+    "title": "A Complete Guide to useEffect",
+    "url": "https://overreacted.io/a-complete-guide-to-useeffect/",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1711733040000,
+    "dateLastUsed": 1789009200000
+  },
+  {
+    "id": "e003",
+    "title": "Vue.js - The Progressive JavaScript Framework",
+    "url": "https://vuejs.org/guide/introduction.html",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1704268080000,
+    "dateLastUsed": 1769292720000
+  },
+  {
+    "id": "e004",
+    "title": "Svelte • Cybernetically enhanced web apps",
+    "url": "https://svelte.dev/",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1652644080000,
+    "dateLastUsed": 1715992560000
+  },
+  {
+    "id": "e005",
+    "title": "Vite | Next Generation Frontend Tooling",
+    "url": "https://vite.dev/guide/",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1743355440000
+  },
+  {
+    "id": "e006",
+    "title": "TypeScript: Handbook - The Basics",
+    "url": "https://www.typescriptlang.org/docs/handbook/2/basic-types.html",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1765508400000,
+    "dateLastUsed": 1789328880000
+  },
+  {
+    "id": "e007",
+    "title": "Mastering CSS Grid Layout",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1721936880000,
+    "dateLastUsed": 1789251120000
+  },
+  {
+    "id": "e008",
+    "title": "A Complete Guide to Flexbox",
+    "url": "https://css-tricks.com/snippets/css/a-guide-to-flexbox/",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1760816880000,
+    "dateLastUsed": 1776368880000
+  },
+  {
+    "id": "e009",
+    "title": "How to build Web Components",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_components",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1655253360000,
+    "dateLastUsed": 1723414320000
+  },
+  {
+    "id": "e010",
+    "title": "Tailwind CSS - Rapidly build modern websites",
+    "url": "https://tailwindcss.com/docs/installation",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1709650800000,
+    "dateLastUsed": 1735337520000
+  },
+  {
+    "id": "e011",
+    "title": "Can I use... Support tables for HTML5, CSS3",
+    "url": "https://caniuse.com/",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1714428720000,
+    "dateLastUsed": 1782442800000
+  },
+  {
+    "id": "e012",
+    "title": "What are Core Web Vitals?",
+    "url": "https://web.dev/articles/vitals",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1692301680000,
+    "dateLastUsed": 1765136880000
+  },
+  {
+    "id": "e013",
+    "title": "Next.js App Router: the mental model",
+    "url": "https://nextjs.org/docs/app/building-your-application/routing",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1691282160000,
+    "dateLastUsed": 1768523760000
+  },
+  {
+    "id": "e014",
+    "title": "Accessibility basics - WAI-ARIA",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA",
+    "folderPath": [
+      "Dev",
+      "Frontend"
+    ],
+    "dateAdded": 1719163440000,
+    "dateLastUsed": 1789173360000
+  },
+  {
+    "id": "e015",
+    "title": "Go by Example",
+    "url": "https://gobyexample.com/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1768299120000,
+    "dateLastUsed": 1772930160000
+  },
+  {
+    "id": "e016",
+    "title": "The Rust Programming Language book",
+    "url": "https://doc.rust-lang.org/book/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1723950000000,
+    "dateLastUsed": 1776455280000
+  },
+  {
+    "id": "e017",
+    "title": "PostgreSQL 16 Documentation",
+    "url": "https://www.postgresql.org/docs/16/index.html",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1763063280000,
+    "dateLastUsed": 1779842160000
+  },
+  {
+    "id": "e018",
+    "title": "Understanding Redis data types",
+    "url": "https://redis.io/docs/latest/develop/data-types/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1751649840000,
+    "dateLastUsed": 1783289520000
+  },
+  {
+    "id": "e019",
+    "title": "Writing a Docker Compose file",
+    "url": "https://docs.docker.com/compose/compose-file/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1752980400000,
+    "dateLastUsed": 1789000560000
+  },
+  {
+    "id": "e020",
+    "title": "What is a Kubernetes Pod?",
+    "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1737316080000,
+    "dateLastUsed": 1789000560000
+  },
+  {
+    "id": "e021",
+    "title": "gRPC basics",
+    "url": "https://grpc.io/docs/what-is-grpc/introduction/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1679816880000
+  },
+  {
+    "id": "e022",
+    "title": "REST API design best practices",
+    "url": "https://restfulapi.net/rest-api-design-tutorial-with-example/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1737126000000,
+    "dateLastUsed": 1771461360000
+  },
+  {
+    "id": "e023",
+    "title": "FastAPI - a modern, fast Python web framework",
+    "url": "https://fastapi.tiangolo.com/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1650198960000,
+    "dateLastUsed": 1721617200000
+  },
+  {
+    "id": "e024",
+    "title": "SQL antipatterns, summarized",
+    "url": "https://stackoverflow.blog/2020/10/26/sql-injection-antipatterns/",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1703239920000,
+    "dateLastUsed": 1775358000000
+  },
+  {
+    "id": "e025",
+    "title": "Fallacies of Distributed Computing",
+    "url": "https://architecturenotes.co/p/fallacies-of-distributed-systems",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1756635120000,
+    "dateLastUsed": 1771703280000
+  },
+  {
+    "id": "e026",
+    "title": "Configuring nginx as a reverse proxy",
+    "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1755304560000,
+    "dateLastUsed": 1768091760000
+  },
+  {
+    "id": "e027",
+    "title": "OAuth 2.0 and OpenID Connect: the difference",
+    "url": "https://auth0.com/docs/authenticate/protocols/oauth",
+    "folderPath": [
+      "Dev",
+      "Backend"
+    ],
+    "dateAdded": 1762786800000,
+    "dateLastUsed": 1789605360000
+  },
+  {
+    "id": "e028",
+    "title": "Pro Git",
+    "url": "https://git-scm.com/book/en/v2",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1760324400000,
+    "dateLastUsed": 1771815600000
+  },
+  {
+    "id": "e029",
+    "title": "GitHub Actions workflow syntax",
+    "url": "https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1657162800000,
+    "dateLastUsed": 1705633200000
+  },
+  {
+    "id": "e030",
+    "title": "Vim Cheat Sheet",
+    "url": "https://vim.rtorr.com/",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1693312560000,
+    "dateLastUsed": 1751494320000
+  },
+  {
+    "id": "e031",
+    "title": "Visual Studio Code keyboard shortcuts",
+    "url": "https://code.visualstudio.com/docs/getstarted/keybindings",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1682305200000
+  },
+  {
+    "id": "e032",
+    "title": "tmux cheat sheet",
+    "url": "https://tmuxcheatsheet.com/",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1741955760000
+  },
+  {
+    "id": "e033",
+    "title": "regex101: build, test, and debug regex",
+    "url": "https://regex101.com/",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1728702000000,
+    "dateLastUsed": 1771444080000
+  },
+  {
+    "id": "e034",
+    "title": "jq Manual",
+    "url": "https://jqlang.github.io/jq/manual/",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1756695600000,
+    "dateLastUsed": 1784594160000
+  },
+  {
+    "id": "e035",
+    "title": "ripgrep on GitHub",
+    "url": "https://github.com/BurntSushi/ripgrep",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1715128560000,
+    "dateLastUsed": 1789942320000
+  },
+  {
+    "id": "e036",
+    "title": "Homebrew — The Missing Package Manager for macOS",
+    "url": "https://brew.sh/",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1767815280000,
+    "dateLastUsed": 1788551280000
+  },
+  {
+    "id": "e037",
+    "title": "Chrome DevTools tips and tricks",
+    "url": "https://developer.chrome.com/docs/devtools/",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1726403760000,
+    "dateLastUsed": 1771798320000
+  },
+  {
+    "id": "e038",
+    "title": "Migrate to Manifest V3",
+    "url": "https://developer.chrome.com/docs/extensions/develop/migrate",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1730766960000,
+    "dateLastUsed": 1746223920000
+  },
+  {
+    "id": "e039",
+    "title": "chrome.bookmarks API reference",
+    "url": "https://developer.chrome.com/docs/extensions/reference/api/bookmarks",
+    "folderPath": [
+      "Dev",
+      "Tools"
+    ],
+    "dateAdded": 1660299120000,
+    "dateLastUsed": 1708985520000
+  },
+  {
+    "id": "e040",
+    "title": "Attention Is All You Need",
+    "url": "https://arxiv.org/abs/1706.03762",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1685156400000,
+    "dateLastUsed": 1721159280000
+  },
+  {
+    "id": "e041",
+    "title": "The Illustrated Transformer",
+    "url": "https://jalammar.github.io/illustrated-transformer/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1738266480000,
+    "dateLastUsed": 1789527600000
+  },
+  {
+    "id": "e042",
+    "title": "Hugging Face – The AI community building the future",
+    "url": "https://huggingface.co/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1704570480000
+  },
+  {
+    "id": "e043",
+    "title": "transformers.js documentation",
+    "url": "https://huggingface.co/docs/transformers.js/index",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1718757360000,
+    "dateLastUsed": 1789614000000
+  },
+  {
+    "id": "e044",
+    "title": "multilingual-e5-small model card",
+    "url": "https://huggingface.co/intfloat/multilingual-e5-small",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1778952240000,
+    "dateLastUsed": 1790201520000
+  },
+  {
+    "id": "e045",
+    "title": "What are embeddings, really?",
+    "url": "https://vickiboykis.com/what_are_embeddings/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1785026160000,
+    "dateLastUsed": 1790192880000
+  },
+  {
+    "id": "e046",
+    "title": "What is Retrieval-Augmented Generation (RAG)?",
+    "url": "https://aws.amazon.com/what-is/retrieval-augmented-generation/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1728235440000,
+    "dateLastUsed": 1782244080000
+  },
+  {
+    "id": "e047",
+    "title": "PyTorch tutorials",
+    "url": "https://pytorch.org/tutorials/beginner/basics/intro.html",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1703334960000,
+    "dateLastUsed": 1770407280000
+  },
+  {
+    "id": "e048",
+    "title": "scikit-learn: machine learning in Python",
+    "url": "https://scikit-learn.org/stable/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1774295280000,
+    "dateLastUsed": 1789156080000
+  },
+  {
+    "id": "e049",
+    "title": "Understanding UMAP",
+    "url": "https://pair-code.github.io/understanding-umap/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1710523440000,
+    "dateLastUsed": 1783116720000
+  },
+  {
+    "id": "e050",
+    "title": "k-means++",
+    "url": "https://en.wikipedia.org/wiki/K-means%2B%2B",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1711525680000,
+    "dateLastUsed": 1779142320000
+  },
+  {
+    "id": "e051",
+    "title": "Get started with ONNX Runtime Web",
+    "url": "https://onnxruntime.ai/docs/tutorials/web/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1760886000000
+  },
+  {
+    "id": "e052",
+    "title": "Prompt Engineering Guide",
+    "url": "https://www.promptingguide.ai/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1720787760000,
+    "dateLastUsed": 1776645360000
+  },
+  {
+    "id": "e053",
+    "title": "Whisper — robust speech recognition",
+    "url": "https://github.com/openai/whisper",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1661880240000,
+    "dateLastUsed": 1698626160000
+  },
+  {
+    "id": "e054",
+    "title": "What are diffusion models?",
+    "url": "https://lilianweng.github.io/posts/2021-07-11-diffusion-models/",
+    "folderPath": [
+      "AI"
+    ],
+    "dateAdded": 1683912240000
+  },
+  {
+    "id": "e055",
+    "title": "Figma basics",
+    "url": "https://help.figma.com/hc/en-us/articles/360040514813",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1730188080000
+  },
+  {
+    "id": "e056",
+    "title": "Material Design 3",
+    "url": "https://m3.material.io/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1752202800000
+  },
+  {
+    "id": "e057",
+    "title": "Tips from Refactoring UI",
+    "url": "https://www.refactoringui.com/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1718843760000,
+    "dateLastUsed": 1768938480000
+  },
+  {
+    "id": "e058",
+    "title": "Coolors - the super fast color palette generator",
+    "url": "https://coolors.co/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1741290480000,
+    "dateLastUsed": 1748133360000
+  },
+  {
+    "id": "e059",
+    "title": "Google Fonts",
+    "url": "https://fonts.google.com/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1713219120000,
+    "dateLastUsed": 1736806320000
+  },
+  {
+    "id": "e060",
+    "title": "Lucide icon set",
+    "url": "https://lucide.dev/icons/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1708467120000,
+    "dateLastUsed": 1782347760000
+  },
+  {
+    "id": "e061",
+    "title": "Easing functions cheat sheet",
+    "url": "https://easings.net/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1765620720000,
+    "dateLastUsed": 1790028720000
+  },
+  {
+    "id": "e062",
+    "title": "three.js examples",
+    "url": "https://threejs.org/examples/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1716882480000
+  },
+  {
+    "id": "e063",
+    "title": "Shadertoy",
+    "url": "https://www.shadertoy.com/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1759054320000,
+    "dateLastUsed": 1788637680000
+  },
+  {
+    "id": "e064",
+    "title": "The Book of Shaders",
+    "url": "https://thebookofshaders.com/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1722688560000
+  },
+  {
+    "id": "e065",
+    "title": "WebAIM color contrast checker",
+    "url": "https://webaim.org/resources/contrastchecker/",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1768091760000,
+    "dateLastUsed": 1788559920000
+  },
+  {
+    "id": "e066",
+    "title": "Hubble Space Telescope image gallery",
+    "url": "https://hubblesite.org/images/gallery",
+    "folderPath": [
+      "Design"
+    ],
+    "dateAdded": 1787894640000,
+    "dateLastUsed": 1789605360000
+  },
+  {
+    "id": "e067",
+    "title": "Classic shepherd's pie",
+    "url": "https://www.allrecipes.com/recipe/16354/shepherds-pie/",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1724874480000,
+    "dateLastUsed": 1769992560000
+  },
+  {
+    "id": "e068",
+    "title": "How not to mess up carbonara",
+    "url": "https://www.seriouseats.com/the-food-lab-carbonara-recipe",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1692785520000
+  },
+  {
+    "id": "e069",
+    "title": "How to make dashi from scratch",
+    "url": "https://www.justonecookbook.com/how-to-make-dashi/",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1715163120000,
+    "dateLastUsed": 1769629680000
+  },
+  {
+    "id": "e070",
+    "title": "Ten make-ahead meals for the week",
+    "url": "https://www.bonappetit.com/story/make-ahead-meals",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1773560880000,
+    "dateLastUsed": 1789933680000
+  },
+  {
+    "id": "e071",
+    "title": "Homemade chicken curry from scratch",
+    "url": "https://www.bbcgoodfood.com/recipes/chicken-curry",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1747623600000,
+    "dateLastUsed": 1769724720000
+  },
+  {
+    "id": "e072",
+    "title": "Bread baking: getting proofing temperature right",
+    "url": "https://www.kingarthurbaking.com/blog/2018/03/12/guide-to-proofing-bread",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1772221680000
+  },
+  {
+    "id": "e073",
+    "title": "How to keep a sourdough starter alive",
+    "url": "https://www.kingarthurbaking.com/learn/sourdough-baking-guide",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1752989040000,
+    "dateLastUsed": 1789760880000
+  },
+  {
+    "id": "e074",
+    "title": "Hand-drip coffee for beginners",
+    "url": "https://perfectdailygrind.com/2019/07/a-beginners-guide-to-brewing-pour-over-coffee/",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1676041200000,
+    "dateLastUsed": 1725150960000
+  },
+  {
+    "id": "e075",
+    "title": "How to sharpen a kitchen knife",
+    "url": "https://www.seriouseats.com/how-to-sharpen-a-knife",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1768471920000
+  },
+  {
+    "id": "e076",
+    "title": "Weeknight pasta, five ways",
+    "url": "https://cooking.nytimes.com/68861692-nyt-cooking/collections/weeknight-pasta",
+    "folderPath": [
+      "Cooking"
+    ],
+    "dateAdded": 1767210480000,
+    "dateLastUsed": 1778382000000
+  },
+  {
+    "id": "e077",
+    "title": "How to use a Eurail Pass",
+    "url": "https://www.eurail.com/en",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1705278960000,
+    "dateLastUsed": 1727907120000
+  },
+  {
+    "id": "e078",
+    "title": "Hiking Iceland's Laugavegur Trail",
+    "url": "https://www.visiticeland.com/plan-your-trip/hiking-in-iceland",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1776023280000,
+    "dateLastUsed": 1789432560000
+  },
+  {
+    "id": "e079",
+    "title": "A 3-day itinerary for Lisbon",
+    "url": "https://www.lonelyplanet.com/portugal/lisbon",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1734473520000
+  },
+  {
+    "id": "e080",
+    "title": "Road-tripping the Icelandic Ring Road",
+    "url": "https://guidetoiceland.is/travel-info/driving-in-iceland-ring-road",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1674071280000,
+    "dateLastUsed": 1699922160000
+  },
+  {
+    "id": "e081",
+    "title": "Finding cheap flights on Skyscanner",
+    "url": "https://www.skyscanner.com/",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1758414960000,
+    "dateLastUsed": 1790037360000
+  },
+  {
+    "id": "e082",
+    "title": "Creating a custom map with Google My Maps",
+    "url": "https://www.google.com/maps/about/mymaps/",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1710938160000,
+    "dateLastUsed": 1770502320000
+  },
+  {
+    "id": "e083",
+    "title": "National park entrance passes explained",
+    "url": "https://www.nps.gov/planyourvisit/passes.htm",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1685631600000,
+    "dateLastUsed": 1737575280000
+  },
+  {
+    "id": "e084",
+    "title": "Best stargazing spots near you",
+    "url": "https://www.darksky.org/our-work/conservation/idsp/finder/",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1713711600000,
+    "dateLastUsed": 1775867760000
+  },
+  {
+    "id": "e085",
+    "title": "A packing list template",
+    "url": "https://www.notion.so/templates/packing-list",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1721599920000,
+    "dateLastUsed": 1766864880000
+  },
+  {
+    "id": "e086",
+    "title": "Booking a stay on Airbnb",
+    "url": "https://www.airbnb.com/",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1719111600000,
+    "dateLastUsed": 1765145520000
+  },
+  {
+    "id": "e087",
+    "title": "Adler Planetarium visitor guide",
+    "url": "https://www.adlerplanetarium.org/visit/",
+    "folderPath": [
+      "Travel"
+    ],
+    "dateAdded": 1787125680000,
+    "dateLastUsed": 1790123760000
+  },
+  {
+    "id": "e088",
+    "title": "Spotify Web Player",
+    "url": "https://open.spotify.com/",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1723708080000,
+    "dateLastUsed": 1779064560000
+  },
+  {
+    "id": "e089",
+    "title": "Ultimate Guitar chords and tabs",
+    "url": "https://www.ultimate-guitar.com/",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1690383600000,
+    "dateLastUsed": 1718826480000
+  },
+  {
+    "id": "e090",
+    "title": "Understanding diatonic chords",
+    "url": "https://www.musictheory.net/lessons/40",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1693278000000
+  },
+  {
+    "id": "e091",
+    "title": "Mixing for beginners",
+    "url": "https://www.izotope.com/en/learn/mixing-basics.html",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1715232240000,
+    "dateLastUsed": 1782676080000
+  },
+  {
+    "id": "e092",
+    "title": "Getting started with Ableton Live",
+    "url": "https://www.ableton.com/en/live/",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1745731440000,
+    "dateLastUsed": 1778978160000
+  },
+  {
+    "id": "e093",
+    "title": "Freesound - free sound samples",
+    "url": "https://freesound.org/",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1715085360000,
+    "dateLastUsed": 1781310960000
+  },
+  {
+    "id": "e094",
+    "title": "How to store and care for vinyl records",
+    "url": "https://www.discogs.com/blog/vinyl-record-care",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1738966320000,
+    "dateLastUsed": 1789674480000
+  },
+  {
+    "id": "e095",
+    "title": "Buying music on Bandcamp",
+    "url": "https://bandcamp.com/",
+    "folderPath": [
+      "Music"
+    ],
+    "dateAdded": 1765413360000
+  },
+  {
+    "id": "e096",
+    "title": "Understanding index funds",
+    "url": "https://www.investopedia.com/terms/i/indexfund.asp",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1745187120000,
+    "dateLastUsed": 1785207600000
+  },
+  {
+    "id": "e097",
+    "title": "How tax brackets actually work",
+    "url": "https://www.irs.gov/filing/federal-income-tax-rates-and-brackets",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1737126000000
+  },
+  {
+    "id": "e098",
+    "title": "Employer 401(k) matching, explained",
+    "url": "https://www.nerdwallet.com/article/investing/401k-matching",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1714454640000,
+    "dateLastUsed": 1790020080000
+  },
+  {
+    "id": "e099",
+    "title": "Budgeting apps compared",
+    "url": "https://www.ynab.com/",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1764558000000,
+    "dateLastUsed": 1772135280000
+  },
+  {
+    "id": "e100",
+    "title": "Freelancer invoicing basics",
+    "url": "https://www.freshbooks.com/hub/invoicing/freelance-invoice",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1660739760000,
+    "dateLastUsed": 1724900400000
+  },
+  {
+    "id": "e101",
+    "title": "Comparing mortgage rates",
+    "url": "https://www.bankrate.com/mortgages/mortgage-rates/",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1728166320000,
+    "dateLastUsed": 1775686320000
+  },
+  {
+    "id": "e102",
+    "title": "How Social Security benefits are calculated",
+    "url": "https://www.ssa.gov/benefits/retirement/planner/AnypiaApplet.html",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1715888880000,
+    "dateLastUsed": 1766977200000
+  },
+  {
+    "id": "e103",
+    "title": "Five books to read before you start investing",
+    "url": "https://www.fool.com/investing/how-to-invest/books/",
+    "folderPath": [
+      "Money"
+    ],
+    "dateAdded": 1740046320000,
+    "dateLastUsed": 1768696560000
+  },
+  {
+    "id": "e104",
+    "title": "Stretches to prevent lower back pain",
+    "url": "https://www.health.harvard.edu/pain/stretching-and-strengthening-for-a-healthy-back",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1709166960000,
+    "dateLastUsed": 1782788400000
+  },
+  {
+    "id": "e105",
+    "title": "Sleep hygiene: 12 tips for better sleep",
+    "url": "https://www.sleepfoundation.org/sleep-hygiene",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1726395120000,
+    "dateLastUsed": 1783462320000
+  },
+  {
+    "id": "e106",
+    "title": "Couch to 5K running plan",
+    "url": "https://www.nhs.uk/live-well/exercise/running-and-aerobic-exercises/get-running-with-couch-to-5k/",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1700708400000,
+    "dateLastUsed": 1771366320000
+  },
+  {
+    "id": "e107",
+    "title": "How to build a workout routine",
+    "url": "https://www.bodybuilding.com/content/how-to-build-your-own-workout-routine.html",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1771590960000,
+    "dateLastUsed": 1789095600000
+  },
+  {
+    "id": "e108",
+    "title": "Fixing your desk posture",
+    "url": "https://www.ergotron.com/en-us/resources/health-and-wellness",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1697865840000,
+    "dateLastUsed": 1707689520000
+  },
+  {
+    "id": "e109",
+    "title": "Relief for digital eye strain",
+    "url": "https://www.aao.org/eye-health/tips-prevention/computer-usage",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1767089520000,
+    "dateLastUsed": 1789614000000
+  },
+  {
+    "id": "e110",
+    "title": "Blood donation eligibility",
+    "url": "https://www.redcrossblood.org/donate-blood/how-to-donate/eligibility-requirements.html",
+    "folderPath": [
+      "Health"
+    ],
+    "dateAdded": 1720165680000
+  },
+  {
+    "id": "e111",
+    "title": "HHKB Professional Hybrid",
+    "url": "https://happyhackingkb.com/en/products/hybrid/",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1732227120000,
+    "dateLastUsed": 1782088560000
+  },
+  {
+    "id": "e112",
+    "title": "Getting started with custom keyboards",
+    "url": "https://www.keychron.com/blogs/news/a-beginners-guide-to-custom-keyboards",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1704501360000,
+    "dateLastUsed": 1711845360000
+  },
+  {
+    "id": "e113",
+    "title": "Setting up a Raspberry Pi 5",
+    "url": "https://www.raspberrypi.com/documentation/computers/getting-started.html",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1735942320000,
+    "dateLastUsed": 1778356080000
+  },
+  {
+    "id": "e114",
+    "title": "M4 MacBook Pro review",
+    "url": "https://www.theverge.com/24080631/apple-macbook-pro-m4-review",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1777500720000
+  },
+  {
+    "id": "e115",
+    "title": "E-ink tablets, compared",
+    "url": "https://www.goodereader.com/blog/e-paper/e-ink-tablet-comparison",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1752850800000,
+    "dateLastUsed": 1777414320000
+  },
+  {
+    "id": "e116",
+    "title": "How to choose a monitor arm",
+    "url": "https://www.ergotron.com/en-us/products/monitor-arms",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1722083760000,
+    "dateLastUsed": 1782166320000
+  },
+  {
+    "id": "e117",
+    "title": "Noise-cancelling earbuds, compared",
+    "url": "https://www.rtings.com/headphones/reviews/best/noise-cancelling",
+    "folderPath": [
+      "Gadgets"
+    ],
+    "dateAdded": 1712718000000,
+    "dateLastUsed": 1766700720000
+  },
+  {
+    "id": "e118",
+    "title": "Hacker News",
+    "url": "https://news.ycombinator.com/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1785821040000,
+    "dateLastUsed": 1790296560000
+  },
+  {
+    "id": "e119",
+    "title": "r/technology",
+    "url": "https://www.reddit.com/r/technology/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1694867760000,
+    "dateLastUsed": 1772066160000
+  },
+  {
+    "id": "e120",
+    "title": "The Verge",
+    "url": "https://www.theverge.com/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1680438960000
+  },
+  {
+    "id": "e121",
+    "title": "Bloomberg",
+    "url": "https://www.bloomberg.com/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1772282160000,
+    "dateLastUsed": 1789614000000
+  },
+  {
+    "id": "e122",
+    "title": "BBC News",
+    "url": "https://www.bbc.com/news",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1687990320000,
+    "dateLastUsed": 1736979120000
+  },
+  {
+    "id": "e123",
+    "title": "TechCrunch",
+    "url": "https://techcrunch.com/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1765845360000,
+    "dateLastUsed": 1773085680000
+  },
+  {
+    "id": "e124",
+    "title": "Space.com",
+    "url": "https://www.space.com/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1778382000000,
+    "dateLastUsed": 1789873200000
+  },
+  {
+    "id": "e125",
+    "title": "NASA",
+    "url": "https://www.nasa.gov/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1723353840000,
+    "dateLastUsed": 1781043120000
+  },
+  {
+    "id": "e126",
+    "title": "NASA Astronomy Picture of the Day",
+    "url": "https://apod.nasa.gov/apod/astropix.html",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1721237040000,
+    "dateLastUsed": 1769646960000
+  },
+  {
+    "id": "e127",
+    "title": "Subaru Telescope - National Astronomical Observatory of Japan",
+    "url": "https://subarutelescope.org/en/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1712268720000,
+    "dateLastUsed": 1771020720000
+  },
+  {
+    "id": "e128",
+    "title": "Next Spaceflight - upcoming rocket launches",
+    "url": "https://nextspaceflight.com/launches/",
+    "folderPath": [
+      "News"
+    ],
+    "dateAdded": 1785829680000
+  },
+  {
+    "id": "e129",
+    "title": "Deep Learning (the book)",
+    "url": "https://www.deeplearningbook.org/",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1736547120000
+  },
+  {
+    "id": "e130",
+    "title": "Why We Do Daily Standups",
+    "url": "https://martinfowler.com/articles/on-dailies.html",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1786918320000
+  },
+  {
+    "id": "e131",
+    "title": "Kyoto's best spots for autumn leaves",
+    "url": "https://www.japan-guide.com/e/e2013.html",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1699645680000
+  },
+  {
+    "id": "e132",
+    "title": "How the black hole photo was taken",
+    "url": "https://www.nature.com/articles/d41586-019-01155-0",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1724045040000
+  },
+  {
+    "id": "e133",
+    "title": "What great home cooks have in common",
+    "url": "https://www.bonappetit.com/story/what-makes-a-good-cook",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1679523120000
+  },
+  {
+    "id": "e134",
+    "title": "Reaching $1,000 MRR as a solo indie hacker",
+    "url": "https://www.indiehackers.com/post/reaching-1-000-mrr-as-a-solo-founder",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1696543920000,
+    "dateLastUsed": 1722377520000
+  },
+  {
+    "id": "e135",
+    "title": "Fermat's spiral and sunflower seeds",
+    "url": "https://en.wikipedia.org/wiki/Fermat%27s_spiral",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1678736880000,
+    "dateLastUsed": 1699490160000
+  },
+  {
+    "id": "e136",
+    "title": "The origin and history of constellations",
+    "url": "https://www.britannica.com/science/constellation-astronomy",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1743156720000
+  },
+  {
+    "id": "e137",
+    "title": "Tsundoku: the art of buying books and never reading them",
+    "url": "https://www.bbc.com/culture/article/20220117-tsundoku-the-art-of-buying-books-and-never-reading-them",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1701909360000,
+    "dateLastUsed": 1748219760000
+  },
+  {
+    "id": "e138",
+    "title": "Tips for keeping up extensive reading",
+    "url": "https://www.fluentu.com/blog/extensive-reading/",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1729859760000
+  },
+  {
+    "id": "e139",
+    "title": "Books to read before your first stock purchase",
+    "url": "https://www.nerdwallet.com/article/investing/best-investing-books",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1720087920000
+  },
+  {
+    "id": "e140",
+    "title": "The Pomodoro Technique in practice",
+    "url": "https://francescocirillo.com/products/the-pomodoro-technique",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1713374640000
+  },
+  {
+    "id": "e141",
+    "title": "Minimum spanning tree: Prim's algorithm, explained",
+    "url": "https://www.geeksforgeeks.org/prims-minimum-spanning-tree-mst-greedy-algo-5/",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1697114160000
+  },
+  {
+    "id": "e142",
+    "title": "Tonight's night sky guide",
+    "url": "https://in-the-sky.org/",
+    "folderPath": [
+      "Read Later"
+    ],
+    "dateAdded": 1788145200000,
+    "dateLastUsed": 1789423920000
+  },
+  {
+    "id": "e143",
+    "title": "Google",
+    "url": "https://www.google.com/",
+    "folderPath": [],
+    "dateAdded": 1648540080000,
+    "dateLastUsed": 1790210160000
+  },
+  {
+    "id": "e144",
+    "title": "GitHub",
+    "url": "https://github.com/",
+    "folderPath": [],
+    "dateAdded": 1597875120000,
+    "dateLastUsed": 1790296560000
+  },
+  {
+    "id": "e145",
+    "title": "Gmail",
+    "url": "https://mail.google.com/",
+    "folderPath": [],
+    "dateAdded": 1660601520000,
+    "dateLastUsed": 1790115120000
+  },
+  {
+    "id": "e146",
+    "title": "YouTube",
+    "url": "https://www.youtube.com/",
+    "folderPath": [],
+    "dateAdded": 1608770160000,
+    "dateLastUsed": 1790210160000
+  },
+  {
+    "id": "e147",
+    "title": "X",
+    "url": "https://x.com/home",
+    "folderPath": [],
+    "dateAdded": 1645654320000,
+    "dateLastUsed": 1790192880000
+  },
+  {
+    "id": "e148",
+    "title": "Amazon.com",
+    "url": "https://www.amazon.com/",
+    "folderPath": [],
+    "dateAdded": 1672213680000,
+    "dateLastUsed": 1790305200000
+  },
+  {
+    "id": "e149",
+    "title": "Notion",
+    "url": "https://www.notion.so/",
+    "folderPath": [],
+    "dateAdded": 1624235760000,
+    "dateLastUsed": 1790382960000
+  },
+  {
+    "id": "e150",
+    "title": "DeepL Translator",
+    "url": "https://www.deepl.com/translator",
+    "folderPath": [],
+    "dateAdded": 1679263920000,
+    "dateLastUsed": 1790106480000
+  },
+  {
+    "id": "e151",
+    "title": "Wikipedia",
+    "url": "https://en.wikipedia.org/",
+    "folderPath": [],
+    "dateAdded": 1635856560000,
+    "dateLastUsed": 1790115120000
+  },
+  {
+    "id": "e152",
+    "title": "Weather.com",
+    "url": "https://weather.com/",
+    "folderPath": [],
+    "dateAdded": 1633808880000,
+    "dateLastUsed": 1790374320000
+  },
+  {
+    "id": "e153",
+    "title": "Google Calendar",
+    "url": "https://calendar.google.com/",
+    "folderPath": [],
+    "dateAdded": 1650579120000,
+    "dateLastUsed": 1790028720000
+  },
+  {
+    "id": "e154",
+    "title": "Google Maps",
+    "url": "https://maps.google.com/",
+    "folderPath": [],
+    "dateAdded": 1598272560000,
+    "dateLastUsed": 1790123760000
+  },
+  {
+    "id": "e155",
+    "title": "How to find constellations using the Big Dipper",
+    "url": "https://skyandtelescope.org/observing/how-to-find-the-big-dipper/",
+    "folderPath": [],
+    "dateAdded": 1788318000000,
+    "dateLastUsed": 1788905520000
+  },
+  {
+    "id": "e156",
+    "title": "Spot the Station - track the ISS",
+    "url": "https://spotthestation.nasa.gov/",
+    "folderPath": [],
+    "dateAdded": 1787471280000
+  }
+]

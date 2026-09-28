@@ -1,12 +1,14 @@
 import type { BookmarkSourceKind } from "../bookmarks/types";
+import type { Lang } from "../i18n";
 
 /**
  * IndexedDB。埋め込みベクトル（384 次元の float32）と、配置・星座（M2 / M4）を置く。
  * 画面を開くたびに再計算しないための土台。依存なしの薄い包み。
  *
- * DB はデータ源ごとに分ける（bukusupe-chrome / bukusupe-sample）。
+ * DB はデータ源ごとに分ける（bukusupe-chrome / bukusupe-sample-ja / bukusupe-sample-en）。
  * 一つにすると、サンプルと実ブックマークを行き来したときに、相手の埋め込みを「消えた分」として
  * 削除し、星座のメンバーを空にし、相手の平均ベクトルを使い回してしまう。
+ * サンプルは画面の言語ごとにブックマークが違う（段階 3c）ので、言語ごとにも DB を分ける。
  */
 let dbName: string | null = null;
 const DB_VERSION = 2;
@@ -23,10 +25,10 @@ export type StoredEmbedding = {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
-/** どのデータ源の DB を使うか。最初に DB を開く前に一度だけ決める。 */
-export function useDataSource(kind: BookmarkSourceKind, bench?: string): void {
+/** どのデータ源の DB を使うか。最初に DB を開く前に一度だけ決める。sampleLang はデータ源が sample のときだけ要る。 */
+export function useDataSource(kind: BookmarkSourceKind, bench?: string, sampleLang?: Lang): void {
   // bench は測定（?debug=1&bench=…）のときだけ。生成したブックマークの DB を、サンプルの DB と分ける
-  const next = __DEBUG__ && bench ? `bukusupe-bench-${bench}` : `bukusupe-${kind}`;
+  const next = __DEBUG__ && bench ? `bukusupe-bench-${bench}` : kind === "sample" ? `bukusupe-sample-${sampleLang}` : `bukusupe-${kind}`;
   if (dbPromise && next !== dbName) throw new Error("DB を開いた後にデータ源は変えられない");
   dbName = next;
 }
