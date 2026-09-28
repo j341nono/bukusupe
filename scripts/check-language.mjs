@@ -141,7 +141,7 @@ async function tour(lang) {
       placeholder: document.getElementById('search-input')?.placeholder })`);
     const want = lang === "ja"
       ? { lang: "ja", heading: "ブクスペを始める前に", start: "始める", placeholder: "星を探す" }
-      : { lang: "en", heading: "Before you start Bukusupe", start: "Start", placeholder: "Search the stars" };
+      : { lang: "en", heading: "Before you begin", start: "Start", placeholder: "Search the stars" };
     check(first?.lang === want.lang && first.heading === want.heading && first.start === want.start && first.placeholder === want.placeholder &&
       first.picker === "auto",
       `「自動」で、ブラウザの言語が${tag}なら${tag}で表示される（初回の説明画面から。言語の選択欄は「自動」）`,
@@ -243,7 +243,7 @@ async function switching() {
     const after = await evalIn("document.querySelector('#first-run h1').textContent");
     await pick("first-run-lang-select", "auto");
     const back = await evalIn("document.querySelector('#first-run h1').textContent");
-    check(before === "ブクスペを始める前に" && after === "Before you start Bukusupe" && back === before,
+    check(before === "ブクスペを始める前に" && after === "Before you begin" && back === before,
       "初回の説明画面に言語の選択欄があり、切り替えると説明画面の文言がその場で変わる", `${before} → ${after} → ${back}`);
     await evalIn("document.getElementById('first-run-start').click()");
     await waitUntil(`document.body.dataset.phase === 'ready' && ${b}?.state.kind === 'sample'`, 300_000, 500);

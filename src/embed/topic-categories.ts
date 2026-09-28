@@ -32,7 +32,7 @@ export const CATEGORIES: readonly TopicCategory[] = [
     words: "カレンダー メモ モニターアーム 予報 予定 仕事 作業環境 保管 天気 家電 暮らし 翻訳 英語 言語 連絡" },
   { id: "shopping", ja: "買い物", en: "Shopping",
     words: "中古 個人売買 買い物 通販 キーボード 入力機器" },
-  { id: "docs", ja: "文書", en: "Documents",
+  { id: "docs", ja: "文書", en: "Docs & notes",
     words: "ファイル 文書 表計算" },
   { id: "chat", ja: "対話", en: "Messaging",
     words: "チャット メール 対話" },

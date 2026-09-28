@@ -256,7 +256,8 @@
         display: none; position: fixed; left: 50%; bottom: 18px; z-index: 5; transform: translateX(-50%);
         padding: 9px 18px 8px; border: 1px solid var(--faint); border-radius: 8px;
         background: rgba(7, 10, 24, 0.72); color: var(--ink); font-size: 12px; letter-spacing: 0.04em;
-        text-align: center; white-space: nowrap; pointer-events: none;
+        text-align: center; pointer-events: none;
+        max-width: min(920px, calc(100vw - 180px));
       }
       #flight-help span { margin: 0 9px; }
       #flight-help p { margin: 5px 0 0; font-size: 11px; color: var(--dim); }
@@ -264,7 +265,8 @@
         display: inline-block; min-width: 1.6em; margin: 0 2px; padding: 0 5px;
         border: 1px solid var(--hairline); border-radius: 3px; font: inherit; font-size: 11px; line-height: 1.6;
       }
-      body.is-flying #flight-help { display: block; }
+      body.is-flying #flight-help { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; row-gap: 4px; }
+      body.is-flying #flight-help p { flex-basis: 100%; }
       #flight-help { transition: opacity 0.9s ease; }
       /* 入って約 10 秒後：左下の小さな 1 行に。窓や星に重ならないように */
       #flight-help.is-compact {
