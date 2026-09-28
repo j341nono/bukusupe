@@ -12,27 +12,35 @@
 
 - Chrome ウェブストアでの公開の準備中。版は `0.9.0`（限定公開の間は `0.9.x`、一般公開で `1.0.0`。`public/manifest.json`・`package.json`・git のタグをそろえ、`CHANGELOG.md` に書く）。
   ハッカソンで提出した状態はタグ `v0.1.0-hacksonic`。
-- 段階 1（安全性）・段階 2（ストア向けのビルド）は完了。段階 3 は、資料・自動確認・使う人の 6 点の回答の反映まで完了
-  （最新の `82c5673`：初回の説明と「始める」による同意、モデルの版の固定と SHA-256 の照合、ストア用アイコンの余白、星のタイトルのダブルクリック）。
+- 段階 1（安全性）・段階 2（ストア向けのビルド）は完了。段階 3 は、資料・自動確認・使う人の 6 点の回答の反映まで完了（push の後の確認が残る）。
+- **段階 3b（画面の言語の切り替え。英語対応を段階 7 から 0.9.0 の前へ前倒し）は完了**（2026-09-28、[記録](history/2026-09-28-stage3b-language.md)）。
+  画面の文言はすべて辞書（`src/i18n/en.ts`・`ja.ts`）にあり、設定「自動／English／日本語」（初期値は自動＝ブラウザの言語が日本語なら日本語、それ以外は英語）を
+  ⓘ のパネルと初回の説明画面で選べる。**読み込み直さずにその場で切り替わり**、localStorage `bukusupe:lang` に保存する。拡張機能の名前と説明は `_locales`（既定は英語）。
+  星団名は言語に依らない形（大分類の id）で保存し、表示のときに言語の名前にする。英語の見出しはセリフ体。ストアは英語を主の掲載にし（`docs/store/listing.en.md`）、
+  スクリーンショットは英語と日本語の 2 組、宣伝用の画像は英語の文字だけ。README は英語が主（日本語は `README.ja.md`）。
 - 段階 5 のうち、星座のメンバーの固定と新星・選択モード・飛行モードの操作の見直しは、先に完了している。
-- 最後の `check:ext` は 16 本すべて OK。ヘッドレス描画のコマ数は揺れるので、しきい値付近の NG は単独で測り直してから判断する。
-- 選択モードのダブルクリックを変えた（2026-09-28、使う人の依頼）：選択モード中も星・タイトルのダブルクリックで同じタブに開く。
-  1 回目と 2 回目のクリックで選ぶ・外すが切り替わって元に戻るので、選んだ状態は変わらない。「戻る」用の保存状態（`src/ui/return-state.ts`）は
-  版 3 にし、選択モードで選んでいた星（`selection`、選択モードでなければ `null`）を持つ。「戻る」で帰ると同じ星を選んだ選択モードから再開する（消えた星は除く）。
-  版 2 以前の保存状態は捨てる。確認は `check-selection` の 6（本物のマウスのダブルクリック、Fetch で移動先を差し替えて「戻る」）。
+- 最後の `check:ext` は 18 本すべて OK（`check-i18n`・`check-language` を足した）。ヘッドレス描画のコマ数は揺れるので、しきい値付近の NG は単独で測り直してから判断する。
 
 ### 次にやること（詳しくは `docs/RELEASE.md`）
 
 | 順 | 内容 | 状態 |
 |---|---|---|
-| 1 | 段階 3 の残り：push の後にプライバシーポリシー（`/bukusupe/privacy/`）が開けること、使う人の了承、ダッシュボードでの最終確認 | 使う人待ち |
-| 2 | 段階 4：`0.9.0` を限定公開で申請し、試してもらう | 未着手（登録は使う人） |
-| 3 | 段階 5 の残り：多い件数、データの管理とバックアップ、動きを減らす設定、WebGL が無い環境、報告の窓口 | 未着手 |
-| 4 | 段階 6（1.0.0 の一般公開）・段階 7（英語対応、片付け、フォルダの自動星座など） | 未着手 |
+| 1 | 段階 3 の残り：push の後にプライバシーポリシー（`/bukusupe/privacy/`）が開けること、使う人の了承（英語の掲載文・英語の画面の画像を含む）、ダッシュボードでの最終確認（英語を主、日本語を追加の掲載として入れる） | 使う人待ち |
+| 2 | 段階 3c：英語のサンプルの宇宙（英語のブックマークのサンプルと計算済みのデータ、英語の検索の正解数、英語のサンプルでの画像の撮り直し） | 未着手 |
+| 3 | 段階 4：`0.9.0` を限定公開で申請し、試してもらう | 未着手（登録は使う人。3c を申請の前に入れるかは使う人と決める） |
+| 4 | 段階 5 の残り：多い件数、データの管理とバックアップ、動きを減らす設定、WebGL が無い環境、報告の窓口 | 未着手 |
+| 5 | 段階 6（1.0.0 の一般公開）・段階 7（片付け、フォルダの自動星座など） | 未着手 |
 
 ### 今の作業で気をつけること
 
-- **一緒に直すもの**：manifest の name・description・permissions → `docs/store/` の掲載文と申告（`check-store`）。
+- **画面の文言は辞書を通す**（SPEC 14 章）：`src/` の画面の部品と `index.html` に日本語を直書きすると `check-i18n` が NG にする。文言を足すときは
+  `src/i18n/ja.ts` と `en.ts` の両方に同じ項目を足す（英語の辞書は型で過不足を弾く）。`index.html` は `data-i18n` などの属性で項目の名前だけを持つ。
+  切り替えたときに描き直す動く文言は、`main.ts` の `refreshLanguage` と `hud.ts` の `redraw` に入れる。英語は日本語より長くなりやすいので、
+  部品を足したら `check-language`（英語の画面のはみ出し・重なり）を走らせる。
+- **確認の Chrome の言語**：`scripts/lib/harness.mjs` の `lang`（既定 `"ja"`、`--lang`・`--accept-lang`）。既存の確認は日本語の画面で文言を見ている。
+  macOS では Chrome 自体の言語（`_locales` の選び方・インストール時の警告）は変えられない。
+- **星団名**：保存する名前は `{dev}+{news}` のような形（`src/layout/names.ts`）。画面に出すときは必ず `clusterLabel()` を通す。確認用の窓口の `layout()` の `name` は表示名、`key` が保存の形。
+- **一緒に直すもの**：`_locales` の name・description と permissions → `docs/store/` の掲載文（英語と日本語）と申告（2 つ）（`check-store`）。
   通信先・保存場所 → `privacy/index.html`（`check-web`）。版 → manifest・`package.json`・`CHANGELOG.md`（ずれるとビルドが失敗する）。
 - **問い合わせ先**：`src/config.ts` の `SUPPORT_EMAIL`（仮の値に戻すと `npm run package` が失敗する）と GitHub の Issues。
   Markdown の文書にはアドレスを `j341nono.dev [at] gmail.com` の形で書く（`privacy/index.html` と `check-web` はそのまま）。
@@ -46,7 +54,7 @@
 
 終えた段階の記録は `docs/history/` にある（[一覧](history/README.md)）。
 段階 1 [安全性](history/2026-09-28-stage1-security.md)・段階 2 [ストア向けのビルド](history/2026-09-28-stage2-store-build.md)・
-段階 3 [掲載の資料](history/2026-09-28-stage3-store-materials.md)・段階 5 [星座の固定と新星](history/2026-09-28-stage5-constellation-members.md)・
+段階 3 [掲載の資料](history/2026-09-28-stage3-store-materials.md)・段階 3b [画面の言語](history/2026-09-28-stage3b-language.md)・段階 5 [星座の固定と新星](history/2026-09-28-stage5-constellation-members.md)・
 [選択モード](history/2026-09-28-stage5-selection-mode.md)・[飛行の操作](history/2026-09-28-stage5-flight-controls.md)・
 [正式公開の出発点](history/2026-09-27-release-start.md)・ハッカソン期間（[到達点](history/2026-09-26-hackathon-m2-m4.md)・
 [〜09-26 の記録](history/2026-09-26-hackathon-m6-flight.md)・[09-27 の記録](history/2026-09-27-hackathon-final.md)）。
@@ -296,9 +304,11 @@ npm run build:debug  # 確認用のビルドを dist-debug/ に生成（check:ex
 npm run package    # 配布用のビルドから、ストアに上げる zip を release/ に作る
 npm run typecheck  # tsc --noEmit
 npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
-npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ → キャッシュの名前 → 星座 → 選択モード。30 分ほど）
+npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ → キャッシュの名前 → 星座 → 選択モード → 画面の言語。35 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 npm run check:web    # Web のデモの確認だけ
+npm run check:i18n   # 辞書のそろい・辞書を通さない日本語が無いこと（ブラウザを使わない。数秒）
+npm run check:language  # 画面の言語（自動・切り替え・保持・英語と日本語の画面のはみ出しと重なり。5 分ほど）
 npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す
 npm run bench        # 時間とメモリの測定（2〜3 時間。--only=run1 / run2 / <項目>）。npm run bench:report で報告書だけ作り直す
 npm run icons      # アイコン PNG を作り直す
@@ -327,7 +337,9 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
 
 `check:ext` は、はじめに確認用のビルド（`dist-debug/`・`dist-web-debug/`）を作ってから、次の順に動かす：`check-dist`（コミットされる `dist/` が
 配布用のビルドと一致）→ `check-release`（配布用の中身・版・zip）→ `check-store`（掲載文・申告・画像）→ `check-fresh`（配布用の `dist/` をまっさらなプロファイルで。権限なしで意味検索、
-`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-flight-controls` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache` → `check-constellation` → `check-selection`（`check-extension` から後は確認用のビルド）。
+`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-flight-controls` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache` → `check-constellation` → `check-selection` → `check-model-consent` → `check-label-open` → `check-i18n`（辞書とソース）→ `check-language`（画面の言語）
+（`check-extension` から後は確認用のビルド）。確認の Chrome のブラウザの言語は日本語（`harness.mjs` の `lang`。英語の画面は `check-language`・`check-web` の 7・`store-assets` が開く）。
+`check-store` は、掲載文（英語が主・日本語）と `_locales` の一致、2 つの申告の権限の表、インストール時の警告、画像 13 枚（スクリーンショットは `en/`・`ja/`）を見る。
 以下の番号は `check-extension` の項目。
 
 1. 拡張機能として読み込め、専用ページが開く
@@ -416,13 +428,13 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
 | `src/embed/ensure.ts` | 足りない分だけ埋め込む。進み具合を流す |
 | `src/embed/text.ts` | 入力文の組み立てとハッシュ |
 | `src/embed/domain-hints.ts` | ドメイン → 分野語の辞書（星団の名前にも使う） |
-| `src/embed/topic-categories.ts` | 分野語から星団名に使う大分類への対応 |
+| `src/embed/topic-categories.ts` | 分野語から星団名に使う大分類への対応。大分類は id と日本語・英語の名前を持つ |
 | `src/store/db.ts` | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごと（`bukusupe-chrome` / `bukusupe-sample`）。`meta` に `mean-vector`（データ源つき） / `generality` / `layout` |
 | `src/constellation/index.ts` | 星座の保存形式、メンバーの集合、決定的なプリム法 |
 | `src/layout/index.ts` | 配置の本体。`computeLayout` / `addStar` / `dropMissing` と各種の係数 |
 | `src/layout/kmeans.ts` `pca.ts` `pack.ts` `spiral.ts` `refine.ts` | 配置の部品。すべて決定的 |
 | `src/layout/vector.ts` | 平均引き・正規化・汎用度・標準化 |
-| `src/layout/names.ts` | 星団の名前 |
+| `src/layout/names.ts` | 星団の名前（言語に依らない形で作る。表示は `clusterLabel`） |
 | `src/search/index.ts` | 文字一致、平均を引いた意味検索、汎用度補正、z 値での正規化と順位 |
 | `src/layout/provisional.ts` | 埋め込みが揃うまでの仮の配置（フォルダごとの螺旋） |
 | `src/render/scene.ts` | three.js のシーン、カメラ、拡大率の段階、ラベルの組み立て |
@@ -430,7 +442,11 @@ URL に `?sample=1` を付けると拡張機能内でも強制的にサンプル
 | `src/render/stars.ts` | 星の描画（`Points` 1 つ）と位置の移り変わり |
 | `src/render/nebula.ts` | 星雲のもや |
 | `src/render/present.ts` | 配置 → 描画用の形への変換 |
-| `src/ui/hud.ts` | 左上のパネルと `body.dataset.phase` |
+| `src/ui/hud.ts` | 左上のパネル（中身は `#hud-body`、言語の選択欄はその外）と `body.dataset.phase` |
+| `src/i18n/index.ts` | 画面の言語（設定の保存、自動の判定、`t()`、`applyStaticText`、`setRichText`、言語の選択欄、`onLangChange`） |
+| `src/i18n/ja.ts` `en.ts` | 画面の文言の辞書（項目の名前をそろえる） |
+| `src/i18n/cluster.ts` | 保存した星団名（`{dev}+{news}` など）を画面の言語の名前にする `clusterLabel` |
+| `public/_locales/` | 拡張機能の名前・説明・ボタンの説明（en・ja。`default_locale` は en） |
 | `src/ui/labels.ts` | タイトルの重ね表示（配置規則と間引き、種類ごとの書体での幅の測定） |
 | `docs/DESIGN.md` | 見た目の方向性、配色と書体の規則、8 つの案と状態 |
 | `scripts/check-extension.mjs` | 自動確認（CDP パイプ） |
@@ -471,22 +487,24 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 ```
 .
 ├── CLAUDE.md / AGENTS.md    # 同じ内容（エージェント向けの作業規則）
-├── README.md                # 審査員・使う人向け（導入手順、使い方、権限、プライバシー）
+├── README.md                # 使う人向け（英語が主。導入手順、使い方、権限、プライバシー）。日本語は README.ja.md
 ├── THIRD_PARTY_NOTICES      # 第三者のライセンス（scripts/gen-notices.mjs で作る）。licenses/ に ONNX Runtime の表示
 ├── .github/workflows/pages.yml  # Web のデモを GitHub Pages に公開
 ├── docs/
 │   ├── SPEC.md              # 仕様書（正典）
 │   ├── PLAN.md              # ハッカソンまでの実装計画・完了条件（M0〜M6）
 │   ├── RELEASE.md           # 正式公開までの計画・版の番号の決まり・決めたこと
-│   ├── store/               # ストアの掲載文（listing.ja.md）、プライバシーの申告の案（privacy-practices.md）、掲載用の画像（assets/）
+│   ├── store/               # ストアの掲載文（listing.en.md が主、listing.ja.md）、プライバシーの申告の案（privacy-practices.md・.en.md）、掲載用の画像（assets/。スクリーンショットは en/・ja/）
 │   ├── SECURITY.md          # 安全性（表示と遷移の経路、保存データの確かめ、設定、依存関係）
 │   ├── HANDOFF.md           # 引き継ぎ資料（0 章に今の状態と残りのタスク、6 章にハッカソン期間の記録）
 │   ├── DESIGN.md            # 見た目の規則と案
-│   └── screens/             # check:ext が保存する画面と結果。before/ はデザイン見直し前
+│   ├── history/             # 終えた段階の記録
+│   └── screens/             # check:ext が保存する画面と結果。before/ はデザイン見直し前、i18n/ は英語と日本語の主な画面
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
 ├── privacy/index.html       # プライバシーポリシー（日本語・英語）。Web のデモと一緒に GitHub Pages の /bukusupe/privacy/ に出す
 ├── public/
-│   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる）
+│   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる。名前と説明は __MSG_…__）
+│   ├── _locales/            # 拡張機能の名前と説明（en・ja）
 │   ├── icons/               # 16 / 32 / 48 / 128 px（npm run icons で作る。しおりの形の星座）
 │   └── ort/                 # ONNX Runtime の .mjs / .wasm（生成物。git には入れない）
 ├── scripts/
@@ -508,6 +526,8 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-idle.mjs       # 動きがあるときだけ描く（止まる・すぐ再開する・止まった画面が正しい）
 │   ├── check-today.mjs      # 星の新しさの「今日」（サンプルは基準日に固定、自分のブックマークは実際の今日）
 │   ├── check-safety.mjs     # 安全性（HTML として解釈しない・http(s) だけ開く・保存状態の確かめ・書字の向き・長いタイトル）
+│   ├── check-i18n.mjs       # 辞書の項目のそろい・_locales・大分類の英語名・辞書を通さない日本語が無いこと
+│   ├── check-language.mjs   # 画面の言語（自動・切り替え・保持・主な画面のはみ出しと重なり、docs/screens/i18n/）
 │   ├── precompute-sample.mjs  # Web のデモに同梱する計算済みのサンプルを作る
 │   ├── gen-notices.mjs      # THIRD_PARTY_NOTICES を作る
 │   ├── bench/               # 時間とメモリの測定（npm run bench → docs/bench/results/、npm run bench:report → docs/BENCHMARK.md）
@@ -525,6 +545,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── debug/               # 測定用の時間の記録（?debug=1 のときだけ使う）
 │   ├── render/              # three.js の描画（星・星雲・ブラックホール・星座の線）
 │   ├── ui/                  # HUD とラベルの重ね表示
+│   ├── i18n/                # 画面の言語（辞書 en・ja、言語の設定、星団名の表示）
 │   └── data/                # sample-bookmarks.json（156 件）、sample-precomputed.json（Web のデモ用の計算済み）
 ├── dist/                    # 配布用のビルド（拡張機能として読み込む・ストアの zip の元）。**リポジトリに含める**（審査員はビルドしない）
 ├── dist-debug/              # 確認用のビルド（?debug=1 の窓口・測定用の仕組みを含む。check:ext と bench が使う。git には入れない）
