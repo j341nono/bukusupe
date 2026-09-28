@@ -28,7 +28,7 @@
 | — | **使う人に頼むこと**：問い合わせのメールアドレス（`src/config.ts` の `SUPPORT_EMAIL`。仮の値のままだと `npm run package` が失敗する）、ONNX Runtime Web を正式版に替えるか（今は替えない） | 待ち |
 | 3 | プライバシーポリシーのページ、ストアの掲載文、権限ごとの説明文、掲載用の画像 | **次に行う** |
 | 4 | 限定公開（0.9.x）で申請し、試してもらう | 未着手（ストアの登録は使う人） |
-| 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 星座のメンバーの固定と新星だけ**完了（2026-09-28、先に行った）**。残りは未着手 |
+| 5 | 利用者のための修正（多い件数、星座のメンバーの固定と新星、データの管理、動きを減らす設定、WebGL が無い環境、報告の窓口） | 星座のメンバーの固定と新星、選択モード（追加）は**完了（2026-09-28、先に行った）**。残りは未着手 |
 | 6 | 1.0.0 として一般公開 | 未着手 |
 | 7 | 伸ばすための機能（英語対応、片付け、フォルダの自動星座、検索候補、新しいタブ版） | 未着手 |
 
@@ -65,6 +65,23 @@
 - `hud.ts` の `innerHTML` を要素の組み立てに替えた（`src/` に HTML として解釈する処理は無い）。
 - Web のデモの index.html に CSP（`vite.config.ts` の `WEB_CSP`、`--mode web` のときだけ）。
 - 確認用の窓口に `openUrl`・`returnStateInfo`・`focusCluster` を足した（`?debug=1` のときだけ。段階 2 で配布物から取り除く）。
+
+### 選択モード（2026-09-28、使う人の依頼で追加。`docs/RELEASE.md` 段階 5 の 2b）
+
+星座を、検索とは関係なく地図のどこからでも作れるようにした（`docs/SPEC.md` 9 章「作る流れ（選択モード）」）。
+- 状態は `main.ts` の `selection`（選んだ星の id の集合。null なら選択モードではない）。入る・抜けるは `setSelecting`、表示の更新は `refreshSelection`。
+  前の「編集状態」（`editing`・pinned / excluded）は無くし、検索の「星座にする」は上位 12 を選んだ状態で選択モードに入る入口にした。
+- 入口は右下の「選択」ボタン（`#select-toggle`）と **C** キー（文字の入力中・飛行中は無効）。Esc は、開いている小さな一覧 → 選択モード → 星座の選択、の順に一つずつ閉じる。
+  Esc の受け取りは `document` から `window` に移した（ページ内で `window` に出したキーの確認でも届くように）。
+- 選んだ星の表示は `SpaceView.setSelecting` と強調の種類 `"select"`（`src/render/stars.ts`）：金の輪、少し大きく明るく、選んでいない星は暗くしない。
+  タイトルはふつうの地図の出し方のまま、選んだ星だけ優先（`priority -4000`、明るさ 1、星団の円でも間引かない）。
+- Shift＋ドラッグは、`window` の取り込み段階で `pointerdown` を受けて止め、MapControls に渡さない（画面を動かさない）。四角は `#select-rect`。
+  範囲の判定は `SpaceView.starsInRect`（表示している位置を投影）。ほとんど動かさなければ、ふつうのクリックとして扱う。選択モードでは Shift で拡大しない（`applyKeys`）。
+- まとめて行う操作は画面の下の `#selection-bar`。「新しい星座にする」は名前の入力（`#constellation-name-input`・`#constellation-save`、前と同じ id）を開き、
+  検索中なら検索語と埋め込みを記録して `createConstellation` を呼ぶ（保存の演出は前のまま）。「既存の星座に加える」は `#selection-targets` の一覧から。
+  「星座から外す」は星座を選んでいるときだけ使え、外した星は `dismissed` に入れる（新星として出し直さない）。すべてのメンバーは外せない。加える・外すの後はその星座を選んで見せる。
+- 選択モードの間は、ダブルクリックで開かず、飛行モードに入らず、新星の一覧を出さない。カメラの寄せ（`safeRect`）は `#selection-bar` を避ける。
+- 確認：`scripts/check-selection.mjs`（新規）。星の選択は CDP のマウスのクリック、キーはページ内の KeyboardEvent。`check-extension` の編集状態の確認は選択モードに書き換えた。
 
 ### 段階 5 から先に行ったこと：星座のメンバーの固定と新星（2026-09-28）
 
@@ -461,7 +478,7 @@ npm run icons      # アイコン PNG を作り直す
 
 `check:ext` は、はじめに確認用のビルド（`dist-debug/`・`dist-web-debug/`）を作ってから、次の順に動かす：`check-dist`（コミットされる `dist/` が
 配布用のビルドと一致）→ `check-release`（配布用の中身・版・zip）→ `check-fresh`（配布用の `dist/` をまっさらなプロファイルで。権限なしで意味検索、
-`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache` → `check-constellation`（`check-extension` から後は確認用のビルド）。
+`?debug=1` でも窓口が無い）→ `check-extension` → `check-flight` → `check-idle` → `check-today` → `check-safety` → `check-web` → `check-cache` → `check-constellation` → `check-selection`（`check-extension` から後は確認用のビルド）。
 以下の番号は `check-extension` の項目。
 
 1. 拡張機能として読み込め、専用ページが開く

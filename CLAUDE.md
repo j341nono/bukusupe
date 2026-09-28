@@ -28,7 +28,7 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 |---|---|
 | 拡張機能 | Manifest V3（`public/manifest.json` を手書き。crxjs 等のプラグインは使わない） |
 | 言語・ビルド | TypeScript + Vite（`index.html` と `src/background.ts` の 2 エントリ） |
-| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄（入力中は無効、Ctrl は使わない） |
+| 描画 | three.js。`MapControls` は自由回転を無効にし、左ドラッグで移動・ホイールで拡大縮小。右ドラッグの上下で傾きだけを変える（真上から 0〜60 度、地図の方角は回さない）。キー操作は W・A・S・D で移動、Space で縮小、Shift で拡大、「/」で検索欄、C で選択モード（星を選んで星座にする。Shift＋ドラッグで範囲選択、その間は Shift で拡大しない）、F で飛行モード（入力中は無効、Ctrl は使わない） |
 | 埋め込み | `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（`dtype: "q8"`＝`onnx/model_quantized.onnx`）、WASM バックエンド、Web Worker |
 | 保存 | IndexedDB（`embeddings` / `meta` / `constellations`）。DB はデータ源ごとに分ける（`bukusupe-chrome` / `bukusupe-sample`） |
 | 権限 | `bookmarks`, `unlimitedStorage`, `favicon`（飛行モードの窓のアイコン。インストール時の警告が 1 つ増える）。host_permissions は無し（Hugging Face が CORS を許すので、重みは権限なしで取れる）。確認用のビルドだけ `storage`（確認用の注入） |
@@ -66,6 +66,7 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-release.mjs    # 配布用のビルドに確認用の仕組みが残っていない・版ずれと仮の問い合わせ先で失敗する
 │   ├── check-cache.mjs      # モデルのキャッシュの名前（前の版の壊れたキャッシュがあっても動く）
 │   ├── check-constellation.mjs  # 星座のメンバーの固定・新星（加える／見送る）・旧形式の移行・検索語の無い星座
+│   ├── check-selection.mjs  # 選択モード（出入り・選ぶ・Shift＋ドラッグ・移動しても残る・新しい星座／加える／外す・60 コマ）
 │   ├── package.mjs          # ストアに上げる zip を作る（npm run package）
 │   ├── check-fresh.mjs      # git の index の dist/ を、まっさらなプロファイルで初回起動
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
@@ -107,7 +108,7 @@ npm run build:debug  # 確認用のビルドを dist-debug/ に生成（check:ex
 npm run package    # 配布用のビルドから、ストアに上げる zip を release/ に作る
 npm run typecheck  # tsc --noEmit
 npm run build:web  # Web のデモ（サンプルだけで動く版）を dist-web/ に作る
-npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ → キャッシュの名前 → 星座。30 分ほど）
+npm run check:ext    # 通しの自動確認（dist/ の一致 → 初回起動 → 拡張機能 → 飛行 → 止まる描画 → 今日の固定 → 安全性 → Web のデモ → キャッシュの名前 → 星座 → 選択モード。30 分ほど）
 npm run check:flight # 飛行モードの確認だけ（2〜3 分）
 npm run check:web    # Web のデモの確認だけ
 npm run sample:precompute  # サンプル・入力文・配置の計算・モデルを変えたら、Web のデモ用の計算済みを作り直す

@@ -156,7 +156,7 @@ type Constellation = {
   id: string;
   name: string;            // 検索から作ったときの初期値は検索語。書き換え可
   source: "search" | "selection" | "folder";  // 作り方（検索から／選択モード／フォルダ）
-  members: string[];       // メンバーのブックマークの id。保存した時点で固定（加える・見送る・削除への追随だけで変わる）
+  members: string[];       // メンバーのブックマークの id。保存した時点で固定（選択モードの加える・外す、新星の加える、削除への追随だけで変わる）
   query?: string;          // 検索から作ったときの検索語（記録。新星を探すのに使う）
   queryVector?: number[];  // 検索語の埋め込み（記録）
   folderId?: string;       // source が folder のとき
