@@ -22,6 +22,8 @@ Chrome のブックマークを「星」として意味的に配置し、検索�
 - Manifest V3。`public/manifest.json` は手書き（crxjs 等は使わない）。TypeScript + Vite。描画は three.js。
 - 埋め込みは `@huggingface/transformers` v4 + `Xenova/multilingual-e5-small`（q8、WASM、Web Worker）。保存は IndexedDB（データ源ごとに DB を分ける）。
 - 権限は `bookmarks`・`unlimitedStorage`・`favicon`。host_permissions は無し。確認用のビルドだけ `storage`。
+- 画面の文言は英語と日本語の辞書（`src/i18n/en.ts`・`ja.ts`）を通す（SPEC 14 章）。拡張機能の名前と説明は `public/_locales/`（既定は英語）。
+  画面の部品に日本語を直書きしない（`check-i18n` が確かめる）。
 - CSP `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`（manifest の `content_security_policy.extension_pages`）は**外してはいけない。**
 - ビルドは 4 種：`dist/`（配布用。**リポジトリに含める**）、`dist-debug/`（確認用。`?debug=1` の窓口 `__bukusupe` あり）、`dist-web/`・`dist-web-debug/`（Web のデモ）。
   確認用・測定用のコードは `if (__DEBUG__) { … }` で囲む（クラスのメソッドは消えないので `viewDebug(view)` のような関数に分ける）。
@@ -38,7 +40,7 @@ npm run check:ext    # 通しの自動確認（30 分ほど。コミットの直
 ```
 
 個別の確認：`npm run build:debug >/dev/null && node scripts/check-<名前>.mjs`
-（`check:flight`・`check:web`・`check:idle`・`check:safety`・`check:store`・`check:release`・`check:dist` は npm の名前もある）。
+（`check:flight`・`check:web`・`check:idle`・`check:safety`・`check:store`・`check:release`・`check:dist`・`check:i18n`・`check:language` は npm の名前もある）。
 どの確認が何を見ているかは `docs/HANDOFF.md` 4 章。
 
 ## 作業の進め方

@@ -14,7 +14,8 @@
 | [2026-09-28-stage2-store-build.md](2026-09-28-stage2-store-build.md) | 段階 2：ストア向けのビルド（権限、配布用と確認用の分離、版、package、キャッシュ） |
 | [2026-09-28-stage3-store-materials.md](2026-09-28-stage3-store-materials.md) | 段階 3：プライバシーポリシー・掲載文・申告・画像、使う人への 6 つの質問、初回同意とモデルの照合、タイトルのダブルクリック |
 | [2026-09-28-stage5-constellation-members.md](2026-09-28-stage5-constellation-members.md) | 段階 5 の 2：星座のメンバーの固定と新星、旧形式の移行、Worker の init のつまずき |
-| [2026-09-28-stage5-selection-mode.md](2026-09-28-stage5-selection-mode.md) | 段階 5 の 2b：選択モード |
+| [2026-09-28-stage5-selection-mode.md](2026-09-28-stage5-selection-mode.md) | 段階 5 の 2b：選択モード（追記：選択モード中のダブルクリックと「戻る」） |
 | [2026-09-28-stage5-flight-controls.md](2026-09-28-stage5-flight-controls.md) | 段階 5 の 2c：飛行モードの操作の見直し |
+| [2026-09-28-stage3b-language.md](2026-09-28-stage3b-language.md) | 段階 3b：画面の言語の切り替え（英語対応の前倒し）、星団名の保存の形、_locales、英語のストアの素材、確認の Chrome の言語 |
 
 新しく段階を終えたら、`docs/HANDOFF.md` の 0 章に書いていた記録をここへ `YYYY-MM-DD-<段階>.md` として移し、この表に 1 行足す。
