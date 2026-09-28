@@ -238,7 +238,9 @@ try {
   const storesUsed = namesAsync ? [namesAsync.idb.length && "IndexedDB", namesAsync.cache.length && "Cache Storage",
     namesAsync.local.length && "localStorage", namesAsync.session.length && "sessionStorage"].filter(Boolean) : [];
   const mustSay = ["huggingface.co", "*.hf.co", "IndexedDB", "Cache Storage", "localStorage", "sessionStorage", "GET",
-    "j341nono.dev@gmail.com", "https://github.com/j341nono/bukusupe/issues", "最終更新", "Last updated", 'lang="en"', 'lang="ja"'];
+    "j341nono.dev@gmail.com", "https://github.com/j341nono/bukusupe/issues", "最終更新", "Last updated", 'lang="en"', 'lang="ja"',
+    // 限定的な使用（Limited Use）の決まりが求める、拡張機能のサイトに置く宣言
+    "including the Limited Use requirements"];
   const missing = mustSay.filter((word) => !privacy.includes(word));
   check(privacyRes?.ok && existsSync(join(ROOT, "privacy", "index.html")) && missing.length === 0 && !/<script/i.test(privacy) &&
     /Content-Security-Policy/.test(privacy) && hostsSeen.length > 0 && hostsCovered && storesUsed.every((name) => privacy.includes(name)),
