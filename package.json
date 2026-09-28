@@ -21,7 +21,7 @@
     "check:release": "node scripts/check-release.mjs",
     "store:assets": "npm run build:debug >/dev/null && node scripts/store-assets.mjs",
     "check:store": "node scripts/check-store.mjs",
-    "check:ext": "npm run build:debug >/dev/null && npm run build:web:debug >/dev/null || exit 1; node scripts/check-dist.mjs; d=$?; node scripts/check-release.mjs; r=$?; node scripts/check-store.mjs; o=$?; node scripts/check-fresh.mjs; c=$?; node scripts/check-extension.mjs; e=$?; node scripts/check-flight.mjs; f=$?; node scripts/check-flight-controls.mjs; g=$?; node scripts/check-idle.mjs; i=$?; node scripts/check-today.mjs; t=$?; node scripts/check-safety.mjs; s=$?; node scripts/check-web.mjs; w=$?; node scripts/check-cache.mjs; k=$?; node scripts/check-constellation.mjs; n=$?; node scripts/check-selection.mjs; l=$?; node scripts/check-model-consent.mjs; m=$?; node scripts/check-label-open.mjs; p=$?; exit $((d | r | o | c | e | f | g | i | t | s | w | k | n | l | m | p))",
+    "check:ext": "npm run build:debug >/dev/null && npm run build:web:debug >/dev/null || exit 1; node scripts/check-dist.mjs; d=$?; node scripts/check-release.mjs; r=$?; node scripts/check-store.mjs; o=$?; node scripts/check-fresh.mjs; c=$?; node scripts/check-extension.mjs; e=$?; node scripts/check-flight.mjs; f=$?; node scripts/check-flight-controls.mjs; g=$?; node scripts/check-idle.mjs; i=$?; node scripts/check-today.mjs; t=$?; node scripts/check-safety.mjs; s=$?; node scripts/check-web.mjs; w=$?; node scripts/check-cache.mjs; k=$?; node scripts/check-constellation.mjs; n=$?; node scripts/check-selection.mjs; l=$?; node scripts/check-model-consent.mjs; m=$?; node scripts/check-label-open.mjs; p=$?; node scripts/check-i18n.mjs; x=$?; node scripts/check-language.mjs; y=$?; exit $((d | r | o | c | e | f | g | i | t | s | w | k | n | l | m | p | x | y))",
     "prebuild": "node scripts/copy-ort.mjs",
     "predev": "node scripts/copy-ort.mjs",
     "check:flight": "npm run build:debug >/dev/null && node scripts/check-flight.mjs && node scripts/check-flight-controls.mjs",
@@ -30,7 +30,9 @@
     "bench": "npm run build:debug >/dev/null && node scripts/bench/index.mjs",
     "bench:report": "node scripts/bench/report.mjs",
     "check:idle": "npm run build:debug >/dev/null && node scripts/check-idle.mjs",
-    "check:safety": "npm run build:debug >/dev/null && node scripts/check-safety.mjs"
+    "check:safety": "npm run build:debug >/dev/null && node scripts/check-safety.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:language": "npm run build:debug >/dev/null && node scripts/check-language.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

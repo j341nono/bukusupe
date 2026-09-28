@@ -1,0 +1,18 @@
+{
+  "extName": {
+    "message": "ブクスペ — ブックマークの宇宙",
+    "description": "Extension name (Chrome Web Store and the extensions page)."
+  },
+  "extShortName": {
+    "message": "ブクスペ",
+    "description": "Short name."
+  },
+  "extDescription": {
+    "message": "ブックマークを星にして、意味の近さで並べた宇宙地図。検索で星を引き寄せ、選んだ星を星座として残し、星の間を飛べる。ブックマークはブラウザの外に送りません。",
+    "description": "Short description, 132 characters or less."
+  },
+  "actionTitle": {
+    "message": "ブクスペを開く",
+    "description": "Tooltip of the toolbar button."
+  }
+}

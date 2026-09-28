@@ -1,6 +1,7 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import { domainOf } from "../bookmarks/types";
 import { LAYOUT_VERSION, SPACING, type ClusterRecord, type Layout, type StarRecord } from "./index";
+import { OTHER } from "./names";
 import { spiralPoint, spiralRadius, GOLDEN_ANGLE } from "./spiral";
 
 /**
@@ -10,7 +11,7 @@ import { spiralPoint, spiralRadius, GOLDEN_ANGLE } from "./spiral";
 export function provisionalLayout(items: BookmarkItem[]): Layout {
   const buckets = new Map<string, BookmarkItem[]>();
   for (const item of items) {
-    const key = item.folderPath[0] ?? domainOf(item.url) ?? "その他";
+    const key = item.folderPath[0] ?? domainOf(item.url) ?? OTHER;
     const list = buckets.get(key);
     if (list) list.push(item);
     else buckets.set(key, [item]);

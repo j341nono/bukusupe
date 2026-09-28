@@ -21,7 +21,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * dist を null にすると拡張機能を読み込まず、url のページ（Web のデモなど）を開く。
  */
 export async function launchExtension(dist, { width = 1280, height = 800, query = "debug=1", url = null, beforeOpen = null,
-  headless = true, profileDir = null, startPath = null, autoConsent = true } = {}) {
+  headless = true, profileDir = null, startPath = null, autoConsent = true, lang = "ja" } = {}) {
   // profileDir を渡すと、そのプロファイルを使い、閉じても消さない（測定でモデルのキャッシュを使い回すため）
   const profile = profileDir ?? mkdtempSync(join(tmpdir(), "bukusupe-"));
   const display = headless
@@ -32,6 +32,9 @@ export async function launchExtension(dist, { width = 1280, height = 800, query 
   const child = spawn(CHROME, [
     ...display,
     "--enable-unsafe-extension-debugging", "--remote-debugging-pipe",
+    // ブラウザの言語（ページの navigator.language。画面の「自動」の言語が決まる）。既定は日本語。英語の画面を確かめるときは "en-US"。
+    // macOS では、Chrome 自体の言語（拡張機能の _locales の選び方・インストール時の警告の文言）は OS の設定のままで、これでは変わらない
+    `--lang=${lang}`, `--accept-lang=${lang}`,
     `--user-data-dir=${profile}`, `--window-size=${width},${height}`, "about:blank",
   ], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
 

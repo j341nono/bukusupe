@@ -61,7 +61,8 @@ function debugManifest(outDir: string): Plugin {
     closeBundle() {
       const path = resolve(outDir, "manifest.json");
       const manifest = JSON.parse(readFileSync(path, "utf8"));
-      manifest.name = `${manifest.name}（確認用）`;
+      // 名前は _locales から引く（__MSG_extName__）ので、確認用は固定の名前にする
+      manifest.name = "ブクスペ（確認用）";
       manifest.permissions = [...new Set([...(manifest.permissions ?? []), "storage"])];
       writeFileSync(path, JSON.stringify(manifest, null, 2) + "\n");
     },

@@ -1,8 +1,9 @@
 import type { BookmarkSourceKind } from "../bookmarks/types";
+import { createLangPicker, formatNumber, onLangChange, setRichText, t, type MessageKey } from "../i18n";
 
-const SOURCE_LABEL: Record<BookmarkSourceKind, string> = {
-  chrome: "Chrome",
-  sample: "サンプル",
+const SOURCE_LABEL: Record<BookmarkSourceKind, MessageKey> = {
+  chrome: "hud.sourceChrome",
+  sample: "hud.sourceSample",
 };
 
 /** いまどこまで進んだか。自動確認はこれを見る（文言を変えても壊れないように）。 */
@@ -12,27 +13,18 @@ export type HudState = {
   count: number;
   kind: BookmarkSourceKind;
   phase?: HudPhase;
-  /** 進み具合の一行。空なら出さない */
-  status?: string;
+  /** 進み具合の一行。空なら出さない。言語を切り替えたときに引き直せるよう、関数で渡す */
+  status?: () => string;
   /** 0..1。あれば細い棒を出す */
   progress?: number;
 };
 
 /**
  * 操作の全文（ⓘ の中）。画面下の説明は最初の約 10 秒で消えるので、ここに必ず全部を置く。
- * 各行は「キー（kbd）と文言」の並び。文字列を HTML として解釈させないよう、要素を組み立てて入れる（規則 9）。
+ * 文言は辞書にあり、`[[W]]` がキーの表示（kbd）になる。HTML として解釈させない（規則 9、`setRichText`）。
  */
-type HelpPart = { key: string } | string;
-const HELP: HelpPart[][] = [
-  [{ key: "W" }, { key: "A" }, { key: "S" }, { key: "D" }, "・左ドラッグ　移動"],
-  [{ key: "Space" }, " 縮小　", { key: "Shift" }, " 拡大（ホイールでも）"],
-  ["右ドラッグの上下　傾き"],
-  [{ key: "/" }, " 検索欄へ　", { key: "Esc" }, " 検索を消して抜ける"],
-  [{ key: "↑" }, { key: "↓" }, " 候補を選ぶ　", { key: "Enter" }, " 同じタブで開く（", { key: "Ctrl" }, "/", { key: "⌘" }, " で新しいタブ）"],
-  [{ key: "Shift" }, "+", { key: "Enter" }, " 検索結果を選んで星座にする"],
-  [{ key: "C" }, " 選択モード（星を選んで星座にする。", { key: "Shift" }, "+ドラッグで範囲を選ぶ）"],
-  ["星団名をクリック　その星団へ移動"],
-  ["星をクリック　カード（ダブルクリックで開く）"],
+const HELP: MessageKey[] = [
+  "help.move", "help.zoom", "help.tilt", "help.search", "help.open", "help.constellation", "help.selection", "help.cluster", "help.star",
 ];
 
 /** 要素を作って文言を入れる（textContent。HTML として解釈しない） */
@@ -45,9 +37,9 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", tex
 
 function helpList(): HTMLUListElement {
   const list = node("ul", "hud-help");
-  for (const parts of HELP) {
+  for (const key of HELP) {
     const item = node("li");
-    for (const part of parts) item.append(typeof part === "string" ? part : node("kbd", "", part.key));
+    setRichText(item, t(key));
     list.append(item);
   }
   return list;
@@ -68,18 +60,32 @@ export function setSourceSwitch(to: BookmarkSourceKind | null, handler: (to: Boo
   onSourceSwitch = handler;
 }
 
-const SWITCH_LABEL: Record<BookmarkSourceKind, string> = {
-  sample: "サンプルの宇宙で試す",
-  chrome: "自分のブックマークに戻る",
+const SWITCH_LABEL: Record<BookmarkSourceKind, MessageKey> = {
+  sample: "hud.switchToSample",
+  chrome: "hud.switchToChrome",
 };
 
+/** 最後に描いた中身。言語を切り替えたら、これで描き直す */
+let redraw: (() => void) | null = null;
+
+/**
+ * パネルの中身（#hud-body）を描く。言語の選択欄はその外に 1 度だけ置く（進み具合のたびに作り直すと、開いた選択肢が閉じてしまうため）。
+ */
+function hudBody(): HTMLElement | null {
+  const hud = document.getElementById("hud");
+  if (hud && !document.getElementById("hud-lang")) hud.append(createLangPicker("hud-lang"));
+  return document.getElementById("hud-body");
+}
+
 export function renderHud(state: HudState): void {
-  const el = document.getElementById("hud");
+  const el = hudBody();
   if (!el) return;
+  redraw = () => renderHud(state);
   if (state.phase) document.body.dataset.phase = state.phase;
-  const parts: Node[] = [node("div", "hud-title", "ブクスペ"), line("星", String(state.count)), line("データ源", SOURCE_LABEL[state.kind])];
+  const parts: Node[] = [node("div", "hud-title", t("app.name")), line(t("hud.stars"), formatNumber(state.count)),
+    line(t("hud.source"), t(SOURCE_LABEL[state.kind]))];
   if (state.status) {
-    parts.push(node("div", "hud-status", state.status));
+    parts.push(node("div", "hud-status", state.status()));
     if (state.progress != null) {
       const bar = node("div", "hud-bar");
       const fill = node("i");
@@ -89,7 +95,7 @@ export function renderHud(state: HudState): void {
     }
   }
   if (sourceSwitch) {
-    const button = node("button", "hud-switch", SWITCH_LABEL[sourceSwitch]);
+    const button = node("button", "hud-switch", t(SWITCH_LABEL[sourceSwitch]));
     button.id = "source-toggle";
     button.type = "button";
     parts.push(button);
@@ -98,12 +104,15 @@ export function renderHud(state: HudState): void {
   el.replaceChildren(...parts);
 }
 
-export function renderHudMessage(message: string, phase: HudPhase = "loading"): void {
-  const el = document.getElementById("hud");
+export function renderHudMessage(message: MessageKey, phase: HudPhase = "loading"): void {
+  const el = hudBody();
   if (!el) return;
+  redraw = () => renderHudMessage(message, phase);
   document.body.dataset.phase = phase;
-  el.replaceChildren(node("div", "hud-title", "ブクスペ"), node("div", "hud-status", message));
+  el.replaceChildren(node("div", "hud-title", t("app.name")), node("div", "hud-status", t(message)));
 }
+
+onLangChange(() => redraw?.());
 
 /** 左上のパネルの開閉。?demo=1 のときは丸ごと隠す。 */
 let userToggled = false;

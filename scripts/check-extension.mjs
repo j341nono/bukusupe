@@ -38,6 +38,8 @@ const profile = mkdtempSync(join(tmpdir(), "bukusupe-"));
 const child = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--use-gl=swiftshader", "--enable-unsafe-swiftshader",
   "--enable-unsafe-extension-debugging", "--remote-debugging-pipe",
+  // ブラウザの言語を日本語にする（画面の「自動」の言語。文言を見る確認があるため。英語の画面は check-language が見る）
+  "--lang=ja", "--accept-lang=ja",
   `--user-data-dir=${profile}`, "--window-size=1280,800", "about:blank",
 ], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
 

@@ -9,6 +9,7 @@
  *  4. サイトのアイコンは常に頭文字の紋章
  *  5. スマホ（タッチ・狭い画面）：ドラッグで移動、ピンチで拡大縮小、タップで選択。飛行モードのボタンは無く、案内が出る
  *  6. 外部から読み込むのはモデルの重みだけ。マニフェストを置かない。コンソールにエラー・警告が無い
+ *  7. 画面の言語（SPEC 14 章）：英語の Chrome で開くと英語になり、ⓘ のパネルで日本語に切り替えられ、読み込み直しても保たれる
  */
 import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -259,6 +260,34 @@ try {
   problems.push(String(err));
 } finally {
   await app.close();
+}
+
+// --- 7. 画面の言語（英語の Chrome。モデルの通信は止めておく：計算済みのサンプルで星空が出るので、言語の確認には要らない） ---
+const en = await launchExtension(null, { url: PAGE, lang: "en-US",
+  beforeOpen: ({ send, sessionId }) => send("Network.setBlockedURLs", { urls: ["*huggingface.co*", "*hf.co*"] }, sessionId) });
+try {
+  const ready = await en.waitUntil(`document.body.dataset.phase === 'ready' && (globalThis.__bukusupe?.layout()?.stars.length ?? 0) > 0`, 20_000, 200);
+  const texts = async () => JSON.parse(await en.evalIn(`JSON.stringify({ lang: document.documentElement.lang,
+    placeholder: document.getElementById('search-input').placeholder,
+    clusters: globalThis.__bukusupe.layout().clusters.filter((c) => c.count > 0).map((c) => c.name) })`));
+  const before = await texts();
+  await en.evalIn(`(() => { const s = document.getElementById('hud-lang'); s.value = 'ja'; s.dispatchEvent(new Event('change')); })()`);
+  await sleep(500);
+  const switched = await texts();
+  await en.send("Page.reload", {}, en.sessionId);
+  await en.waitUntil(`document.body.dataset.phase === 'ready' && (globalThis.__bukusupe?.layout()?.stars.length ?? 0) > 0`, 20_000, 200);
+  const reloaded = await texts();
+  const japanese = (list) => list.some((n) => /[\p{Script=Han}\p{Script=Katakana}]/u.test(n));
+  check(ready && before.lang === "en" && before.placeholder === "Search the stars" && !japanese(before.clusters) &&
+    switched.lang === "ja" && switched.placeholder === "星を探す" && japanese(switched.clusters) &&
+    reloaded.lang === "ja" && reloaded.placeholder === "星を探す",
+    "Web のデモも、英語の Chrome では英語で開き、ⓘ のパネルで日本語に切り替えられ、読み込み直しても保たれる",
+    `${before.placeholder}（${before.clusters.slice(0, 3).join("/")}）→ ${switched.placeholder}（${switched.clusters.slice(0, 3).join("/")}）→ 読み込み直し ${reloaded.placeholder}`);
+} catch (err) {
+  console.error(err);
+  problems.push(String(err));
+} finally {
+  await en.close();
   server.close();
 }
 
