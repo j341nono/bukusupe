@@ -155,6 +155,7 @@ async function tour(lang) {
     await sleep(2500);
     await visit("初期画面", "2-map");
     const clusterNames = await json(`${b}.layout().clusters.filter((c) => c.count > 0).map((c) => c.name)`);
+    const starTitles = await json(`${b}.layout().stars.map((s) => s.title)`);
 
     // --- ⓘ のパネル ---
     await evalIn("document.getElementById('hud-toggle').click()");
@@ -218,24 +219,33 @@ async function tour(lang) {
       check(japanese.length === 0 && japaneseNames.length === 0 && flightButton === "Back to map" && hudPicker === "auto",
         "英語の画面の部品に日本語が残っていない（星団名も英語。ブックマークのタイトルなど利用者のデータは除く）",
         japanese.length || japaneseNames.length ? `${[...new Set(japanese)].slice(0, 5).join("／")} ${japaneseNames.join("・")}` : `星団 ${clusterNames.join(" / ")}`);
+      // 段階 3c：英語の画面では英語のサンプルが出る（サンプルのブックマークのタイトルに日本語が無い）
+      const japaneseTitles = starTitles.filter((n) => /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(n));
+      check(japaneseTitles.length === 0, "英語の画面のサンプルの宇宙は、ブックマークのタイトルも英語（日本語が残っていない）",
+        japaneseTitles.slice(0, 5).join("／"));
     }
   } finally {
     await app.close();
   }
 }
 
-/** 言語を切り替える：ⓘ のパネルで English → 読み込み直さずに変わる → 読み込み直しても保たれる。初回の説明画面の選択欄 */
+/**
+ * 言語を切り替える：ⓘ のパネルで English → サンプルは言語ごとにブックマークが違う（段階 3c）ので読み込み直してその言語の
+ * サンプルになる（読み込み直しても保たれる）。初回の説明画面の選択欄は、データを読み込む前なのでその場で変わる。
+ */
 async function switching() {
   const app = await launchExtension(DIST, { query: "sample=1&debug=1", autoConsent: false, lang: "ja" });
   const { evalIn, waitUntil, send, sessionId } = app;
+  const ready = () => waitUntil(`document.body.dataset.phase === 'ready' && ${b}?.state.kind === 'sample'`, 300_000, 500);
   const json = async (expr) => JSON.parse((await evalIn(`JSON.stringify(${expr})`)) ?? "null");
-  const pick = (id, value) => evalIn(`(() => { const s = document.getElementById(${JSON.stringify(id)}); s.value = ${JSON.stringify(value)};
-    s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  const pick = async (id, value) => { try { return await evalIn(`(() => { const s = document.getElementById(${JSON.stringify(id)}); s.value = ${JSON.stringify(value)};
+    s.dispatchEvent(new Event('change', { bubbles: true })); })()`); } catch (err) { throw new Error(`pick(${id}) failed: ${err}`); } };
   const texts = () => json(`({ lang: document.documentElement.lang, placeholder: document.getElementById('search-input').placeholder,
     select: document.getElementById('select-toggle').textContent, flight: document.getElementById('flight-toggle').textContent,
     help: document.querySelector('#hud .hud-help li')?.textContent ?? '', hud: document.querySelector('#hud .hud-status')?.textContent ?? '',
     clusters: [...document.querySelectorAll('#labels .label-cluster')].map((el) => el.textContent), picker: document.getElementById('hud-lang')?.value,
-    marker: globalThis.__languageMarker ?? null })`);
+    titles: ${b}.layout().stars.map((s) => s.title), marker: globalThis.__languageMarker ?? null })`);
+  const japanese = (list) => list.some((n) => /[\p{Script=Han}\p{Script=Katakana}]/u.test(n));
   try {
     await waitUntil("!document.getElementById('first-run')?.hidden", 20_000, 200);
     const before = await evalIn("document.querySelector('#first-run h1').textContent");
@@ -244,36 +254,41 @@ async function switching() {
     await pick("first-run-lang-select", "auto");
     const back = await evalIn("document.querySelector('#first-run h1').textContent");
     check(before === "ブクスペを始める前に" && after === "Before you begin" && back === before,
-      "初回の説明画面に言語の選択欄があり、切り替えると説明画面の文言がその場で変わる", `${before} → ${after} → ${back}`);
+      "初回の説明画面に言語の選択欄があり、切り替えると説明画面の文言がその場で変わる（データを読み込む前）", `${before} → ${after} → ${back}`);
     await evalIn("document.getElementById('first-run-start').click()");
-    await waitUntil(`document.body.dataset.phase === 'ready' && ${b}?.state.kind === 'sample'`, 300_000, 500);
+    await ready();
     await evalIn(`${b}.resetCamera()`);
     await sleep(2000);
     await evalIn("globalThis.__languageMarker = 'same-page'");
     const ja = await texts();
     await evalIn("document.getElementById('hud-toggle').click()");
     await pick("hud-lang", "en");
+    // サンプルの言語も変わるので、読み込み直る（__languageMarker は消える）
+    await ready();
     await sleep(1500);
     const en = await texts();
     const changed = en.lang === "en" && en.placeholder === "Search the stars" && en.select === "Select" && en.flight === "Fly" &&
-      /move/i.test(en.help) && /clusters?$/.test(en.hud) && en.clusters.length > 0 && en.clusters.every((n) => !/[\p{Script=Han}\p{Script=Katakana}]/u.test(n)) &&
-      ja.clusters.some((n) => /[\p{Script=Han}\p{Script=Katakana}]/u.test(n));
-    check(changed && en.marker === "same-page",
-      "ⓘ のパネルで English を選ぶと、読み込み直さずにその場で画面の文言と星団名が英語に変わる",
-      `${ja.placeholder}・${ja.select}・${ja.clusters.slice(0, 3).join("/")} → ${en.placeholder}・${en.select}・${en.clusters.slice(0, 3).join("/")}・${en.hud}・同じページ ${en.marker === "same-page"}`);
+      /move/i.test(en.help) && /clusters?$/.test(en.hud) && en.clusters.length > 0 && !japanese(en.clusters) && !japanese(en.titles) &&
+      japanese(ja.clusters) && japanese(ja.titles);
+    check(changed && en.marker === null,
+      "ⓘ のパネルで English を選ぶと、その言語のサンプルへ読み込み直り、画面の文言と星団名・サンプルのブックマークが英語に変わる",
+      `${ja.placeholder}・${ja.select}・${ja.clusters.slice(0, 3).join("/")} → ${en.placeholder}・${en.select}・${en.clusters.slice(0, 3).join("/")}・${en.hud}・読み込み直った ${en.marker === null}`);
     await send("Page.reload", {}, sessionId);
-    await waitUntil(`document.body.dataset.phase === 'ready' && ${b}?.state.kind === 'sample'`, 60_000, 500);
+    await ready();
     await sleep(1500);
     const reloaded = await texts();
     const stored = await evalIn("localStorage.getItem('bukusupe:lang')");
-    check(reloaded.lang === "en" && reloaded.placeholder === "Search the stars" && reloaded.picker === "en" && stored === "en",
-      "選んだ言語（English）は保存され、ブラウザの言語が日本語でも、次に開いたときに英語のまま",
+    check(reloaded.lang === "en" && reloaded.placeholder === "Search the stars" && reloaded.picker === "en" && stored === "en" && !japanese(reloaded.titles),
+      "選んだ言語（English）は保存され、ブラウザの言語が日本語でも、次に開いたときに英語のサンプルのまま",
       `lang ${reloaded.lang}・${reloaded.placeholder}・選択欄 ${reloaded.picker}・保存 ${stored}`);
     await pick("hud-lang", "ja");
-    await sleep(800);
+    await ready();
+    await sleep(1500);
     const jaAgain = await texts();
-    check(jaAgain.lang === "ja" && jaAgain.placeholder === "星を探す" && jaAgain.flight === "飛行" && [...jaAgain.clusters].sort().join() === [...ja.clusters].sort().join(),
-      "日本語に戻すと、文言と星団名が元の日本語に戻る", `${jaAgain.lang}・${jaAgain.placeholder}・${jaAgain.flight}・${jaAgain.clusters.join("/")}（元 ${ja.clusters.join("/")}）`);
+    check(jaAgain.lang === "ja" && jaAgain.placeholder === "星を探す" && jaAgain.flight === "飛行" && japanese(jaAgain.titles) &&
+      [...jaAgain.clusters].sort().join() === [...ja.clusters].sort().join(),
+      "日本語に戻すと、文言・星団名・サンプルのブックマークが元の日本語に戻る（同じデータなので配置も同じ）",
+      `${jaAgain.lang}・${jaAgain.placeholder}・${jaAgain.flight}・${jaAgain.clusters.join("/")}（元 ${ja.clusters.join("/")}）`);
   } finally {
     await app.close();
   }
