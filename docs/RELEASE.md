@@ -13,8 +13,8 @@
 |---|---|---|
 | 0 | ハッカソンの提出（`v0.1.0-hacksonic`） | 完了（2026-09-27） |
 | 1 | 安全性の調査と修正 | **完了（2026-09-28）**。`docs/SECURITY.md`。調査の #3・#9・#10 は段階 2 へ |
-| 2 | ストア向けのビルド | **ほぼ完了（2026-09-28）**。`host_permissions` を外した・配布用と確認用のビルドを分けた・`npm run package`・版 0.9.0・キャッシュの名前。残りは、警告の文言と段階 3 の説明文の照合だけ |
-| 3 | プライバシーポリシー・掲載文・権限の説明・画像 | 未着手 |
+| 2 | ストア向けのビルド | **完了（2026-09-28）**。`host_permissions` を外した・配布用と確認用のビルドを分けた・`npm run package`・版 0.9.0・キャッシュの名前・警告の文言と説明の照合 |
+| 3 | プライバシーポリシー・掲載文・権限の説明・画像 | **資料と自動確認は完了（2026-09-28）**。6 点の回答を反映する作業と、push 後のページ公開・ダッシュボードの最終確認が残る |
 | 4 | 限定公開で申請し、試してもらう（0.9.x） | 未着手 |
 | 5 | 利用者のための修正 | 未着手（方針は「決めたこと」で決定済み） |
 | 6 | 1.0.0 として一般公開 | 未着手 |
@@ -127,8 +127,9 @@
       まっさらなプロファイルでモデルの取得まで通る（自動確認）。外せない場合：外部へ出る通信が、すべて `host_permissions` の範囲に入っている
       （範囲に入っていない通信が 1 件でもあれば NG。自動確認）。
 - [x] 自動確認：manifest・`package.json` の版が一致しないと配布用のビルドと `npm run package` が失敗する（タグは上げた後に付けるので比べない）。
-- [ ] `chrome://extensions` でストア向けのビルドを読み込んだときの権限の警告の文言が、段階 3 の説明文と一致している（スクリーンショットで確認）。
-      警告の文言は実測した（「結果」）。段階 3 の説明文を書くときに照らし合わせる。
+- [x] ストア向けのビルドを読み込んだときの権限の警告の文言が、段階 3 の説明文と一致している。スクリーンショットの代わりに、
+      `chrome.management.getPermissionWarningsByManifest` で配布用の manifest から求めた文言と `docs/store/privacy-practices.md` の欄を
+      `scripts/check-store.mjs` が照らし合わせる（2026-09-28、「ブックマークの読み取りと変更」「アクセスしたウェブサイトのアイコンの読み取り」）。
 - [x] zip の大きさと、ファイルの一覧が `docs/RELEASE.md` の付録に記録されている。
 
 ---
@@ -147,11 +148,27 @@
   画像は確認スクリプトで撮って `docs/store/` に置き、作り直せるようにする。
 - README の「インストール時の警告について」「プライバシー」を、このページと同じ内容にそろえる。
 
+**結果（2026-09-28）**
+- **問い合わせ先**：`j341nono.dev@gmail.com`（`src/config.ts`）と GitHub の Issues。README・SECURITY.md に載せた。`npm run package` で `release/bukusupe-0.9.0.zip` ができる。
+- **プライバシーポリシー**：`privacy/index.html`（日本語と英語を 1 ページに）。Web のデモのビルド（`--mode web`）に入り、`https://j341nono.github.io/bukusupe/privacy/` に公開される
+  （push の後に GitHub Actions が配信する。まだ push していないので、公開はこれから）。拡張機能のビルドには入れない。
+  書いた内容はコードの動きに合わせた：通信先は `huggingface.co` と配信用の `us.aws.cdn.hf.co`（GET だけ、本文なし。届くのは IP・User-Agent・Accept-Language・Origin＝拡張機能の id。
+  Referer と Cookie は無い。実測）、保存場所は IndexedDB・Cache Storage（`bukusupe-model`）・localStorage・sessionStorage。限定的な使用の決まりが求める宣言
+  （"The use of information received from Google APIs will adhere to …"）も置いた。`check-web` が、ページの存在と、実際の通信先・保存場所・問い合わせ先・最終更新日・宣言の記載を確かめる。
+- **掲載文**：`docs/store/listing.ja.md`（名前 16 文字＝manifest の name、短い説明 77 文字＝manifest の description、詳しい説明、カテゴリの案、言語）。
+- **申告**：`docs/store/privacy-practices.md`（単一の目的、権限ごとの理由、インストール時の警告、リモートコード、データの使用の案。根拠の公式の URL つき）。
+  利用者のデータの FAQ の 3（端末の中だけで扱う場合も開示が要る）により、「Web history」を申告する案にした。判断の要る点は「確認したいこと」として HANDOFF の 0 章に置いた。
+- **画像**：`docs/store/assets/`（1280×800 を 5 枚、440×280、1400×560、128×128）。`npm run store:assets` でサンプルの宇宙から撮り直せる（`scripts/store-assets.mjs`）。
+- **確認**：`scripts/check-store.mjs`（新規、`check:ext` の 3 番目）：名前と短い説明の字数と manifest との一致、権限の表と manifest の 1 対 1、インストール時の警告と説明の一致、画像の大きさ。
+  申告と画像を作る前に走らせ、その 3 項目が NG になるのを確かめた。
+- **通し確認**：`npm run build` → `git add dist` → `npm run check:ext`。最初は負荷で飛行・選択モードのコマ数が 47 になったが、個別再測定で 57・60、通しの再実行で 58・60 コマ/秒。14 本すべて OK。
+
 完了条件
 - [ ] プライバシーポリシーのページが公開され、URL から開ける（日本語・英語）。README とストアの掲載文から、そのページへ行ける。
-- [ ] 自動確認：掲載用の画像の大きさがストアの決まり（1280×800、440×280）に合っている。
-- [ ] 権限ごとの説明文が、段階 2 の manifest の権限と 1 対 1 で対応している（一覧表が `docs/store/` にある）。
-- [ ] 短い説明が 132 文字以内。
+      （ページと README・掲載文のリンクはできた。公開は push の後）
+- [x] 自動確認：掲載用の画像の大きさがストアの決まり（1280×800、440×280）に合っている（`check-store`。1400×560・128×128 も）。
+- [x] 権限ごとの説明文が、段階 2 の manifest の権限と 1 対 1 で対応している（一覧表が `docs/store/privacy-practices.md` にある。`check-store`）。
+- [x] 短い説明が 132 文字以内（77 文字。`check-store`）。
 - [ ] 使う人が、掲載文・説明文・画像を読んで了承している。
 
 ---

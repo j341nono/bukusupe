@@ -48,11 +48,13 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── SPEC.md              # 仕様書（正典）
 │   ├── PLAN.md              # ハッカソンまでの実装計画・完了条件（M0〜M6）
 │   ├── RELEASE.md           # 正式公開までの計画・版の番号の決まり・決めたこと
+│   ├── store/               # ストアの掲載文（listing.ja.md）、プライバシーの申告の案（privacy-practices.md）、掲載用の画像（assets/）
 │   ├── SECURITY.md          # 安全性（表示と遷移の経路、保存データの確かめ、設定、依存関係）
 │   ├── HANDOFF.md           # 引き継ぎ資料（0 章に今の状態と残りのタスク、6 章にハッカソン期間の記録）
 │   ├── DESIGN.md            # 見た目の規則と案
 │   └── screens/             # check:ext が保存する画面と結果。before/ はデザイン見直し前
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
+├── privacy/index.html       # プライバシーポリシー（日本語・英語）。Web のデモと一緒に GitHub Pages の /bukusupe/privacy/ に出す
 ├── public/
 │   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる）
 │   ├── icons/               # 16 / 32 / 48 / 128 px（npm run icons で作る。しおりの形の星座）
@@ -69,6 +71,8 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── check-constellation.mjs  # 星座のメンバーの固定・新星（加える／見送る）・旧形式の移行・検索語の無い星座
 │   ├── check-selection.mjs  # 選択モード（出入り・選ぶ・Shift＋ドラッグ・移動しても残る・新しい星座／加える／外す・60 コマ）
 │   ├── package.mjs          # ストアに上げる zip を作る（npm run package）
+│   ├── check-store.mjs      # 掲載文の字数と manifest の一致・権限の説明と manifest・インストール時の警告・画像の大きさ
+│   ├── store-assets.mjs     # 掲載用の画像を撮り直す（npm run store:assets）
 │   ├── check-fresh.mjs      # git の index の dist/ を、まっさらなプロファイルで初回起動
 │   ├── check-web.mjs        # Web のデモ（dist-web/）の確認（PC とスマホ）
 │   ├── check-idle.mjs       # 動きがあるときだけ描く（止まる・すぐ再開する・止まった画面が正しい）
