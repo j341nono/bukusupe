@@ -8,7 +8,7 @@ import type { BookmarkSourceKind } from "../bookmarks/types";
 export const RETURN_STATE_KEY = "bukusupe:return-state";
 /** 版の番号を持たなかった頃の保存場所（見つけたら消す） */
 const LEGACY_KEYS = ["bukusupe:return-state-v1"];
-export const RETURN_STATE_VERSION = 2;
+export const RETURN_STATE_VERSION = 3;
 
 export type ReturnState = {
   version: number;
@@ -19,12 +19,16 @@ export type ReturnState = {
   camera: { x: number; y: number; distance: number; tilt: number };
   query: string;
   constellationId: string | null;
+  /** 選択モードで選んでいた星（選択モードでなければ null。版 3 から） */
+  selection: string[] | null;
 };
 
 /** 妥当な範囲（地図の座標・宇宙船の位置は十分に広く取る。これを超えるものは壊れた値とみなす） */
 const COORD = 1e6;
 const QUERY_MAX = 500;
 const ID_MAX = 256;
+/** 選んだ星の数の上限（ブックマークの件数より十分に多く取る） */
+const SELECTION_MAX = 100_000;
 
 const inRange = (v: unknown, min: number, max: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
@@ -34,7 +38,7 @@ export function parseReturnState(raw: string, source: BookmarkSourceKind): Retur
   let value: unknown;
   try { value = JSON.parse(raw); } catch { return null; }
   if (!isObject(value) || value.version !== RETURN_STATE_VERSION || value.source !== source) return null;
-  const { camera, ship, flying, query, constellationId } = value;
+  const { camera, ship, flying, query, constellationId, selection } = value;
   if (typeof flying !== "boolean") return null;
   if (!isObject(camera) || !inRange(camera.x, -COORD, COORD) || !inRange(camera.y, -COORD, COORD) ||
     !inRange(camera.distance, 1, COORD) || !inRange(camera.tilt, 0, Math.PI / 2)) return null;
@@ -44,12 +48,16 @@ export function parseReturnState(raw: string, source: BookmarkSourceKind): Retur
   if (flying && ship === null) return null;
   if (typeof query !== "string" || query.length > QUERY_MAX) return null;
   if (constellationId !== null && (typeof constellationId !== "string" || constellationId.length > ID_MAX)) return null;
+  if (selection !== null && (!Array.isArray(selection) || selection.length > SELECTION_MAX ||
+    !selection.every((id) => typeof id === "string" && id.length > 0 && id.length <= ID_MAX))) return null;
+  if (flying && selection !== null) return null;
   return {
     version: RETURN_STATE_VERSION, source, flying,
     ship: ship === null ? null : { x: ship.x as number, y: ship.y as number, z: ship.z as number, yaw: ship.yaw as number,
       pitch: ship.pitch as number, roll: (ship.roll as number | undefined) ?? 0, speed: ship.speed as number },
     camera: { x: camera.x as number, y: camera.y as number, distance: camera.distance as number, tilt: camera.tilt as number },
     query, constellationId: constellationId as string | null,
+    selection: selection === null ? null : [...new Set(selection as string[])],
   };
 }
 
