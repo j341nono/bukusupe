@@ -1,0 +1,18 @@
+{
+  "extName": {
+    "message": "Bukusupe — Bookmark Space",
+    "description": "Extension name (Chrome Web Store and the extensions page)."
+  },
+  "extShortName": {
+    "message": "Bukusupe",
+    "description": "Short name."
+  },
+  "extDescription": {
+    "message": "Bookmarks as stars, arranged by meaning. Search pulls them close, link them into constellations, fly among them. All on your device.",
+    "description": "Short description, 132 characters or less."
+  },
+  "actionTitle": {
+    "message": "Open Bukusupe",
+    "description": "Tooltip of the toolbar button."
+  }
+}

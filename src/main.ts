@@ -30,6 +30,8 @@ import { renderHud, renderHudMessage, setSourceSwitch, settleHud, setupHudContro
 import { openPage } from "./ui/open-page";
 import { RETURN_STATE_KEY, RETURN_STATE_VERSION, parseReturnState, storeReturnState, takeReturnState } from "./ui/return-state";
 import type { ZoomTier } from "./ui/labels";
+import { applyStaticText, createLangPicker, formatPercent, onLangChange, t, type MessageKey } from "./i18n";
+import { clusterLabel } from "./i18n/cluster";
 
 const META_MEAN = "mean-vector";
 const META_LAYOUT = "layout";
@@ -143,6 +145,9 @@ async function restoreReturnState(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // 画面の文言を、選んだ言語（初期値は「自動」＝ブラウザの言語）で入れる。切り替えたら、その場で描き直す（SPEC 14 章）
+  applyStaticText();
+  onLangChange(refreshLanguage);
   await awaitFirstRunConsent();
   const canvas = document.getElementById("space") as HTMLCanvasElement | null;
   const labels = document.getElementById("labels");
@@ -158,7 +163,7 @@ async function main(): Promise<void> {
   setupFlight();
   view.start();
 
-  renderHudMessage("ブックマークを読み込んでいる…");
+  renderHudMessage("status.loadingBookmarks");
   const snapshot = await loadBookmarks();
   mark("bookmarks");
   state.kind = snapshot.kind;
@@ -169,7 +174,7 @@ async function main(): Promise<void> {
   setSourceSwitch(state.kind === "chrome" ? "sample" : snapshot.chromeCount > 0 ? "chrome" : null, switchSource);
   // DB はデータ源ごとに分ける。以後、このページでデータ源は変えない（変わったら読み込み直す）
   useDataSource(state.kind, snapshot.bench);
-  onDbBlocked(() => renderHudMessage("ほかのブクスペのタブを閉じると続きを始める"));
+  onDbBlocked(() => renderHudMessage("status.dbBlocked"));
 
   if (WEB && (await startFromSampleCache())) {
     document.getElementById("loading")?.remove();
@@ -177,7 +182,7 @@ async function main(): Promise<void> {
   } else {
     // 埋め込みが揃うまでは仮の配置で「星が生まれる」ところを見せる
     show(provisionalLayout(state.items), false);
-    renderHud({ count: state.items.length, kind: state.kind, status: "星を読み解いている…", phase: "embed" });
+    renderHud({ count: state.items.length, kind: state.kind, status: () => t("status.reading"), phase: "embed" });
     document.getElementById("loading")?.remove();
 
     embedder = createEmbedder();
@@ -207,6 +212,7 @@ function awaitFirstRunConsent(): Promise<void> {
   const panel = document.getElementById("first-run");
   const start = document.getElementById("first-run-start");
   if (!panel || !start) throw new Error("初回の説明が見つからない");
+  document.getElementById("first-run-lang")?.append(createLangPicker("first-run-lang-select"));
   document.body.dataset.phase = "consent";
   panel.hidden = false;
   return new Promise((resolve) => start.addEventListener("click", () => {
@@ -230,9 +236,11 @@ async function startFromSampleCache(): Promise<boolean> {
   state.vectors = cache.vectors;
   state.mean = cache.mean;
   state.generality = cache.generality;
-  show(cache.layout);
+  // 名前は同梱の計算済みのものではなく、今の命名規則で付ける（表示のときに画面の言語へ直す）
+  const layout = withCurrentNames(cache.layout);
+  show(layout);
   renderHud({ count: state.items.length, kind: state.kind,
-    status: `${cache.layout.clusters.filter((c) => c.count > 0).length} つの星団`, phase: "ready" });
+    status: clusterCount(layout), phase: "ready" });
   settleHud();
   return true;
 }
@@ -248,7 +256,7 @@ function loadModelInBackground(): void {
   embedder = createEmbedder();
   embedder.onDownload = (_file, percent) => {
     view?.wake();   // Worker からの通知
-    if (status) status.textContent = `意味の検索を準備している ${percent.toFixed(0)}%（それまでは文字の一致で探す）`;
+    if (status) setModelStatus("model.preparingPercent", percent);
   };
   embedder.ready().then(() => {
     view?.wake();
@@ -263,10 +271,36 @@ function loadModelInBackground(): void {
     document.body.dataset.model = "error";
     modelFailed = true;
     void migrateConstellations();
-    if (status) status.textContent = String(err).includes("MODEL_INTEGRITY_ERROR")
-      ? "モデルの検証に失敗しました。再読み込みしてください（文字の一致で探せます）"
-      : "意味の検索を準備できなかった（文字の一致で探す）";
+    if (status) setModelStatus(String(err).includes("MODEL_INTEGRITY_ERROR") ? "model.integrityFailedText" : "model.failedText");
   });
+}
+
+/** Web のデモ：検索欄の下の、モデルの読み込みの知らせ（言語を切り替えたら引き直せるよう、辞書の項目名で持つ） */
+function setModelStatus(key: MessageKey, percent?: number): void {
+  const status = document.getElementById("model-status");
+  if (!status) return;
+  status.dataset.i18n = key;
+  if (percent === undefined) delete status.dataset.i18nParams;
+  else status.dataset.i18nParams = JSON.stringify({ percent: formatPercent(percent) });
+  applyStaticText(status);
+}
+
+/**
+ * 言語を切り替えたときに、動く文言を描き直す（静的な文言は applyStaticText が差し替える）。
+ * 星団名は表示のときに言語へ直すので、配置は変えずに名前だけ差し替える。
+ */
+function refreshLanguage(): void {
+  if (state.layout) view?.setClusterNames(clusterNamesOf(state.layout));
+  renderConstellationList();
+  renderNovae();
+  const targets = document.getElementById("selection-targets");
+  if (targets && !targets.hidden) openTargets();
+  if (cardId) showCard(cardId);
+}
+
+/** 画面に出す星団名（保存した名前を、今の言語に直す） */
+function clusterNamesOf(layout: Layout): Map<number, string> {
+  return new Map(layout.clusters.map((c) => [c.index, clusterLabel(c.name)]));
 }
 
 /**
@@ -318,17 +352,19 @@ async function computeEmbeddings(): Promise<void> {
       mark(`embed:${p.phase}`);
       view?.wake();   // Worker からの通知
       if (p.phase === "model") {
-        renderHud({ ...base, status: `モデルを取り込んでいる ${p.percent.toFixed(0)}%`, progress: p.percent / 100, phase: "model" });
+        const percent = p.percent;
+        renderHud({ ...base, status: () => t("status.model", { percent: formatPercent(percent) }), progress: percent / 100, phase: "model" });
       } else if (p.phase === "embed") {
-        renderHud({ ...base, status: `星を読み解いている ${p.done} / ${p.total}`, progress: p.done / p.total, phase: "embed" });
+        const { done, total } = p;
+        renderHud({ ...base, status: () => t("status.readingProgress", { done, total }), progress: done / total, phase: "embed" });
       } else {
-        renderHud({ ...base, status: "星を並べている…", phase: "layout" });
+        renderHud({ ...base, status: () => t("status.placing"), phase: "layout" });
       }
     });
   } catch (err) {
     console.error("[ブクスペ] 埋め込みに失敗", err);
-    renderHud({ ...base, status: String(err).includes("MODEL_INTEGRITY_ERROR")
-      ? "モデルの検証に失敗しました。再読み込みしてください" : "意味の計算に失敗した", phase: "error" });
+    const message: MessageKey = String(err).includes("MODEL_INTEGRITY_ERROR") ? "status.integrityFailed" : "status.embedFailed";
+    renderHud({ ...base, status: () => t(message), phase: "error" });
   } finally {
     view?.hold("embedding", false);
   }
@@ -357,13 +393,9 @@ async function placeStars(): Promise<void> {
       layout = addStar(layout, item.id, state.vectors.get(item.id) as Float32Array, state.mean);
     }
     // 命名規則が変わっても、保存済みの星の座標はそのまま使う。
-    const byId = new Map(state.items.map((item) => [item.id, item]));
-    const names = clusterNames(layout.clusters.map((c) => layout!.stars
-      .filter((s) => s.cluster === c.index)
-      .sort((a, b) => a.rank - b.rank)
-      .flatMap((s) => { const item = byId.get(s.id); return item ? [item] : []; })));
-    const namesChanged = layout.clusters.some((c, i) => c.name !== names[i]);
-    if (namesChanged) layout = { ...layout, clusters: layout.clusters.map((c, i) => ({ ...c, name: names[i] })) };
+    const renamed = withCurrentNames(layout);
+    const namesChanged = renamed !== layout;
+    layout = renamed;
     if (namesChanged || added.length > 0 || layout.stars.length !== stored.stars.length) {
       await writeMeta(META_LAYOUT, layout);
     }
@@ -378,16 +410,27 @@ async function placeStars(): Promise<void> {
   renderHud({
     count: state.items.length,
     kind: state.kind,
-    status: `${layout.clusters.filter((c) => c.count > 0).length} つの星団`,
+    status: clusterCount(layout),
     phase: "ready",
   });
   settleHud();
 }
 
+/** 星団名を、今の命名規則で付け直す（座標は変えない）。名前が変わらなければ、同じものを返す */
+function withCurrentNames(layout: Layout): Layout {
+  const byId = new Map(state.items.map((item) => [item.id, item]));
+  const names = clusterNames(layout.clusters.map((c) => layout.stars
+    .filter((s) => s.cluster === c.index)
+    .sort((a, b) => a.rank - b.rank)
+    .flatMap((s) => { const item = byId.get(s.id); return item ? [item] : []; })));
+  if (layout.clusters.every((c, i) => c.name === names[i])) return layout;
+  return { ...layout, clusters: layout.clusters.map((c, i) => ({ ...c, name: names[i] })) };
+}
+
 /** 全部まとめて計算し直す（「再配置」）。平均ベクトルも取り直す。 */
 async function relayout(): Promise<void> {
   if (state.vectors.size === 0) return;
-  renderHud({ count: state.items.length, kind: state.kind, status: "並べ直している…", phase: "layout" });
+  renderHud({ count: state.items.length, kind: state.kind, status: () => t("status.relayout"), phase: "layout" });
   const mean = meanVector([...state.vectors.values()]);
   state.mean = mean;
   await writeMeta<StoredMean>(META_MEAN, { source: state.kind, vector: mean });
@@ -397,9 +440,15 @@ async function relayout(): Promise<void> {
   renderHud({
     count: state.items.length,
     kind: state.kind,
-    status: `${layout.clusters.filter((c) => c.count > 0).length} つの星団`,
+    status: clusterCount(layout),
     phase: "ready",
   });
+}
+
+/** 準備ができたときの HUD の一行（星団の数） */
+function clusterCount(layout: Layout): () => string {
+  const count = layout.clusters.filter((c) => c.count > 0).length;
+  return () => t("status.clusters", { count });
 }
 
 /**
@@ -562,7 +611,8 @@ function setSelecting(on: boolean, initial: string[] = []): void {
   }
   const toggle = document.getElementById("select-toggle");
   if (toggle) {
-    toggle.textContent = on ? "選択を終える" : "選択";
+    toggle.dataset.i18n = on ? "select.toggleEnd" : "select.toggle";
+    applyStaticText(toggle);
     toggle.setAttribute("aria-pressed", String(on));
   }
   view?.setSelecting(on);
@@ -613,7 +663,7 @@ function renderSelectionBar(): void {
   if (!selection) return;
   const count = selection.size;
   (document.getElementById("selection-count") as HTMLElement).textContent =
-    count ? `${count} 個の星を選んでいる` : "星を選んでいない";
+    count ? t("selection.count", { count }) : t("selection.none");
   const active = constellations.find((row) => row.id === activeConstellationId);
   const inActive = active ? active.members.filter((id) => selection!.has(id)) : [];
   const enable = (id: string, on: boolean, title = "") => {
@@ -623,11 +673,11 @@ function renderSelectionBar(): void {
     button.title = title;
   };
   enable("selection-new", count > 0);
-  enable("selection-add", count > 0 && constellations.length > 0, constellations.length ? "" : "保存した星座がまだ無い");
+  enable("selection-add", count > 0 && constellations.length > 0, constellations.length ? "" : t("selection.noConstellations"));
   enable("selection-remove", inActive.length > 0 && inActive.length < (active?.members.length ?? 0),
-    !active ? "外す星座を、画面の下の一覧から選ぶ"
-      : !inActive.length ? "選んだ星は、この星座に入っていない"
-        : inActive.length === active.members.length ? "すべての星は外せない（星座を消すときは「…」の「削除」）" : "");
+    !active ? t("selection.pickConstellation")
+      : !inActive.length ? t("selection.notInConstellation")
+        : inActive.length === active.members.length ? t("selection.cannotRemoveAll") : "");
   enable("selection-clear", count > 0);
 }
 
@@ -655,7 +705,7 @@ function openTargets(): void {
   const menu = document.getElementById("selection-targets") as HTMLElement;
   menu.replaceChildren();
   const heading = document.createElement("p");
-  heading.textContent = "加える星座を選ぶ";
+  heading.textContent = t("selection.targetsHeading");
   menu.append(heading);
   for (const row of constellations) {
     const button = document.createElement("button");
@@ -714,7 +764,7 @@ async function saveConstellation(): Promise<void> {
   const query = currentQuery();
   // 名前は入力欄と同じ 80 文字まで（読み込むときの確かめ parseConstellation の上限に収める）
   const name = ((document.getElementById("constellation-name-input") as HTMLInputElement).value.trim() ||
-    query || "名前のない星座").slice(0, 80);
+    query || t("constellation.untitled")).slice(0, 80);
   const members = [...selection];
   const queryVector = query && embedder && modelReady ? Array.from((await embedder.embed([queryText(query)]))[0]) : undefined;
   setSelecting(false);
@@ -902,8 +952,8 @@ function renderNovae(): void {
   if (panel.hidden || !row) return;
   const heading = document.createElement("p");
   const label = document.createElement("b");
-  label.textContent = "新星";
-  heading.append(label, `保存の後に加わり、「${row.query ?? ""}」に合う星`);
+  label.textContent = t("novae.label");
+  heading.append(label, t("novae.heading", { query: row.query ?? "" }));
   heading.title = heading.textContent ?? "";
   const list = document.createElement("ul");
   for (const id of shown) {
@@ -916,11 +966,11 @@ function renderNovae(): void {
     title.addEventListener("click", () => showCard(id));
     const accept = document.createElement("button");
     accept.dataset.action = "accept";
-    accept.textContent = "加える";
+    accept.textContent = t("novae.accept");
     accept.addEventListener("click", () => void acceptNova(id));
     const dismiss = document.createElement("button");
     dismiss.dataset.action = "dismiss";
-    dismiss.textContent = "見送る";
+    dismiss.textContent = t("novae.dismiss");
     dismiss.addEventListener("click", () => void dismissNova(id));
     item.append(title, accept, dismiss);
     list.append(item);
@@ -970,8 +1020,8 @@ function renderConstellationList(): void {
       const more = document.createElement("button");
       more.id = "constellation-more";
       more.textContent = "…";
-      more.title = "この星座の操作";
-      more.setAttribute("aria-label", `「${row.name}」の操作`);
+      more.title = t("constellation.more");
+      more.setAttribute("aria-label", t("constellation.moreAria", { name: row.name }));
       more.setAttribute("aria-haspopup", "menu");
       more.setAttribute("aria-expanded", "false");
       more.addEventListener("click", (event) => {
@@ -1012,7 +1062,7 @@ function setupConstellations(): void {
     closeConstellationMenu();
     const row = constellations.find((item) => item.id === activeConstellationId);
     if (!row) return;
-    const name = window.prompt("星座の名前", row.name)?.trim().slice(0, 80);
+    const name = window.prompt(t("constellation.name"), row.name)?.trim().slice(0, 80);
     if (!name) return;
     row.name = name;
     await writeConstellation(row);
@@ -1080,7 +1130,7 @@ function showCard(id: string): void {
   };
   setText("star-card-title", item.title);
   setText("star-card-url", item.url);
-  setText("star-card-folder", item.folderPath.join(" / ") || "ルート");
+  setText("star-card-folder", item.folderPath.join(" / ") || t("card.root"));
   card.hidden = false;
 }
 
@@ -1207,8 +1257,9 @@ function setupFlight(): void {
     help?.classList.remove("is-compact");
     if (active) helpTimer = window.setTimeout(() => help?.classList.add("is-compact"), 10_000);
     if (button) {
-      button.textContent = active ? "地図へ戻る" : "飛行";
-      button.title = active ? "地図へ戻る（Esc）" : "星の間を飛ぶ（F）";
+      button.dataset.i18n = active ? "flight.exit" : "flight.enter";
+      button.dataset.i18nTitle = active ? "flight.exitTitle" : "flight.enterTitle";
+      applyStaticText(button);
     }
   };
   button?.addEventListener("click", () => (view?.inFlight ? leave() : enter()));
@@ -1293,7 +1344,9 @@ if (__DEBUG__) {
     })),
     clusters: layout.clusters.map((c) => ({
       index: c.index,
-      name: c.name,
+      // 画面に出す名前（今の言語）。保存している形は key
+      name: clusterLabel(c.name),
+      key: c.name,
       x: c.x,
       y: c.y,
       radius: c.radius,
@@ -1368,7 +1421,7 @@ if (__DEBUG__) {
       await new Promise((r) => setTimeout(r, 1500));
       const fps = ((view?.frames ?? 0) - before) / ((performance.now() - start) / 1000);
       vd?.setContinuousRender(false);
-      return { n, layoutMs, fps, clusters: layout.clusters.map((c) => ({ name: c.name, count: c.count })) };
+      return { n, layoutMs, fps, clusters: layout.clusters.map((c) => ({ name: clusterLabel(c.name), count: c.count })) };
     },
 
     /** benchmark の前の状態に戻す。 */
@@ -1414,7 +1467,7 @@ if (__DEBUG__) {
       const ranked = await searchResults(text, coefficient, priorCoefficient);
       const byId = new Map(state.items.map((i) => [i.id, i]));
       const clusterOf = new Map((state.layout?.stars ?? []).map((s) => [s.id, s.cluster]));
-      const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, c.name]));
+      const names = new Map((state.layout?.clusters ?? []).map((c) => [c.index, clusterLabel(c.name)]));
       return ranked.slice(0, topK).map((row) => ({ ...row,
         folder: byId.get(row.id)?.folderPath.join("/") ?? "",
         cluster: names.get(clusterOf.get(row.id) ?? -1) ?? "(未配置)",
@@ -1547,5 +1600,5 @@ if (__DEBUG__) {
 
 main().catch((err) => {
   console.error(err);
-  renderHudMessage("読み込みに失敗した。コンソールを確認する。");
+  renderHudMessage("status.loadFailed");
 });

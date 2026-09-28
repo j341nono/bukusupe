@@ -1,0 +1,133 @@
+/**
+ * 画面の文言（日本語）。英語は en.ts。**項目の名前は両方でそろえる**（型と `scripts/check-i18n.mjs` が確かめる）。
+ * - `{name}` は差し込む値。数は `t()` が Intl で言語に合わせて書く。
+ * - `[[W]]` はキーの表示（kbd）。HTML としては解釈しない（`setRichText`）。
+ * - `#one` で終わる項目は、英語の単数形のためのもの（Intl.PluralRules が "one" を返すときに使う）。日本語は同じ文にする。
+ */
+const ja = {
+  "app.name": "ブクスペ",
+
+  "lang.label": "表示の言語",
+  "lang.auto": "自動",
+  "lang.en": "English",
+  "lang.ja": "日本語",
+
+  "firstRun.aria": "初回のご案内",
+  "firstRun.heading": "ブクスペを始める前に",
+  "firstRun.local": "ブックマークはこの端末の中だけで処理します。内容を外部へ送りません。",
+  "firstRun.model": "初回に、意味を読み取るためのモデル（約{size} MB）を Hugging Face から取得します。",
+  "firstRun.privacy": "プライバシーポリシーを読む",
+  "firstRun.start": "始める",
+
+  "search.placeholder": "星を探す",
+  "search.aria": "ブックマークを検索",
+  "search.createConstellation": "星座にする",
+  "search.createConstellationTitle": "検索で引き寄せた星を選んで、星座を作る（Shift+Enter）",
+  "search.selectAll": "結果をすべて選ぶ",
+
+  "model.preparing": "意味の検索を準備している（それまでは文字の一致で探す）",
+  "model.preparingPercent": "意味の検索を準備している {percent}（それまでは文字の一致で探す）",
+  "model.integrityFailedText": "モデルの検証に失敗しました。再読み込みしてください（文字の一致で探せます）",
+  "model.failedText": "意味の検索を準備できなかった（文字の一致で探す）",
+
+  "status.loadingBookmarks": "ブックマークを読み込んでいる…",
+  "status.dbBlocked": "ほかのブクスペのタブを閉じると続きを始める",
+  "status.reading": "星を読み解いている…",
+  "status.readingProgress": "星を読み解いている {done} / {total}",
+  "status.model": "モデルを取り込んでいる {percent}",
+  "status.placing": "星を並べている…",
+  "status.relayout": "並べ直している…",
+  "status.clusters": "{count} つの星団",
+  "status.clusters#one": "{count} つの星団",
+  "status.integrityFailed": "モデルの検証に失敗しました。再読み込みしてください",
+  "status.embedFailed": "意味の計算に失敗した",
+  "status.loadFailed": "読み込みに失敗した。コンソールを確認する。",
+  "loading": "星を数えている…",
+
+  "hud.stars": "星",
+  "hud.source": "データ源",
+  "hud.sourceChrome": "Chrome",
+  "hud.sourceSample": "サンプル",
+  "hud.switchToSample": "サンプルの宇宙で試す",
+  "hud.switchToChrome": "自分のブックマークに戻る",
+  "hud.toggleTitle": "情報を開閉する",
+  "hud.toggleAria": "情報",
+  "help.move": "[[W]][[A]][[S]][[D]]・左ドラッグ　移動",
+  "help.zoom": "[[Space]] 縮小　[[Shift]] 拡大（ホイールでも）",
+  "help.tilt": "右ドラッグの上下　傾き",
+  "help.search": "[[/]] 検索欄へ　[[Esc]] 検索を消して抜ける",
+  "help.open": "[[↑]][[↓]] 候補を選ぶ　[[Enter]] 同じタブで開く（[[Ctrl]]/[[⌘]] で新しいタブ）",
+  "help.constellation": "[[Shift]]+[[Enter]] 検索結果を選んで星座にする",
+  "help.selection": "[[C]] 選択モード（星を選んで星座にする。[[Shift]]+ドラッグで範囲を選ぶ）",
+  "help.cluster": "星団名をクリック　その星団へ移動",
+  "help.star": "星をクリック　カード（ダブルクリックで開く）",
+
+  "hint.pointer": "ドラッグで移動・ホイールで拡大縮小　操作の一覧は ⓘ",
+  "hint.touch": "ドラッグで移動・ピンチで拡大縮小・タップで選ぶ",
+  "touchNote": "飛行モードは PC で試せます",
+  "sampleHint.text": "ブックマークが少ないので、星空がまだまばらです。{count} 個の星が並ぶサンプルの宇宙でも試せます（ⓘ からいつでも切り替えられます）。",
+  "sampleHint.try": "サンプルの宇宙で試す",
+  "sampleHint.close": "閉じる",
+
+  "relayout.label": "再配置",
+  "relayout.title": "星団から並べ直す",
+  "flight.enter": "飛行",
+  "flight.enterTitle": "星の間を飛ぶ（F）",
+  "flight.exit": "地図へ戻る",
+  "flight.exitTitle": "地図へ戻る（Esc）",
+  "flight.helpPitch": "[[W]][[S]]（[[↑]][[↓]]）機首の上下",
+  "flight.helpYaw": "[[A]][[D]]（[[←]][[→]]）左右",
+  "flight.helpSpeed": "[[Space]] 加速 [[Shift]] 減速",
+  "flight.helpMouse": "マウスはドラッグで機首の向き",
+  "flight.helpExit": "[[Esc]] 地図へ戻る",
+  "flight.helpNote": "宇宙船は止まらずに進む。星に近づくと名前が見え、星の芯に入るとそのページが開く",
+
+  "card.open": "開く",
+  "card.root": "ルート",
+
+  "select.toggle": "選択",
+  "select.toggleEnd": "選択を終える",
+  "select.toggleTitle": "星を選んで星座を作る（C）",
+  "selection.aria": "選んだ星",
+  "selection.mode": "選択モード",
+  "selection.help": "クリックで選ぶ・外す　Shift＋ドラッグで範囲を選ぶ　C か Esc で終える",
+  "selection.count": "{count} 個の星を選んでいる",
+  "selection.count#one": "{count} 個の星を選んでいる",
+  "selection.none": "星を選んでいない",
+  "selection.new": "新しい星座にする",
+  "selection.add": "既存の星座に加える",
+  "selection.remove": "星座から外す",
+  "selection.clear": "選択を解除",
+  "selection.noConstellations": "保存した星座がまだ無い",
+  "selection.pickConstellation": "外す星座を、画面の下の一覧から選ぶ",
+  "selection.notInConstellation": "選んだ星は、この星座に入っていない",
+  "selection.cannotRemoveAll": "すべての星は外せない（星座を消すときは「…」の「削除」）",
+  "selection.targetsAria": "加える星座",
+  "selection.targetsHeading": "加える星座を選ぶ",
+
+  "constellation.name": "星座の名前",
+  "constellation.save": "保存",
+  "constellation.cancel": "やめる",
+  "constellation.untitled": "名前のない星座",
+  "constellation.listAria": "保存した星座",
+  "constellation.menuAria": "星座の操作",
+  "constellation.rename": "名前を変える",
+  "constellation.delete": "削除",
+  "constellation.more": "この星座の操作",
+  "constellation.moreAria": "「{name}」の操作",
+
+  "novae.aria": "新星",
+  "novae.label": "新星",
+  "novae.heading": "保存の後に加わり、「{query}」に合う星",
+  "novae.accept": "加える",
+  "novae.dismiss": "見送る",
+
+  "cluster.unnamed": "無名の星団 {n}",
+  "cluster.other": "その他",
+  "cluster.join": "・",
+  "cluster.numbered": "{name} {n}",
+};
+
+export type MessageKey = keyof typeof ja;
+export type Messages = Record<MessageKey, string>;
+export default ja satisfies Messages;

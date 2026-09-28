@@ -4,15 +4,17 @@
  *
  * 使い捨てのプロファイルの Chrome で、サンプルの宇宙（?sample=1）を開いて撮る。自分のブックマークなど個人の情報は映らない。
  * 画面の大きさは Emulation.setDeviceMetricsOverride で、ストアの決まりの大きさにそろえる（端末の画素の比は 1）。
- *  - screenshot-1-map.png           1280×800  銀河の地図
- *  - screenshot-2-search.png        1280×800  ブラックホール検索
- *  - screenshot-3-constellation.png 1280×800  星座（選んだ状態）
- *  - screenshot-4-selection.png     1280×800  選択モード（複数の星団から選んだ状態）
- *  - screenshot-5-flight.png        1280×800  3D 飛行モード（近づいた星の窓）
+ * スクリーンショットは、英語の画面（en/、主の掲載）と日本語の画面（ja/、日本語の掲載）の 2 組。ブラウザの言語を変えて開き、画面の「自動」で切り替える。
+ *  - {en,ja}/screenshot-1-map.png           1280×800  銀河の地図
+ *  - {en,ja}/screenshot-2-search.png        1280×800  ブラックホール検索
+ *  - {en,ja}/screenshot-3-constellation.png 1280×800  星座（選んだ状態）
+ *  - {en,ja}/screenshot-4-selection.png     1280×800  選択モード（複数の星団から選んだ状態）
+ *  - {en,ja}/screenshot-5-flight.png        1280×800  3D 飛行モード（近づいた星の窓）
  *  - promo-small-440x280.png        440×280   小さな宣伝用画像（星空と名前だけ）
  *  - promo-marquee-1400x560.png     1400×560  大きな宣伝用画像（星空と名前と一行の説明）
  *  - icon-128.png                   128×128   manifest のアイコンを 96px に縮めて透明な余白を付ける
- * 宣伝用の画像は、画面の部品を隠した星空の上に、DESIGN.md の書体（名前は明朝）と色（藍・生成り）で名前を重ねて撮る。
+ * 宣伝用の画像は言語ごとに変えられないので、文字は英語だけ（英語の画面で撮る）。画面の部品を隠した星空の上に、
+ * DESIGN.md の書体（英語の名前はセリフ体）と色（藍・生成り）で名前を重ねて撮る。
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -22,9 +24,21 @@ import { writeStoreIcon } from "./store-icon.mjs";
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const OUT = join(ROOT, "docs/store/assets");
 const b = "globalThis.__bukusupe";
-mkdirSync(OUT, { recursive: true });
+/** 言語ごとの文言（検索語と星座の名前） */
+const WORDS = {
+  en: { query: "stargazing", constellation: "Night sky" },
+  ja: { query: "夜空を眺めたい", constellation: "夜空の記録" },
+};
 
-const app = await launchExtension(join(ROOT, "dist-debug"), { query: "sample=1&debug=1" });
+for (const lang of ["ja", "en"]) {
+  mkdirSync(join(OUT, lang), { recursive: true });
+  await capture(lang);
+}
+writeStoreIcon(ROOT);
+console.log("  icon-128.png");
+
+async function capture(lang) {
+const app = await launchExtension(join(ROOT, "dist-debug"), { query: "sample=1&debug=1", lang: lang === "en" ? "en-US" : "ja" });
 const { send, evalIn, waitUntil } = app;
 const json = async (expr) => JSON.parse((await evalIn(`JSON.stringify(${expr})`)) ?? "null");
 const key = (type, code, name) => evalIn(`window.dispatchEvent(new KeyboardEvent(${JSON.stringify(type)}, { code: ${JSON.stringify(code)}, key: ${JSON.stringify(name)}, bubbles: true }))`);
@@ -38,6 +52,7 @@ async function shot(file) {
   writeFileSync(join(OUT, file), Buffer.from(data, "base64"));
   console.log(`  ${file}`);
 }
+const words = WORDS[lang];
 async function clearSearch() {
   await evalIn("(() => { const i = document.getElementById('search-input'); i.value = ''; i.dispatchEvent(new Event('input')); i.blur(); })()");
   await sleep(1200);
@@ -53,17 +68,17 @@ try {
   const layout = await json(`${b}.layout()`);
 
   // 1. 銀河の地図
-  await shot("screenshot-1-map.png");
+  await shot(`${lang}/screenshot-1-map.png`);
 
   // 2. ブラックホール検索
-  await evalIn(`${b}.searchNow('夜空を眺めたい')`);
+  await evalIn(`${b}.searchNow(${JSON.stringify(words.query)})`);
   await sleep(3000);
-  await shot("screenshot-2-search.png");
+  await shot(`${lang}/screenshot-2-search.png`);
 
   // 3. 星座：検索から選択モードに入り、名前を付けて保存し、呼び出す
   await evalIn("document.getElementById('constellation-create').click()");
   await evalIn("document.getElementById('selection-new').click()");
-  await evalIn("document.getElementById('constellation-name-input').value = '夜空の記録'");
+  await evalIn(`document.getElementById('constellation-name-input').value = ${JSON.stringify(words.constellation)}`);
   await evalIn("document.getElementById('constellation-save').click()");
   await waitUntil(`${b}.constellationState().rows.length === 1 && ${b}.constellationState().animation.phase === 'done' &&
     ${b}.constellationState().active === null`, 20_000, 200);
@@ -71,7 +86,7 @@ try {
   const id = await evalIn(`${b}.constellationState().rows[0].id`);
   await evalIn(`${b}.recallConstellation(${JSON.stringify(id)})`);
   await sleep(2500);
-  await shot("screenshot-3-constellation.png");
+  await shot(`${lang}/screenshot-3-constellation.png`);
   await evalIn(`${b}.recallConstellation(${JSON.stringify(id)})`);   // 選択を解く
   await sleep(600);
 
@@ -84,7 +99,7 @@ try {
   const picks = layout.stars.filter((s) => clusters.includes(s.cluster) && s.rank < 3).map((s) => s.id);
   for (const star of picks) await evalIn(`${b}.toggleEditMember(${JSON.stringify(star)})`);
   await sleep(1800);
-  await shot("screenshot-4-selection.png");
+  await shot(`${lang}/screenshot-4-selection.png`);
   await key("keydown", "Escape", "Escape");
   await key("keyup", "Escape", "Escape");
   await sleep(600);
@@ -104,25 +119,26 @@ try {
   await waitUntil(`document.getElementById('flight-help')?.classList.contains('is-compact')`, 15_000, 200);
   await waitUntil(`document.querySelectorAll('.flight-window').length > 0`, 5000, 100);
   await sleep(1000);
-  await shot("screenshot-5-flight.png");
+  await shot(`${lang}/screenshot-5-flight.png`);
   await key("keydown", "Escape", "Escape");
   await key("keyup", "Escape", "Escape");
   await waitUntil(`(() => { const f = ${b}.flightState?.(); return !!f && !f.active; })()`, 10_000, 100);
 
-  // 宣伝用の画像：画面の部品とラベルを隠した星空に、名前を重ねる（星座の金の線は、自分で名付けた星座としてそのまま残す）
+  // 宣伝用の画像（英語の画面でだけ撮る）：画面の部品とラベルを隠した星空に、名前を重ねる（星座の金の線は、自分で名付けた星座としてそのまま残す）
+  if (lang !== "en") return;
   await evalIn(`(() => {
     const style = document.createElement('style');
     style.textContent = '#search-box, #constellation-list, #constellation-name, #flight-toggle, #select-toggle, #relayout, #hint, #hud, #hud-toggle, #labels, #star-card, #selection-bar, #constellation-novae { display: none !important; }' +
       '#promo { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; pointer-events: none; z-index: 10;' +
       ' background: radial-gradient(ellipse at 30% 50%, rgba(7,10,24,0.78) 0%, rgba(7,10,24,0.35) 45%, rgba(7,10,24,0) 70%); }' +
-      '#promo h1 { margin: 0; font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; font-weight: normal; color: #ece6d6; letter-spacing: 0.32em;' +
+      '#promo h1 { margin: 0; font-family: var(--font-name); font-weight: normal; color: #ece6d6; letter-spacing: 0.24em;' +
       ' text-shadow: 0 0 18px rgba(4,6,16,0.95); }' +
-      '#promo p { margin: 0; font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; color: #a29d8c; letter-spacing: 0.3em; text-shadow: 0 0 12px rgba(4,6,16,0.95); }';
+      '#promo p { margin: 0; font-family: var(--font-name); color: #a29d8c; letter-spacing: 0.22em; text-shadow: 0 0 12px rgba(4,6,16,0.95); }';
     document.head.append(style);
     const promo = document.createElement('div');
     promo.id = 'promo';
-    const h1 = document.createElement('h1'); h1.textContent = 'ブクスペ';
-    const p = document.createElement('p'); p.textContent = 'ブックマークの宇宙';
+    const h1 = document.createElement('h1'); h1.textContent = 'Bukusupe';
+    const p = document.createElement('p'); p.textContent = 'a universe of your bookmarks';
     promo.append(h1, p);
     document.body.append(promo);
   })()`);
@@ -137,9 +153,7 @@ try {
   };
   await promo(1400, 560, "promo-marquee-1400x560.png", 64, 22, 150);
   await promo(440, 280, "promo-small-440x280.png", 34, 12, 40);
-
-  writeStoreIcon(ROOT);
-  console.log("  icon-128.png");
 } finally {
   await app.close();
+}
 }

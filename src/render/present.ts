@@ -1,6 +1,7 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import type { Layout } from "../layout";
 import { brightnessOf } from "../layout/brightness";
+import { clusterLabel } from "../i18n/cluster";
 import { lastTouched } from "./magnitude";
 import type { LabelSource } from "./scene";
 import type { RenderStar } from "./stars";
@@ -21,7 +22,8 @@ export function toLabelSource(layout: Layout, byId: Map<string, BookmarkItem>): 
   return {
     clusters: layout.clusters.map((c) => ({
       index: c.index,
-      name: c.name,
+      // 保存した名前を、画面の言語の名前に直す
+      name: clusterLabel(c.name),
       x: c.x,
       y: c.y,
       radius: c.radius,

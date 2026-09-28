@@ -1,7 +1,7 @@
 import type { BookmarkItem } from "../bookmarks/types";
 import { domainOf } from "../bookmarks/types";
 import { DOMAIN_HINTS, hintsFor } from "../embed/domain-hints";
-import { BROAD_CATEGORIES, TOPIC_CATEGORY, broadCategory } from "../embed/topic-categories";
+import { CATEGORY_BY_ID, TOPIC_CATEGORY, broadCategory, categoriesInTitle, categoryNamed } from "../embed/topic-categories";
 
 for (const word of new Set(Object.values(DOMAIN_HINTS).flatMap((v) => v.split(/\s+/).filter(Boolean)))) {
   if (!TOPIC_CATEGORY.has(word)) throw new Error(`分野語に大分類がない: ${word}`);
@@ -11,16 +11,21 @@ for (const word of new Set(Object.values(DOMAIN_HINTS).flatMap((v) => v.split(/\
 const LEADERS = 4;
 const LEADER_AGREE = 2;
 
-/** 分野を表さないフォルダ名。星団の名前には使わない。 */
-const IGNORED_FOLDERS = new Set([
-  "あとで読む", "あとでよむ", "後で読む", "後でよむ", "その他", "未分類", "未整理", "雑",
-  "ブックマーク バー", "ブックマークバー", "お気に入り", "その他のブックマーク",
-  "モバイルのブックマーク", "同期したタブ", "新しいフォルダ",
-  "Bookmarks bar", "Bookmarks Bar", "Other bookmarks", "Other Bookmarks",
-  "Mobile bookmarks", "Reading list", "Read later", "Unsorted", "Misc", "New folder",
-]);
+/**
+ * 保存する星団名の形（言語に依らない）。表示のときに `clusterLabel()`（src/i18n/cluster.ts）が画面の言語に直す。
+ * - `{dev}`：大分類（id）。`{dev}+{ai}` は 2 つを並べた名前
+ * - `#3`：同じ名前を区別する番号（`{dev}#3`）
+ * - `{unnamed}#3`：無名の星団 3
+ */
+export const categoryToken = (id: string): string => `{${id}}`;
+export const UNNAMED = "{unnamed}";
+/** 仮の配置（埋め込みの前）で、フォルダもドメインも無い星をまとめる名前 */
+export const OTHER = "{other}";
 
 type Tally = { key: string; n: number };
+
+/** 同数のときの順：大分類の日本語の名前の順（大分類を id にする前と同じ結果にするため） */
+const orderName = (key: string): string => CATEGORY_BY_ID.get(key)?.ja ?? key;
 
 /** 多い順。同数のときは名前の順で決める（毎回同じ結果にするため）。 */
 function tally(values: string[]): Tally[] {
@@ -29,17 +34,18 @@ function tally(values: string[]): Tally[] {
     if (!v) continue;
     map.set(v, (map.get(v) ?? 0) + 1);
   }
-  return [...map].map(([key, n]) => ({ key, n })).sort((a, b) => b.n - a.n || (a.key < b.key ? -1 : 1));
+  return [...map].map(([key, n]) => ({ key, n }))
+    .sort((a, b) => b.n - a.n || (orderName(a.key) < orderName(b.key) ? -1 : 1));
 }
 
+/** フォルダ名は、大分類の名前（日本語か英語）と同じときだけ、その大分類として数える（分野を表さないフォルダ名は使わない） */
 const folderTally = (members: BookmarkItem[]): Tally[] =>
-  tally(members.map((m) => m.folderPath.at(-1) ?? "")
-    .filter((f) => !IGNORED_FOLDERS.has(f) && BROAD_CATEGORIES.includes(f)));
+  tally(members.map((m) => categoryNamed(m.folderPath.at(-1) ?? "") ?? ""));
 
-/** ドメインの分野語を大分類に直し、タイトルからは大分類の語だけを拾う。 */
+/** ドメインの分野語を大分類に直し、タイトルからは大分類の名前だけを拾う。 */
 function hintsOf(item: BookmarkItem): string[] {
   const fromDomain = hintsFor(domainOf(item.url)).split(/\s+/).map(broadCategory).filter((w): w is string => !!w);
-  const fromTitle = BROAD_CATEGORIES.filter((w) => item.title.includes(w));
+  const fromTitle = categoriesInTitle(item.title);
   return [...new Set([...fromDomain, ...fromTitle])];
 }
 
@@ -54,27 +60,27 @@ const hintTally = (members: BookmarkItem[]): Tally[] => tally(members.flatMap(hi
  */
 export function clusterNames(groups: BookmarkItem[][]): string[] {
   const names = groups.map((members, index) => {
-    if (members.length === 0) return `無名の星団 ${index + 1}`;
+    if (members.length === 0) return `${UNNAMED}#${index + 1}`;
 
     // 代表 4 件のうち 2 件以上が同じ大分類を持つなら、フォルダの多数決より優先する
     const leaders = members.slice(0, LEADERS);
     const shared = tally(leaders.flatMap(hintsOf)).filter((h) => h.n >= LEADER_AGREE);
-    if (shared[0]) return shared[0].key;
+    if (shared[0]) return categoryToken(shared[0].key);
 
     const folders = folderTally(members);
     const [top, second] = folders;
 
     if (top) {
       const share = top.n / members.length;
-      if (share >= 0.5) return top.key;
-      if (second && second.n >= top.n * 0.6) return `${top.key}・${second.key}`;
-      if (share >= 0.3) return top.key;
+      if (share >= 0.5) return categoryToken(top.key);
+      if (second && second.n >= top.n * 0.6) return `${categoryToken(top.key)}+${categoryToken(second.key)}`;
+      if (share >= 0.3) return categoryToken(top.key);
     }
 
     const hint = hintTally(members)[0];
-    if (hint) return hint.key;
+    if (hint) return categoryToken(hint.key);
 
-    return `無名の星団 ${index + 1}`;
+    return `${UNNAMED}#${index + 1}`;
   });
 
   // 同名が残ったら、その星団の 2 番目に多い分野の語で区別する
@@ -87,8 +93,9 @@ export function clusterNames(groups: BookmarkItem[][]): string[] {
   for (const [, indices] of seen) {
     if (indices.length < 2) continue;
     for (const i of indices) {
-      const hints = hintTally(groups[i]).filter((h) => !names[i].includes(h.key));
-      names[i] = hints[1] ? `${names[i]}・${hints[1].key}` : hints[0] ? `${names[i]}・${hints[0].key}` : `${names[i]} ${i + 1}`;
+      const hints = hintTally(groups[i]).filter((h) => !names[i].includes(categoryToken(h.key)));
+      const extra = hints[1] ?? hints[0];
+      names[i] = extra ? `${names[i]}+${categoryToken(extra.key)}` : `${names[i]}#${i + 1}`;
     }
   }
   return names;

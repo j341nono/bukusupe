@@ -102,6 +102,11 @@ export class LabelLayer {
     container.addEventListener("dblclick", this.onLabelDoubleClick);
   }
 
+  /** 書体を取り直す（画面の言語で名前の書体が変わるため） */
+  resetFonts(): void {
+    for (const kind of Object.keys(this.fontFamily) as PlacedLabel["kind"][]) delete this.fontFamily[kind];
+  }
+
   render(items: PlacedLabel[], tier: ZoomTier, circles: ScreenCircle[] = []): number {
     const labelBoxes: Box[] = [];
     const shown: { item: PlacedLabel; text: string; box: Box }[] = [];

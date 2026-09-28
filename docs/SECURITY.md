@@ -56,9 +56,10 @@
 
 | 場所 | 中身 | 読み込むときの確かめ |
 |---|---|---|
-| sessionStorage `bukusupe:return-state` | 「戻る」で再開するための状態（版の番号 2） | `src/ui/return-state.ts` の `parseReturnState`：版・データ源・数値は有限で妥当な範囲・検索語は 500 文字まで・星座の id は文字列。一つでも合わなければ丸ごと捨ててふつうに開く。「戻る」以外で開いたときも捨てる |
+| sessionStorage `bukusupe:return-state` | 「戻る」で再開するための状態（版の番号 3） | `src/ui/return-state.ts` の `parseReturnState`：版・データ源・数値は有限で妥当な範囲・検索語は 500 文字まで・星座の id は文字列。一つでも合わなければ丸ごと捨ててふつうに開く。「戻る」以外で開いたときも捨てる |
 | IndexedDB `bukusupe-chrome` / `bukusupe-sample`（測定用は `bukusupe-bench-…`） | 埋め込み・配置・星座 | 星座の行は `src/constellation/index.ts` の `parseConstellation`（形の版 2）で確かめ、旧形式の行は `parseLegacyConstellation` で確かめてから移す。どちらにも合わない行は読み飛ばしてコンソールに警告を残す。名前は保存するときに 80 文字まで |
 | localStorage `bukusupe:prefer-sample`・`bukusupe:sample-hint-shown` | サンプルで試すかの選択・案内を出したか | `"1"` と比べるだけ |
+| localStorage `bukusupe:lang` | 表示の言語の設定（SPEC 14 章） | `src/i18n/index.ts` の `readLangSetting`：`auto`・`en`・`ja` のどれかでなければ「自動」として扱う |
 | chrome.storage.local `bench:…` | 確認用の注入（確認用のビルドで `?debug=1&bench=…` のときだけ読む） | `parseBookmarkItem` を通す。配布用のビルドには、この処理も `storage` 権限も無い（段階 2） |
 
 - Web のデモの保存領域の名前には、すべてブクスペ専用の接頭辞（`bukusupe-` / `bukusupe:`）が付いている（`check-web` が確かめる）。

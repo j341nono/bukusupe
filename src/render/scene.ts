@@ -115,6 +115,8 @@ export class SpaceView {
   private fitDistance = 90;
   private labelSource: LabelSource = { clusters: [], stars: [] };
   private labelsDirty = true;
+  /** 最後に受け取った配置（星団名だけを差し替えるときに使う） */
+  private layout: Layout | null = null;
   private hoveredMapId: string | null = null;
   private lastLabelMotion = 0;
   private lastLabelTier: ZoomTier | null = null;
@@ -421,10 +423,24 @@ export class SpaceView {
         .map((c) => ({ x: c.x, y: c.y, radius: c.radius, color: nebulaColor(c.index), seed: c.index })),
     );
     this.labelSource = source;
+    this.layout = layout;
     this.windowStars = source.stars.map((star) => ({ id: star.id, title: star.title, url: star.url }));
     this.bounds = boundsOf(stars, this.extent);
     if (frame) this.frameAll();
     this.resize();
+    this.labelsDirty = true;
+  }
+
+  /**
+   * 星団名だけを差し替える（画面の言語を切り替えたとき。SPEC 14 章）。配置・カメラ・星の見え方は変えない。
+   * 書体も言語で変わるので、ラベルの幅の測り方も取り直す。
+   */
+  setClusterNames(names: Map<number, string>): void {
+    this.wake();
+    this.labelSource = { ...this.labelSource,
+      clusters: this.labelSource.clusters.map((c) => ({ ...c, name: names.get(c.index) ?? c.name })) };
+    if (this.layout) this.placeFlightClusters(this.layout, this.labelSource);
+    this.labels.resetFonts();
     this.labelsDirty = true;
   }
 
