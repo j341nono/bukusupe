@@ -8,7 +8,9 @@
  *     （星の選択は本物の入力：CDP のマウスのクリック。キーはページ内の KeyboardEvent）。選んだ星のタイトルが優先して出る
  *  4. Shift＋ドラッグで、四角の範囲の中の星がまとめて選ばれ、その間に画面が動かない（Shift による拡大もしない）
  *  5. 選択モード中も、画面を動かしている間 1 秒あたり 60 コマを保つ
- *  6. 「新しい星座にする」「既存の星座に加える」「星座から外す」がメンバーに反映され、再読み込みの後も残る。検索中に作ると検索語が残る
+ *  6. 選択モード中も、星のタイトル・星のダブルクリックでそのページを開き、選んだ状態は変わらない（1 回目と 2 回目のクリックで元に戻る）。
+ *     ページを同じタブで開いて「戻る」で戻ると、選択モードで同じ星を選んだ状態から再開する（ダブルクリックは本物のマウスの入力）
+ *  7. 「新しい星座にする」「既存の星座に加える」「星座から外す」がメンバーに反映され、再読み込みの後も残る。検索中に作ると検索語が残る
  */
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -26,6 +28,14 @@ const key = (type, code, keyName) => evalIn(`window.dispatchEvent(new KeyboardEv
   { code: ${JSON.stringify(code)}, key: ${JSON.stringify(keyName)}, bubbles: true }))`);
 const press = async (code, keyName) => { await key("keydown", code, keyName); await key("keyup", code, keyName); };
 const mouse = (type, x, y, extra = {}) => send("Input.dispatchMouseEvent", { type, x, y, button: "left", ...extra }, app.sessionId);
+/** 画面上の位置をダブルクリックする（本物のマウスの入力。click・click・dblclick の順に届く） */
+async function doubleClickAt(p) {
+  await mouse("mouseMoved", p.x, p.y, { button: "none" });
+  for (const clickCount of [1, 2]) {
+    await mouse("mousePressed", p.x, p.y, { buttons: 1, clickCount });
+    await mouse("mouseReleased", p.x, p.y, { buttons: 0, clickCount });
+  }
+}
 /** 画面上の位置をクリックする（本物のマウスの入力） */
 async function clickAt(p) {
   await mouse("mouseMoved", p.x, p.y, { button: "none" });
@@ -213,7 +223,69 @@ try {
   check(fps && fps.selecting && fps.selected > 0 && fps.fps >= 55, "選択モード中も、画面を動かしている間 1 秒あたり 60 コマを保つ",
     fps ? `${fps.fps.toFixed(0)} コマ/秒（選んだ星 ${fps.selected}）` : "測れない");
 
-  // --- 6. まとめて行う操作 ---
+  // --- 6. 選択モード中のダブルクリックでページを開き、「戻る」で同じ選択に戻る ---
+  {
+    const selBefore = (await selection())?.ids ?? [];
+    // (a) 星のタイトルのダブルクリック：ページを開く呼び出しだけを受け取り、移動はしない
+    const label = await json(`(() => { const sel = ${b}.selectionState().ids;
+      const el = [...document.querySelectorAll('.label-star[data-key]')].find((el) => !sel.includes(el.dataset.key) &&
+        el.style.display !== 'none' && el.style.opacity !== '0' && Number(el.style.opacity || 1) > 0.3 && (() => {
+          const r = el.getBoundingClientRect(); return r.width > 4 && r.left > 0 && r.right < innerWidth && r.top > 60 && r.bottom < innerHeight - 120 &&
+            document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === el; })());
+      if (!el) return null; const r = el.getBoundingClientRect();
+      return { id: el.dataset.key, x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await evalIn(`(() => { window.__origUpdateSel = chrome.tabs.update; window.__openedSel = null;
+      chrome.tabs.update = async (_id, args) => { window.__openedSel = { url: args.url, sel: ${b}.selectionState() }; }; })()`);
+    if (label) await doubleClickAt(label);
+    await sleep(400);
+    const labelOpened = await json("window.__openedSel");
+    await evalIn("chrome.tabs.update = window.__origUpdateSel");
+    const labelUrl = label ? await json(`${b}.state.items.find((item) => item.id === ${JSON.stringify(label.id)})?.url ?? null`) : null;
+    const afterLabel = await selection();
+    check(!!label && labelOpened?.url === labelUrl && labelOpened?.sel?.active === true && sameSet(labelOpened.sel.ids, selBefore) &&
+      afterLabel?.active === true && sameSet(afterLabel.ids, selBefore),
+      "選択モード中に星のタイトルをダブルクリックすると、そのページを開き、選んだ星は変わらない（1 回目と 2 回目のクリックで元に戻る）",
+      `タイトル ${label ? "見つけた" : "見つからない"}・開いた ${labelOpened?.url ?? "なし"}（期待 ${labelUrl}）・` +
+      `開く時点の選択 ${labelOpened?.sel?.ids?.length ?? "?"} / ${selBefore.length}・後の選択 ${afterLabel?.ids?.length ?? "?"}`);
+
+    // (b) 星本体のダブルクリック：同じタブで実際にページへ移り、「戻る」で戻る。移動先は Fetch で手元の空ページに差し替える（外部には通信しない）
+    let star = null;
+    for (const s of layout.stars) {
+      if (selBefore.includes(s.id)) continue;
+      const p = await screenOf(s.id);
+      if (!onScreen(p)) continue;
+      const hit = await json(`(() => { const el = document.elementFromPoint(${p.x}, ${p.y});
+        return el?.id === 'space' && ${b}.pickStar?.(${p.x}, ${p.y}) === ${JSON.stringify(s.id)}; })()`);
+      if (hit) { star = { id: s.id, ...p }; break; }
+    }
+    app.onEvent((m) => {
+      if (m.method !== "Fetch.requestPaused") return;
+      app.send("Fetch.fulfillRequest", { requestId: m.params.requestId, responseCode: 200,
+        responseHeaders: [{ name: "Content-Type", value: "text/html; charset=utf-8" }],
+        body: Buffer.from("<!doctype html><title>page</title><p>page</p>").toString("base64") }, m.sessionId).catch(() => {});
+    });
+    await app.send("Fetch.enable", { patterns: [{ urlPattern: "http*://*" }] }, app.sessionId);
+    // ページへ移る直前の選択を、確認用にタブの中へ控える（アプリの保存とは別）
+    await evalIn(`(() => { const orig = chrome.tabs.update.bind(chrome.tabs);
+      chrome.tabs.update = (...args) => { sessionStorage.setItem('test:selection', JSON.stringify(${b}.selectionState())); return orig(...args); }; })()`);
+    if (star) await doubleClickAt(star);
+    const left = !!star && await waitUntil("location.protocol.startsWith('http')", 8000, 100);
+    if (left) await tryEval("history.back()");
+    const resumed = left && await waitUntil(`document.body.dataset.phase === 'ready' && !!${b} && ${b}.selectionState().active === true`, 120_000, 300);
+    await app.send("Fetch.disable", {}, app.sessionId).catch(() => {});
+    await sleep(800);
+    const back = await json(`({ saved: JSON.parse(sessionStorage.getItem('test:selection') ?? 'null'), now: ${b}.selectionState(),
+      rings: ${b}.selectionRings(), selecting: document.body.classList.contains('is-selecting'),
+      bar: !document.getElementById('selection-bar').hidden })`);
+    check(!!star && left && resumed && back?.saved?.active === true && sameSet(back.saved.ids, selBefore) &&
+      back.now.active === true && sameSet(back.now.ids, selBefore) && sameSet(back.rings, selBefore) && back.selecting && back.bar,
+      "選択モードで別の星をダブルクリックしてページを開き、「戻る」で戻ると、選択モードで同じ星が選ばれた状態になっている",
+      `星 ${star ? "見つけた" : "見つからない"}・移動 ${left ? "した" : "しない"}・再開 ${resumed ? "した" : "しない"}・` +
+      `開く時点の選択 ${back?.saved?.ids?.length ?? "?"} / ${selBefore.length}・戻った後 ${back?.now?.active ? "選択モード" : "選択モードでない"} ` +
+      `${back?.now?.ids?.length ?? "?"} 星（同じ ${sameSet(back?.now?.ids, selBefore) ? "はい" : "いいえ"}）・輪 ${back?.rings?.length ?? "?"}・下の操作 ${back?.bar ? "あり" : "なし"}`);
+  }
+
+  // --- 7. まとめて行う操作 ---
   const members = (await selection()).ids;
   await evalIn("document.getElementById('selection-new')?.click()");
   await sleep(200);

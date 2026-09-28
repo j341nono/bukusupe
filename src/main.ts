@@ -108,7 +108,8 @@ function saveReturnState(): void {
       roll: flight.ship.roll, speed: flight.ship.speed } : null,
     camera: view.navigationCamera(),
     query: (document.getElementById("search-input") as HTMLInputElement | null)?.value ?? "",
-    constellationId: activeConstellationId });
+    constellationId: activeConstellationId,
+    selection: selection ? [...selection] : null });
 }
 
 /**
@@ -133,6 +134,11 @@ async function restoreReturnState(): Promise<void> {
     input.value = saved.query;
     applySearch(await searchResults(saved.query));
   }
+  // 選択モードだったら、同じ星を選んだ状態で選択モードから再開する（消えた星は除く）
+  if (saved.selection) {
+    const alive = new Set(state.items.map((item) => item.id));
+    setSelecting(true, saved.selection.filter((id) => alive.has(id)));
+  }
   if (saved.flying && saved.ship) view.resumeFlight(saved.ship);
 }
 
@@ -147,7 +153,8 @@ async function main(): Promise<void> {
   // 星の色と明るさは「最後に触れた日」から（段階 2 の一部。ラベルの目立ち方は段階 2 の残り）
   view.setStarAppearance(touchAppearance);
   view.onStarLabelClick = handleStarClick;
-  view.onStarLabelDoubleClick = (id, newTab) => { if (!selection && !view?.inFlight) openBookmark(id, newTab); };
+  // 選択モード中も開く（1 回目と 2 回目のクリックで選ぶ・外すが切り替わり、選んだ状態は元に戻る。SPEC 8 章）
+  view.onStarLabelDoubleClick = (id, newTab) => { if (!view?.inFlight) openBookmark(id, newTab); };
   setupFlight();
   view.start();
 
@@ -1162,7 +1169,6 @@ function setupSearch(canvas: HTMLCanvasElement): void {
   canvas.addEventListener("mouseleave", () => view?.hoverStar(null));
   canvas.addEventListener("dblclick", (event) => {
     if (view?.inFlight) return;
-    if (selection) return;   // 選択モードのクリックは選ぶ操作
     const id = view?.pickStar(event.clientX, event.clientY);
     if (id) openBookmark(id, event.ctrlKey || event.metaKey);
   });
@@ -1437,6 +1443,8 @@ if (__DEBUG__) {
     setConstellationTestOpacity: (value: number | null) => view?.setConstellationTestOpacity(value),
     setConstellationTestLine: (enabled: boolean) => view?.setConstellationTestLine(enabled),
     starScreen: (id: string) => view?.starScreen(id),
+    /** 確認用：画面の位置にある星（キャンバスのクリック・ダブルクリックが対象にする星） */
+    pickStar: (x: number, y: number) => view?.pickStar(x, y) ?? null,
     starPosition: (id: string) => view?.starPosition(id),
     starVisual: (id: string) => view?.starVisual(id),
     traceGeometry: () => view?.traceGeometry(),
