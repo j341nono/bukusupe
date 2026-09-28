@@ -24,8 +24,10 @@ check(!manifest.host_permissions && !manifest.permissions.includes("storage"),
   "配布用の manifest に host_permissions と storage 権限が無い（この状態でモデルの取得から意味検索まで通すのを、以下で確かめる）",
   `permissions ${manifest.permissions.join(",")}・host_permissions ${JSON.stringify(manifest.host_permissions ?? null)}`);
 
-const app = await launchExtension(join(clone, "dist"), { query: "" });
+const app = await launchExtension(join(clone, "dist"), { query: "", autoConsent: false });
 try {
+  await app.waitUntil("!document.getElementById('first-run')?.hidden", 15_000, 100);
+  await app.evalIn("document.getElementById('first-run-start').click()");
   const seen = new Set();
   const start = Date.now();
   let phase = "";

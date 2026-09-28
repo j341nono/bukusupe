@@ -35,7 +35,7 @@ English（入力する文）：
 | 権限 | 入力する理由（English） | 日本語 |
 |---|---|---|
 | `bookmarks` | Reads the user's bookmarks (title, URL, folder, date added, date last used) to draw them as stars on the map and to search them. The extension only reads bookmarks and listens for bookmark changes to keep the map up to date; it never creates, edits, moves, or deletes bookmarks. | ブックマークを星として地図に描き、検索するために読み取る。変更に追随するため変更の通知も受ける。ブックマークを作る・変える・動かす・消すことはしない。 |
-| `unlimitedStorage` | Stores, inside the browser, the computed meaning vectors (embeddings) for each bookmark, the map layout, the user's constellations, and the downloaded language model data (about 135 MB), which can exceed the default storage quota. Nothing is sent off the device. | 各ブックマークの意味のベクトル（埋め込み）、配置、星座、取得したモデルのデータ（約 135 MB）をブラウザの中に保存する。既定の容量を超えうるため。外部には送らない。 |
+| `unlimitedStorage` | Stores, inside the browser, the computed meaning vectors (embeddings) for each bookmark, the map layout, the user's constellations, and the downloaded language model data (about 135 MB), which can exceed the default storage quota. The model version is pinned to a commit and every model file is verified against a recorded SHA-256 hash before use, including cached files. Bookmark data stays on the device. | 各ブックマークの意味のベクトル（埋め込み）、配置、星座、取得したモデルのデータ（約 135 MB）をブラウザの中に保存する。モデルは版を固定し、取得時とキャッシュからの読み込み時に記録済みの SHA-256 と照合する。ブックマークの内容は外に送らない。 |
 | `favicon` | Shows each site's icon in flight mode using the icons Chrome already has on the device (the `_favicon` URL). The extension never fetches icons from the network. | 飛行モードで、Chrome が端末に持っているサイトのアイコン（`_favicon`）を表示する。アイコンを取りに外部へ通信しない。 |
 <!-- permissions:end -->
 
@@ -64,18 +64,19 @@ English（入力する文）：
 > All JavaScript and WebAssembly (including the ONNX Runtime used to run the language model) are bundled in the extension package; nothing
 > executable is loaded from the network, and there is no eval or dynamic script loading. The only network access is a one-time download of the data
 > files of a fixed, publicly available text-embedding model (Xenova/multilingual-e5-small: weights, tokenizer and configuration) from Hugging Face.
-> These files are data (JSON and model weights) consumed by the bundled runtime; they do not change the extension's logic.
+> The model is pinned to a specific commit, and each file's SHA-256 hash is checked before use, including cached copies. These files are data
+> (JSON and model weights) consumed by the bundled runtime; they do not change the extension's logic.
 
 日本語：スクリプトと WebAssembly（モデルを動かす ONNX Runtime を含む）はすべて同梱し、外部から読み込まない（`eval` も動的なスクリプトの読み込みも無い）。
-外部から取得するのは、公開されている決まった埋め込みモデル（`Xenova/multilingual-e5-small`）のデータ（重み・トークナイザ・設定の JSON）だけ。
+外部から取得するのは、公開されている埋め込みモデル（`Xenova/multilingual-e5-small`）のデータ（重み・トークナイザ・設定の JSON）だけ。コミット `761b726dd34fb83930e26aab4e9ac3899aa1fa78` に固定し、取得時とキャッシュからの読み込み時に SHA-256 を照合する。
 
 公式の定義：RHC は「拡張機能のファイル以外から読み込まれてブラウザが実行するもの。JavaScript や WASM など。データや JSON・CSS は含まない」
 （remote-hosted-code のページ）。ただし、Manifest V3 の追加の決まりには「外部の資源はロジックを含んではならない」「データとして取得しても、
-複雑な命令を実行する解釈器を作るのは違反」とある。モデル（ONNX）は演算の並びを含むデータなので、下の「確認したいこと」の 3 に挙げた。
+複雑な命令を実行する解釈器を作るのは違反」とある。モデル（ONNX）は演算の並びを含むデータなので、審査時の判断はダッシュボードで確認する。使う人の判断に従い、版とハッシュを固定して No と申告する。
 
 ---
 
-## 5. データの使用（Data usage）の案
+## 5. データの使用（Data usage）
 
 ### 申告が要るか
 
@@ -85,11 +86,11 @@ English（入力する文）：
 - 同じく 4：利用者のデータの例に「ウェブの閲覧の活動（利用者が求めた・触れたウェブサイトやウェブの資源についての情報。ブラウザが触れたドメインや URL を含む）」がある。
 - ブックマークは、タイトル・URL・最終利用日を持つので、この「ウェブの閲覧の活動」にあたると判断した。**端末の中だけで扱う場合も申告する**。
 
-### チェックする種類（案）
+### チェックする種類
 
 ダッシュボードの種類の名前と定義は、公式の説明のページには載っておらず、ダッシュボードの画面で決まる（入力するときに画面の定義と照らし合わせる）。
 
-| 種類（ダッシュボードの表記の想定） | 案 | 理由 |
+| 種類（ダッシュボードの表記の想定） | 選択 | 理由 |
 |---|---|---|
 | Web history（ウェブ履歴） | **チェックする** | ブックマークの URL・タイトル・最終利用日を読み取って、端末の中で処理・保存する。FAQ の「ウェブの閲覧の活動」の定義に当たる |
 | Personally identifiable information（個人を特定できる情報） | しない | 氏名・メールアドレスなどは扱わない |
@@ -98,6 +99,8 @@ English（入力する文）：
 | Location（位置情報） | しない | 扱わない（IP アドレスはモデルの取得のときに Hugging Face に届くが、ブクスペは受け取らない） |
 | User activity（ユーザーのアクティビティ） | しない | クリックや入力を記録・送信しない（画面の操作は画面の中で使うだけ） |
 | Website content（ウェブサイトのコンテンツ） | しない | ブックマークしたページの中身は読まない |
+
+使う人の判断：Web history にチェックを入れて進める。ダッシュボード上の実際の項目と説明は、入力時に使う人が最終確認する。
 
 ### 誓約（3 つともチェックする）
 
@@ -128,5 +131,4 @@ FAQ の 14：端末の中だけに保存する場合も必要）
 開示の決まり：「利用者のデータを扱うなら、インストールの前に、どのデータを集めてどう使うかを目立つように開示し、利用者の積極的で十分な説明を受けた同意を得る。
 インストール後にデータの扱いを変えるときは、その変更を目立つように開示する」。
 
-今の形：ストアの掲載文の「プライバシー」の段落、プライバシーポリシー、インストール時の「ブックマークの読み取りと変更」の確認で、インストールの前に開示している。
-拡張機能の画面の中に、初回の説明（ブックマークは端末の中だけで扱う、など）は無い。これで足りるかは「確認したいこと」の 2。
+初めて開いたとき、ブックマークは端末の中だけで処理し外へ送らないこと、モデルを Hugging Face から約 135 MB 取得すること、プライバシーポリシーへのリンクを説明する。「始める」を押すまでモデル取得を始めず、同意はこの端末に記録して次回から画面を出さない。

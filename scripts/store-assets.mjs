@@ -11,12 +11,13 @@
  *  - screenshot-5-flight.png        1280×800  3D 飛行モード（近づいた星の窓）
  *  - promo-small-440x280.png        440×280   小さな宣伝用画像（星空と名前だけ）
  *  - promo-marquee-1400x560.png     1400×560  大きな宣伝用画像（星空と名前と一行の説明）
- *  - icon-128.png                   128×128   public/icons/icon128.png をそのまま写す
+ *  - icon-128.png                   128×128   manifest のアイコンを 96px に縮めて透明な余白を付ける
  * 宣伝用の画像は、画面の部品を隠した星空の上に、DESIGN.md の書体（名前は明朝）と色（藍・生成り）で名前を重ねて撮る。
  */
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { launchExtension, sleep } from "./lib/harness.mjs";
+import { writeStoreIcon } from "./store-icon.mjs";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const OUT = join(ROOT, "docs/store/assets");
@@ -137,7 +138,7 @@ try {
   await promo(1400, 560, "promo-marquee-1400x560.png", 64, 22, 150);
   await promo(440, 280, "promo-small-440x280.png", 34, 12, 40);
 
-  copyFileSync(join(ROOT, "public/icons/icon128.png"), join(OUT, "icon-128.png"));
+  writeStoreIcon(ROOT);
   console.log("  icon-128.png");
 } finally {
   await app.close();

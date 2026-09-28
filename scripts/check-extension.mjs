@@ -145,6 +145,11 @@ try {
 
   const evalIn = async (expression) =>
     (await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result.value;
+  for (let i = 0; i < 100; i++) {
+    if (await evalIn("document.readyState === 'complete'")) break;
+    await sleep(100);
+  }
+  await evalIn("document.getElementById('first-run-start')?.click()");
   await send("Performance.enable", {}, sessionId);
   const layoutCount = async () => (await send("Performance.getMetrics", {}, sessionId))
     .metrics.find((metric) => metric.name === "LayoutCount")?.value ?? NaN;

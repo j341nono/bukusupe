@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { createChecker, launchExtension } from "./lib/harness.mjs";
+import { createChecker, decodePng, launchExtension } from "./lib/harness.mjs";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const STORE = join(ROOT, "docs/store");
@@ -48,7 +48,7 @@ check(described.length > 0 && missing.length === 0 && extra.length === 0,
 const warningsBlock = block(practices, "warnings") ?? "";
 const writtenWarnings = [...warningsBlock.matchAll(/^- 「(.+?)」/gm)].map((m) => m[1]);
 let actual = null;
-const app = await launchExtension(join(ROOT, "dist"), { query: "" });
+const app = await launchExtension(join(ROOT, "dist"), { query: "", autoConsent: false });
 try {
   actual = JSON.parse((await app.tryEval(`(async () => JSON.stringify(
     await chrome.management.getPermissionWarningsByManifest(${JSON.stringify(JSON.stringify(manifest))})))()`)) ?? "null");
@@ -76,10 +76,15 @@ const images = [
 ];
 const sizes = images.map(([file, w, h]) => ({ file, want: `${w}×${h}`, size: pngSize(join(STORE, "assets", file)) }));
 const wrong = sizes.filter((s) => !s.size || `${s.size.w}×${s.size.h}` !== s.want);
-const iconSame = existsSync(join(STORE, "assets/icon-128.png")) &&
-  readFileSync(join(STORE, "assets/icon-128.png")).equals(readFileSync(join(ROOT, "public/icons/icon128.png")));
-check(wrong.length === 0 && iconSame, "掲載用の画像の大きさがストアの決まりに合い、ストア用のアイコンは拡張機能のアイコンと同じ",
-  wrong.length ? wrong.map((s) => `${s.file} ${s.size ? `${s.size.w}×${s.size.h}` : "無い"}（${s.want}）`).join("・") : `${sizes.length} 枚・アイコン ${iconSame ? "同じ" : "違う"}`);
+const icon = decodePng(readFileSync(join(STORE, "assets/icon-128.png")));
+let margin = true, center = false;
+for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+  const alpha = icon.data[(y * 128 + x) * 4 + 3];
+  if ((x < 16 || x >= 112 || y < 16 || y >= 112) && alpha !== 0) margin = false;
+  if (x >= 16 && x < 112 && y >= 16 && y < 112 && alpha > 0) center = true;
+}
+check(wrong.length === 0 && margin && center, "掲載用画像の大きさと、ストア用アイコンの透明な余白 16px",
+  wrong.length ? wrong.map((s) => `${s.file} ${s.size ? `${s.size.w}×${s.size.h}` : "無い"}（${s.want}）`).join("・") : `${sizes.length} 枚・余白 ${margin ? "あり" : "なし"}`);
 
 console.log(problems.length ? `NG（${problems.length} 件）` : "OK");
 process.exit(problems.length ? 1 : 0);

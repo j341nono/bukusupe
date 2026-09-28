@@ -21,7 +21,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * dist を null にすると拡張機能を読み込まず、url のページ（Web のデモなど）を開く。
  */
 export async function launchExtension(dist, { width = 1280, height = 800, query = "debug=1", url = null, beforeOpen = null,
-  headless = true, profileDir = null, startPath = null } = {}) {
+  headless = true, profileDir = null, startPath = null, autoConsent = true } = {}) {
   // profileDir を渡すと、そのプロファイルを使い、閉じても消さない（測定でモデルのキャッシュを使い回すため）
   const profile = profileDir ?? mkdtempSync(join(tmpdir(), "bukusupe-"));
   const display = headless
@@ -100,6 +100,10 @@ export async function launchExtension(dist, { width = 1280, height = 800, query 
     }
     return false;
   };
+  if (autoConsent) {
+    await waitUntil("document.readyState === 'complete'", 15_000, 100);
+    await tryEval("document.getElementById('first-run-start')?.click()");
+  }
   /** ページ内で KeyboardEvent を発行する（アプリが見ているのは window の keydown / keyup と event.code）。 */
   const key = (type, code, keyName, target = "document.activeElement ?? document.body") => evalIn(`(() => {
     const event = new KeyboardEvent(${JSON.stringify(type)}, { code: ${JSON.stringify(code)}, key: ${JSON.stringify(keyName)},

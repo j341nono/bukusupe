@@ -65,9 +65,9 @@
 
         <h2>外部との通信</h2>
         <ul>
-          <li><strong>モデルのデータの取得</strong>：初回（と、ブラウザのキャッシュが消えたとき）に、意味の計算に使うモデル（<code>Xenova/multilingual-e5-small</code>）の
+          <li><strong>モデルのデータの取得</strong>：初回の説明で「始める」を押した後（と、ブラウザのキャッシュが消えたとき）に、意味の計算に使うモデル（<code>Xenova/multilingual-e5-small</code>）の
             データを Hugging Face（<code>huggingface.co</code> と、その配信用の <code>*.hf.co</code>）からダウンロードします。取得したデータはブラウザの中に保存し、
-            次からはそれを使います。</li>
+            次からはそれを使います。モデルの版を固定し、取得したファイルとキャッシュのファイルを、記録済みの SHA-256 と照合してから使います。</li>
           <li>この通信は読み込み（GET）だけで、ブックマークの内容や星座は含みません。一般的なウェブの通信と同じく、通信先には、あなたの IP アドレス、
             ブラウザの種類（User-Agent）、言語の設定、拡張機能の識別子（Origin）などが届きます。これらの扱いは
             <a href="https://huggingface.co/privacy">Hugging Face のプライバシーポリシー</a>に従います。</li>
@@ -142,9 +142,9 @@
 
         <h2>Network access</h2>
         <ul>
-          <li><strong>Model download</strong>: the first time (and again if the browser cache is cleared), Bukusupe downloads the data of the language model
+          <li><strong>Model download</strong>: after you press “Start” on the first-run explanation (and again if the browser cache is cleared), Bukusupe downloads the data of the language model
             (<code>Xenova/multilingual-e5-small</code>) from Hugging Face (<code>huggingface.co</code> and its delivery hosts <code>*.hf.co</code>). The data is
-            kept in your browser and reused afterwards.</li>
+            kept in your browser and reused afterwards. The model revision is pinned, and every downloaded or cached file is checked against its recorded SHA-256 hash before use.</li>
           <li>These requests only read data (GET) and never include your bookmarks or constellations. As with any web request, the server receives your
             IP address, browser type (User-Agent), language settings, and the extension's identifier (Origin). Hugging Face handles them under the
             <a href="https://huggingface.co/privacy">Hugging Face Privacy Policy</a>.</li>

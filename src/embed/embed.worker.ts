@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
 import { configureOrt, dropOldModelCache } from "./ort-env";
+import { MODEL_REVISION, prepareVerifiedModel } from "./model-integrity";
 import type { EmbedDtype, EmbedRequest, EmbedResponse } from "./protocol";
 
 /**
@@ -46,13 +47,9 @@ const post = (msg: EmbedResponse) => self.postMessage(msg);
 
 function load(model: string, dtype: EmbedDtype): Promise<FeatureExtractionPipeline> {
   return pipeline("feature-extraction", model, {
+    revision: MODEL_REVISION,
     dtype,            // 通常は q8 = onnx/model_quantized.onnx（int8、約118MB）。fp16・fp32 は測定の比較だけ
     device: "wasm",   // WebGPU は使わない（SPEC 6 章）
-    progress_callback: (p: { status: string; file?: string; progress?: number }) => {
-      if (p.status === "progress" && p.progress != null) {
-        post({ type: "download", file: p.file ?? "", progress: p.progress });
-      }
-    },
   });
 }
 
@@ -67,6 +64,7 @@ self.onmessage = async (event: MessageEvent<EmbedRequest>) => {
       // 前の版のモデルのキャッシュ（transformers-cache）は、読み込みの前に消す。拡張機能だけ（Web のデモは origin を他のページと共有する）
       extractor = (async () => {
         if (!__WEB__) await dropOldModelCache();
+        await prepareVerifiedModel(msg.model, dtype, (file, progress) => post({ type: "download", file, progress }));
         return load(msg.model, dtype);
       })();
       await extractor;

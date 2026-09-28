@@ -137,6 +137,7 @@ async function restoreReturnState(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  await awaitFirstRunConsent();
   const canvas = document.getElementById("space") as HTMLCanvasElement | null;
   const labels = document.getElementById("labels");
   if (!canvas || !labels) throw new Error("画面の土台が見つからない");
@@ -146,6 +147,7 @@ async function main(): Promise<void> {
   // 星の色と明るさは「最後に触れた日」から（段階 2 の一部。ラベルの目立ち方は段階 2 の残り）
   view.setStarAppearance(touchAppearance);
   view.onStarLabelClick = handleStarClick;
+  view.onStarLabelDoubleClick = (id, newTab) => { if (!selection && !view?.inFlight) openBookmark(id, newTab); };
   setupFlight();
   view.start();
 
@@ -190,6 +192,21 @@ async function main(): Promise<void> {
   // 旧形式の星座を移す。検索（モデル）を待つので、画面の準備は止めない（移すまでは前回の呼び出しの形で描く）
   void migrateConstellations();
   document.getElementById("relayout")?.addEventListener("click", () => void enqueue(relayout));
+}
+
+function awaitFirstRunConsent(): Promise<void> {
+  const key = "bukusupe:first-run-consent-v1";
+  if (localStorage.getItem(key) === "yes") return Promise.resolve();
+  const panel = document.getElementById("first-run");
+  const start = document.getElementById("first-run-start");
+  if (!panel || !start) throw new Error("初回の説明が見つからない");
+  document.body.dataset.phase = "consent";
+  panel.hidden = false;
+  return new Promise((resolve) => start.addEventListener("click", () => {
+    localStorage.setItem(key, "yes");
+    panel.hidden = true;
+    resolve();
+  }, { once: true }));
 }
 
 /**
@@ -239,7 +256,9 @@ function loadModelInBackground(): void {
     document.body.dataset.model = "error";
     modelFailed = true;
     void migrateConstellations();
-    if (status) status.textContent = "意味の検索を準備できなかった（文字の一致で探す）";
+    if (status) status.textContent = String(err).includes("MODEL_INTEGRITY_ERROR")
+      ? "モデルの検証に失敗しました。再読み込みしてください（文字の一致で探せます）"
+      : "意味の検索を準備できなかった（文字の一致で探す）";
   });
 }
 
@@ -301,7 +320,8 @@ async function computeEmbeddings(): Promise<void> {
     });
   } catch (err) {
     console.error("[ブクスペ] 埋め込みに失敗", err);
-    renderHud({ ...base, status: "意味の計算に失敗した", phase: "error" });
+    renderHud({ ...base, status: String(err).includes("MODEL_INTEGRITY_ERROR")
+      ? "モデルの検証に失敗しました。再読み込みしてください" : "意味の計算に失敗した", phase: "error" });
   } finally {
     view?.hold("embedding", false);
   }

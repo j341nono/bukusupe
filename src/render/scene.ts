@@ -217,6 +217,7 @@ export class SpaceView {
   /** 描画できたコマ数。計算中も画面が動いていることの確認に使う。 */
   frames = 0;
   onStarLabelClick: ((id: string) => void) | null = null;
+  onStarLabelDoubleClick: ((id: string, newTab: boolean) => void) | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement, labelContainer: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -309,6 +310,7 @@ export class SpaceView {
     this.labels = new LabelLayer(labelContainer);
     this.labels.onHover = (key) => this.hoverStar(key);
     this.labels.onClick = (key) => this.onStarLabelClick?.(key);
+    this.labels.onDoubleClick = (key, newTab) => this.onStarLabelDoubleClick?.(key, newTab);
     this.labels.onClusterClick = (cluster) => this.focusCluster(cluster);
 
     addEventListener("resize", this.resize);

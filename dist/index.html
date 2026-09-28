@@ -560,10 +560,23 @@
         color: var(--dim);
         pointer-events: none;
       }
+      #first-run:not([hidden]) { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: #070a18; }
+      #first-run article { max-width: 480px; padding: 36px; border: 1px solid var(--hairline); background: #101629; line-height: 1.9; }
+      #first-run h1 { font-family: var(--font-name); font-size: 25px; font-weight: normal; letter-spacing: .12em; }
+      #first-run p { font-size: 14px; color: var(--ink); }
+      #first-run a { color: var(--ink); text-underline-offset: 3px; }
+      #first-run-start { margin-top: 18px; padding: 10px 32px; color: var(--night); background: var(--ink); border: 0; cursor: pointer; }
     </style>
     <script type="module" crossorigin src="./index.js"></script>
   </head>
   <body>
+    <section id="first-run" aria-label="初回のご案内" hidden><article>
+      <h1>ブクスペを始める前に</h1>
+      <p>ブックマークはこの端末の中だけで処理します。内容を外部へ送りません。</p>
+      <p>初回に、意味を読み取るためのモデル（約135 MB）を Hugging Face から取得します。</p>
+      <p><a href="https://j341nono.github.io/bukusupe/privacy/" target="_blank" rel="noopener noreferrer">プライバシーポリシーを読む</a></p>
+      <button id="first-run-start" type="button">始める</button>
+    </article></section>
     <canvas id="space"></canvas>
     <div id="vignette"></div>
     <div id="labels"></div>

@@ -92,12 +92,14 @@ export class LabelLayer {
   private hovered: string | null = null;
   onHover: ((key: string | null) => void) | null = null;
   onClick: ((key: string) => void) | null = null;
+  onDoubleClick: ((key: string, newTab: boolean) => void) | null = null;
   onClusterClick: ((cluster: number) => void) | null = null;
 
   constructor(private readonly container: HTMLElement) {
     container.addEventListener("mouseover", this.onOver);
     container.addEventListener("mouseout", this.onOut);
     container.addEventListener("click", this.onLabelClick);
+    container.addEventListener("dblclick", this.onLabelDoubleClick);
   }
 
   render(items: PlacedLabel[], tier: ZoomTier, circles: ScreenCircle[] = []): number {
@@ -256,6 +258,14 @@ export class LabelLayer {
     if (el?.dataset?.kind === "star" && el.dataset.key) this.onClick?.(el.dataset.key);
     else if (el?.dataset?.kind === "cluster" && el.classList.contains("label-cluster-focus")) {
       this.onClusterClick?.(Number(el.dataset.cluster));
+    }
+  };
+
+  private readonly onLabelDoubleClick = (e: MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el?.dataset?.kind === "star" && el.dataset.key) {
+      this.onDoubleClick?.(el.dataset.key, e.ctrlKey || e.metaKey);
+      e.preventDefault();
     }
   };
 
