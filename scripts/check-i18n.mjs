@@ -8,6 +8,7 @@
  *  4. src/ の画面の部品と index.html に、辞書を通さない日本語の文言が直接書かれていない。
  *     見ないもの：コメント、確認用の仕組み（src/debug/ と `if (__DEBUG__) { … }` の中）、開発者向けの記録（console.* と Error の文）、
  *     辞書そのもの（src/i18n/ja.ts・en.ts）と、画面の文言ではないデータ（下の DATA_FILES。理由つき）
+ *  5. 英語と日本語の文言の一覧（docs/i18n-review.md）が、今の辞書から作ったものと同じ（`npm run i18n:review` で作り直す）
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -144,6 +145,16 @@ const html = (read("index.html") ?? "")
 html.split("\n").forEach((text, i) => { if (JAPANESE.test(text)) found.push(`index.html（本文の ${i + 1} 行目） ${text.trim().slice(0, 30)}`); });
 check(!!read("src/i18n/ja.ts") && found.length === 0, "src/ の画面の部品と index.html に、辞書を通さない日本語の文言が直接書かれていない",
   found.length ? `${found.length} 件：${found.slice(0, 5).join("・")}` : `除いたデータ ${Object.keys(DATA_FILES).length} 件`);
+
+// --- 5. 文言の一覧（docs/i18n-review.md） ---
+{
+  const { renderI18nReview } = await import("./gen-i18n-review.mjs");
+  let want = null;
+  try { want = await renderI18nReview(ROOT); } catch { /* 辞書を読めなければ NG */ }
+  const have = read("docs/i18n-review.md");
+  check(!!want && have === want, "英語と日本語の文言の一覧（docs/i18n-review.md）が今の辞書と同じ",
+    !have ? "一覧が無い" : !want ? "辞書を読めない" : have === want ? "同じ" : "違う（npm run i18n:review で作り直す）");
+}
 
 console.log(problems.length ? `NG（${problems.length} 件）` : "OK");
 process.exit(problems.length ? 1 : 0);

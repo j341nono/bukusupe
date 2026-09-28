@@ -32,6 +32,7 @@
     "check:idle": "npm run build:debug >/dev/null && node scripts/check-idle.mjs",
     "check:safety": "npm run build:debug >/dev/null && node scripts/check-safety.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "i18n:review": "node --no-warnings scripts/gen-i18n-review.mjs",
     "check:language": "npm run build:debug >/dev/null && node scripts/check-language.mjs"
   },
   "dependencies": {

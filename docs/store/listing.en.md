@@ -20,10 +20,10 @@ Same as `extName` in `public/_locales/en/messages.json` (25 characters). "Bukusu
 ## Summary (132 characters or less)
 
 <!-- summary:start -->
-Bookmarks as stars, arranged by meaning. Search pulls them close, link them into constellations, fly among them. All on your device.
+Turn your bookmarks into a galaxy of stars and find pages by meaning. Link them into constellations and fly among them.
 <!-- summary:end -->
 
-Same as `extDescription` in `public/_locales/en/messages.json` (132 characters). The store uses the manifest's value, so change `_locales` first.
+Same as `extDescription` in `public/_locales/en/messages.json` (119 characters; it says what the tool does in the first words and leaves some room under the limit). The store uses the manifest's value, so change `_locales` first.
 
 ## Description
 
@@ -34,7 +34,7 @@ Bukusupe lays out your Chrome bookmarks as stars in a single night sky. Pages ab
 Bukusupe reads the meaning of each bookmark's title and folder and places related pages near each other. A star's brightness shows when you last touched it: pages you opened recently shine brighter and bluer. Drag to move and scroll to zoom. Click a cluster name to fly to it.
 
 ■ Black hole search
-Type in the search box and matching stars are pulled into orbit around a black hole. Stars are found by meaning, even when the words don't match exactly. Press Enter to open the page, and use the browser's Back button to return where you were.
+Type in the search box and matching stars are pulled into orbit around a black hole. Bukusupe searches by meaning, so pages surface even when the words don't match exactly (it falls back to keyword search while the language model is loading). Press Enter to open the page, and use the browser's Back button to return where you were.
 
 ■ Constellations and selection mode
 Pick stars, link them with lines, and save them as a named "constellation". In selection mode you can click stars anywhere on the map, or hold Shift and drag to select an area. A constellation keeps exactly the stars you saved; when a bookmark added later matches the constellation's search words, it is shown as a "nova" you can add or skip.

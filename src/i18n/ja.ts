@@ -41,7 +41,7 @@ const ja = {
   "status.clusters#one": "{count} つの星団",
   "status.integrityFailed": "モデルの検証に失敗しました。再読み込みしてください",
   "status.embedFailed": "意味の計算に失敗した",
-  "status.loadFailed": "読み込みに失敗した。コンソールを確認する。",
+  "status.loadFailed": "読み込みに失敗しました。再読み込みしてください。",
   "loading": "星を数えている…",
 
   "hud.stars": "星",
@@ -83,7 +83,7 @@ const ja = {
   "flight.helpNote": "宇宙船は止まらずに進む。星に近づくと名前が見え、星の芯に入るとそのページが開く",
 
   "card.open": "開く",
-  "card.root": "ルート",
+  "card.root": "フォルダなし",
 
   "select.toggle": "選択",
   "select.toggleEnd": "選択を終える",

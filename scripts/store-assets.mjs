@@ -138,7 +138,7 @@ try {
     const promo = document.createElement('div');
     promo.id = 'promo';
     const h1 = document.createElement('h1'); h1.textContent = 'Bukusupe';
-    const p = document.createElement('p'); p.textContent = 'a universe of your bookmarks';
+    const p = document.createElement('p'); p.textContent = 'A universe of your bookmarks';
     promo.append(h1, p);
     document.body.append(promo);
   })()`);
