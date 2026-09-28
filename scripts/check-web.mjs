@@ -229,6 +229,23 @@ try {
   const scripts = requests.filter((url) => /\.(m?js|wasm)(\?|$)/.test(url) && !url.startsWith(origin));
   check(external.length === 0 && scripts.length === 0, "外部から読み込むのはモデルの重みだけ（スクリプト・WASM は同梱のもの）",
     external.concat(scripts).slice(0, 3).join(" / ") || `通信 ${requests.length} 件`);
+  // --- 7. プライバシーポリシーのページ（/bukusupe/privacy/）。書いた通信先・保存場所が、実際の動き（この確認で見たもの）と合っている ---
+  const privacyRes = await fetch(`${origin}${BASE}privacy/`).catch(() => null);
+  const privacy = privacyRes?.ok ? await privacyRes.text() : "";
+  const hostsSeen = [...new Set(requests.filter((url) => /^https?:/.test(url) && !url.startsWith(origin) &&
+    !(navigated && url.startsWith(new URL(navigated).origin))).map((url) => new URL(url).host))];
+  const hostsCovered = hostsSeen.every((host) => host === "huggingface.co" || host.endsWith(".hf.co"));
+  const storesUsed = namesAsync ? [namesAsync.idb.length && "IndexedDB", namesAsync.cache.length && "Cache Storage",
+    namesAsync.local.length && "localStorage", namesAsync.session.length && "sessionStorage"].filter(Boolean) : [];
+  const mustSay = ["huggingface.co", "*.hf.co", "IndexedDB", "Cache Storage", "localStorage", "sessionStorage", "GET",
+    "j341nono.dev@gmail.com", "https://github.com/j341nono/bukusupe/issues", "最終更新", "Last updated", 'lang="en"', 'lang="ja"'];
+  const missing = mustSay.filter((word) => !privacy.includes(word));
+  check(privacyRes?.ok && existsSync(join(ROOT, "privacy", "index.html")) && missing.length === 0 && !/<script/i.test(privacy) &&
+    /Content-Security-Policy/.test(privacy) && hostsSeen.length > 0 && hostsCovered && storesUsed.every((name) => privacy.includes(name)),
+    "プライバシーポリシーのページ（/privacy/、日本語と英語）があり、書いた通信先と保存場所が実際の動きと合っている",
+    `ページ ${privacyRes?.status ?? "なし"}・実際の通信先 ${hostsSeen.join(", ") || "なし"}（${hostsCovered ? "記載の範囲" : "記載に無い通信先がある"}）・` +
+    `使った保存場所 ${storesUsed.join(", ")}${missing.length ? `・記載に無い ${missing.join(", ")}` : ""}`);
+
   const bad = app.events.filter((e) =>
     (e.method === "Log.entryAdded" && ["error", "warning"].includes(e.params.entry.level) && !IGNORE.test(e.params.entry.text)) ||
     (e.method === "Runtime.consoleAPICalled" && ["error", "warning", "warn"].includes(e.params.type)) ||
