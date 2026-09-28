@@ -6,7 +6,7 @@
 
 ## 問題・脆弱性の報告
 
-- GitHub の Issues（https://github.com/j341nono/bukusupe/issues）か、メール（j341nono.dev@gmail.com）で受け付ける。
+- GitHub の Issues（https://github.com/j341nono/bukusupe/issues）か、メール（j341nono.dev [at] gmail.com）で受け付ける。
   脆弱性の詳細を公開の Issue に書きたくない場合はメールで送ってもらう。
 - 問い合わせ先は `src/config.ts`（`SUPPORT_EMAIL`・`ISSUES_URL`）。仮の値に戻すと `npm run package` が失敗する（`check-release`）。
 

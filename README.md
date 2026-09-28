@@ -121,7 +121,7 @@ npm run sample:precompute  # Web のデモに同梱する計算済みのサン�
 ## 問い合わせ
 
 - 不具合や要望：[GitHub の Issues](https://github.com/j341nono/bukusupe/issues)
-- メール：j341nono.dev@gmail.com
+- メール：j341nono.dev [at] gmail.com
 
 報告にブックマークの内容を書く必要はありません。
 
