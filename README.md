@@ -97,7 +97,7 @@ from other sites, so Bukusupe does not ask for any website access permission for
 
 ## Privacy
 
-Privacy policy: https://j341nono.github.io/bukusupe/privacy/ (English and Japanese)
+Privacy policy: https://j341nono.github.io/bukusupe/privacy-policy.html
 
 - Your bookmarks (title, URL, folder names, date added, date last used) and constellations are **handled only inside your browser and never sent out**.
   Computing meanings, laying out the map, searching, and saving constellations all happen inside your browser (IndexedDB and so on).

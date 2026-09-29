@@ -122,7 +122,7 @@ English（入力する文）：
 
 ### プライバシーポリシーの URL
 
-https://j341nono.github.io/bukusupe/privacy/ （日本語・English。プライバシーポリシーの決まり：「利用者のデータを扱うなら、正確で最新のプライバシーポリシーを掲げる」。
+https://j341nono.github.io/bukusupe/privacy-policy.html （英語。プライバシーポリシーの決まり：「利用者のデータを扱うなら、正確で最新のプライバシーポリシーを掲げる」。
 FAQ の 14：端末の中だけに保存する場合も必要）
 
 ---

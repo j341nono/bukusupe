@@ -129,8 +129,8 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       rollupOptions: {
         // パスは root（プロジェクト直下）からの相対
-        // Web のデモには、プライバシーポリシーのページ（/bukusupe/privacy/）も入れる。拡張機能には入れない
-        input: web ? { index: "index.html", privacy: "privacy/index.html" } as Record<string, string> : {
+        // Web のデモには、プライバシーポリシー（/bukusupe/privacy-policy.html）と、旧 URL（/bukusupe/privacy/）からの転送のページも入れる。拡張機能には入れない
+        input: web ? { index: "index.html", privacy: "privacy/index.html", "privacy-policy": "privacy-policy.html" } as Record<string, string> : {
           index: "index.html",
           background: "src/background.ts",
         },

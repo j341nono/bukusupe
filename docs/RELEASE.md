@@ -154,6 +154,8 @@
 - **問い合わせ先**：`j341nono.dev [at] gmail.com`（`src/config.ts`）と GitHub の Issues。README・SECURITY.md に載せた。`npm run package` で `release/bukusupe-0.9.0.zip` ができる。
 - **プライバシーポリシー**：`privacy/index.html`（日本語と英語を 1 ページに）。Web のデモのビルド（`--mode web`）に入り、`https://j341nono.github.io/bukusupe/privacy/` に公開される
   （push の後に GitHub Actions が配信する。まだ push していないので、公開はこれから）。拡張機能のビルドには入れない。
+  **2026-09-29 に、英語の `privacy-policy.html`（`https://j341nono.github.io/bukusupe/privacy-policy.html`）を正式なポリシーにした**。
+  ストアの登録・掲載文・申告・README・初回の説明画面のリンクはすべてこの URL。旧 `privacy/index.html` は転送だけにし、本文は 1 か所で管理する（`check-web` の 7）。
   書いた内容はコードの動きに合わせた：通信先は `huggingface.co` と配信用の `us.aws.cdn.hf.co`（GET だけ、本文なし。届くのは IP・User-Agent・Accept-Language・Origin＝拡張機能の id。
   Referer と Cookie は無い。実測）、保存場所は IndexedDB・Cache Storage（`bukusupe-model`）・localStorage・sessionStorage。限定的な使用の決まりが求める宣言
   （"The use of information received from Google APIs will adhere to …"）も置いた。`check-web` が、ページの存在と、実際の通信先・保存場所・問い合わせ先・最終更新日・宣言の記載を確かめる。

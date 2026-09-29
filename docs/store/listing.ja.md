@@ -52,7 +52,7 @@ F キーで、星が立ち上がった立体の宇宙へ。宇宙船で星団の
 2. 「/」で検索、C で選択モード、F で飛行モード。操作の一覧は画面左上の ⓘ にあります。
 3. ブックマークが少ないうちは、ⓘ から 156 個の星が並ぶサンプルの宇宙でも試せます。
 
-プライバシーポリシー：https://j341nono.github.io/bukusupe/privacy/
+プライバシーポリシー：https://j341nono.github.io/bukusupe/privacy-policy.html
 不具合・要望：https://github.com/j341nono/bukusupe/issues
 <!-- description:end -->
 

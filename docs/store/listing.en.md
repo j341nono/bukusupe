@@ -53,7 +53,7 @@ The interface is available in English and Japanese. It follows your browser's la
 2. Press / to search, C for selection mode, and F for flight mode. All controls are listed under ⓘ at the top left.
 3. If you have only a few bookmarks, you can try a sample universe with 156 stars from the ⓘ panel.
 
-Privacy policy: https://j341nono.github.io/bukusupe/privacy/
+Privacy policy: https://j341nono.github.io/bukusupe/privacy-policy.html
 Bugs and requests: https://github.com/j341nono/bukusupe/issues
 <!-- description:end -->
 

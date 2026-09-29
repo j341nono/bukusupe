@@ -9,7 +9,8 @@
  *  4. サイトのアイコンは常に頭文字の紋章
  *  5. スマホ（タッチ・狭い画面）：ドラッグで移動、ピンチで拡大縮小、タップで選択。飛行モードのボタンは無く、案内が出る
  *  6. 外部から読み込むのはモデルの重みだけ。マニフェストを置かない。コンソールにエラー・警告が無い
- *  7. 画面の言語（SPEC 14 章）：英語の Chrome で開くと英語になり、ⓘ のパネルで日本語に切り替えられ、読み込み直しても保たれる
+ *  7. プライバシーポリシー（/privacy-policy.html）が実際の通信先・保存場所と合い、旧 URL（/privacy/）は転送だけ
+ *  8. 画面の言語（SPEC 14 章）：英語の Chrome で開くと英語になり、ⓘ のパネルで日本語に切り替えられ、読み込み直しても保たれる
  */
 import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -230,24 +231,36 @@ try {
   const scripts = requests.filter((url) => /\.(m?js|wasm)(\?|$)/.test(url) && !url.startsWith(origin));
   check(external.length === 0 && scripts.length === 0, "外部から読み込むのはモデルの重みだけ（スクリプト・WASM は同梱のもの）",
     external.concat(scripts).slice(0, 3).join(" / ") || `通信 ${requests.length} 件`);
-  // --- 7. プライバシーポリシーのページ（/bukusupe/privacy/）。書いた通信先・保存場所が、実際の動き（この確認で見たもの）と合っている ---
-  const privacyRes = await fetch(`${origin}${BASE}privacy/`).catch(() => null);
-  const privacy = privacyRes?.ok ? await privacyRes.text() : "";
+  // --- 7. プライバシーポリシー（/bukusupe/privacy-policy.html。ストアに登録する唯一の本文）。書いた通信先・保存場所が、実際の動き（この確認で見たもの）と合っている ---
   const hostsSeen = [...new Set(requests.filter((url) => /^https?:/.test(url) && !url.startsWith(origin) &&
     !(navigated && url.startsWith(new URL(navigated).origin))).map((url) => new URL(url).host))];
   const hostsCovered = hostsSeen.every((host) => host === "huggingface.co" || host.endsWith(".hf.co"));
   const storesUsed = namesAsync ? [namesAsync.idb.length && "IndexedDB", namesAsync.cache.length && "Cache Storage",
     namesAsync.local.length && "localStorage", namesAsync.session.length && "sessionStorage"].filter(Boolean) : [];
-  const mustSay = ["huggingface.co", "*.hf.co", "IndexedDB", "Cache Storage", "localStorage", "sessionStorage", "GET",
-    "j341nono.dev@gmail.com", "https://github.com/j341nono/bukusupe/issues", "最終更新", "Last updated", 'lang="en"', 'lang="ja"',
+  const policyRes = await fetch(`${origin}${BASE}privacy-policy.html`).catch(() => null);
+  const policy = policyRes?.ok ? await policyRes.text() : "";
+  const mustSay = ["huggingface.co", "*.hf.co", "GET", "SHA-256", "IndexedDB", "Cache Storage", "localStorage", "sessionStorage",
+    "j341nono.dev@gmail.com", "https://github.com/j341nono/bukusupe", "Last updated", 'lang="en"',
+    "does not transmit your bookmark data",
     // 限定的な使用（Limited Use）の決まりが求める、拡張機能のサイトに置く宣言
     "including the Limited Use requirements"];
-  const missing = mustSay.filter((word) => !privacy.includes(word));
-  check(privacyRes?.ok && existsSync(join(ROOT, "privacy", "index.html")) && missing.length === 0 && !/<script/i.test(privacy) &&
-    /Content-Security-Policy/.test(privacy) && hostsSeen.length > 0 && hostsCovered && storesUsed.every((name) => privacy.includes(name)),
-    "プライバシーポリシーのページ（/privacy/、日本語と英語）があり、書いた通信先と保存場所が実際の動きと合っている",
-    `ページ ${privacyRes?.status ?? "なし"}・実際の通信先 ${hostsSeen.join(", ") || "なし"}（${hostsCovered ? "記載の範囲" : "記載に無い通信先がある"}）・` +
+  const missing = mustSay.filter((word) => !policy.includes(word));
+  check(policyRes?.ok && existsSync(join(ROOT, "privacy-policy.html")) && missing.length === 0 && !/<script/i.test(policy) &&
+    /Content-Security-Policy/.test(policy) && hostsSeen.length > 0 && hostsCovered && storesUsed.every((name) => policy.includes(name)),
+    "プライバシーポリシーのページ（/privacy-policy.html）があり、書いた通信先と保存場所が実際の動きと合っている",
+    `ページ ${policyRes?.status ?? "なし"}・実際の通信先 ${hostsSeen.join(", ") || "なし"}（${hostsCovered ? "記載の範囲" : "記載に無い通信先がある"}）・` +
     `使った保存場所 ${storesUsed.join(", ")}${missing.length ? `・記載に無い ${missing.join(", ")}` : ""}`);
+  // 旧 URL（/privacy/）は転送だけ。本文を持たない（プライバシーポリシーを 2 か所で管理しない）
+  const oldRes = await fetch(`${origin}${BASE}privacy/`).catch(() => null);
+  const old = oldRes?.ok ? await oldRes.text() : "";
+  const redirects = /<meta http-equiv="refresh" content="0; url=\.\.\/privacy-policy\.html"/.test(old) &&
+    old.includes('href="../privacy-policy.html"');
+  // head には Vite が入れる CSP（connect-src に huggingface.co）があるので、本文（body）だけを見る
+  const oldBody = old.slice(old.indexOf("<body"));
+  const duplicated = ["huggingface.co", "IndexedDB", "Limited Use"].filter((word) => oldBody.includes(word));
+  check(oldRes?.ok && redirects && duplicated.length === 0 && !/<script/i.test(old),
+    "旧 URL（/privacy/）は /privacy-policy.html への転送だけで、ポリシーの本文を持たない",
+    `ページ ${oldRes?.status ?? "なし"}・転送 ${redirects ? "あり" : "なし"}${duplicated.length ? `・本文が残っている ${duplicated.join(", ")}` : ""}`);
 
   const bad = app.events.filter((e) =>
     (e.method === "Log.entryAdded" && ["error", "warning"].includes(e.params.entry.level) && !IGNORE.test(e.params.entry.text)) ||
@@ -262,7 +275,7 @@ try {
   await app.close();
 }
 
-// --- 7. 画面の言語（英語の Chrome。モデルの通信は止めておく：計算済みのサンプルで星空が出るので、言語の確認には要らない） ---
+// --- 8. 画面の言語（英語の Chrome。モデルの通信は止めておく：計算済みのサンプルで星空が出るので、言語の確認には要らない） ---
 // サンプルは言語ごとに違う（段階 3c）ので、ⓘ のパネルで切り替えると読み込み直してその言語のサンプルになる。
 const en = await launchExtension(null, { url: PAGE, lang: "en-US",
   beforeOpen: ({ send, sessionId }) => send("Network.setBlockedURLs", { urls: ["*huggingface.co*", "*hf.co*"] }, sessionId) });

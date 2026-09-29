@@ -30,7 +30,7 @@
 
 | 順 | 内容 | 状態 |
 |---|---|---|
-| 1 | 段階 3 の残り：push の後にプライバシーポリシー（`/bukusupe/privacy/`）が開けること、使う人の了承（英語の掲載文・英語の画面の画像を含む）、ダッシュボードでの最終確認（英語を主、日本語を追加の掲載として入れる） | 使う人待ち |
+| 1 | 段階 3 の残り：push の後にプライバシーポリシー（`/bukusupe/privacy-policy.html`）が開け、旧 URL `/bukusupe/privacy/` から転送されること、使う人の了承（英語の掲載文・英語の画面の画像を含む）、ダッシュボードでの最終確認（英語を主、日本語を追加の掲載として入れる） | 使う人待ち |
 | 2 | 段階 4：`0.9.1` を限定公開で申請し、試してもらう | 未着手（登録は使う人） |
 | 3 | 段階 5 の残り：多い件数、データの管理とバックアップ、動きを減らす設定、WebGL が無い環境、報告の窓口 | 未着手 |
 | 4 | 段階 6（1.0.0 の一般公開）・段階 7（片付け、フォルダの自動星座など） | 未着手 |
@@ -53,9 +53,9 @@
   macOS では Chrome 自体の言語（`_locales` の選び方・インストール時の警告）は変えられない。
 - **星団名**：保存する名前は `{dev}+{news}` のような形（`src/layout/names.ts`）。画面に出すときは必ず `clusterLabel()` を通す。確認用の窓口の `layout()` の `name` は表示名、`key` が保存の形。
 - **一緒に直すもの**：`_locales` の name・description と permissions → `docs/store/` の掲載文（英語と日本語）と申告（2 つ）（`check-store`）。
-  通信先・保存場所 → `privacy/index.html`（`check-web`）。版 → manifest・`package.json`・`CHANGELOG.md`（ずれるとビルドが失敗する）。
+  通信先・保存場所 → `privacy-policy.html`（`check-web`。本文はこの 1 か所だけ）。版 → manifest・`package.json`・`CHANGELOG.md`（ずれるとビルドが失敗する）。
 - **問い合わせ先**：`src/config.ts` の `SUPPORT_EMAIL`（仮の値に戻すと `npm run package` が失敗する）と GitHub の Issues。
-  Markdown の文書にはアドレスを `j341nono.dev [at] gmail.com` の形で書く（`privacy/index.html` と `check-web` はそのまま）。
+  Markdown の文書にはアドレスを `j341nono.dev [at] gmail.com` の形で書く（`privacy-policy.html` と `check-web` はそのまま）。
 - **星座**：保存データは形の版 2（`members` 固定・`query`・`dismissed`・`savedAt`・`source`）。選択モードの状態は `src/main.ts` の `selection`
   （`setSelecting` / `refreshSelection`）。ページを開くのは星本体・タイトル・カードとも `openBookmark` を通す（飛行中の地図のダブルクリックだけは開かない）。
   「戻る」用の保存状態の形を変えたら `RETURN_STATE_VERSION` を上げる（今は 3）。
@@ -513,7 +513,8 @@ CSP は `manifest.json` の `content_security_policy.extension_pages` に
 │   ├── history/             # 終えた段階の記録
 │   └── screens/             # check:ext が保存する画面と結果。before/ はデザイン見直し前、i18n/ は英語と日本語の主な画面
 ├── index.html               # 拡張機能の専用タブ兼 dev サーバーの画面
-├── privacy/index.html       # プライバシーポリシー（日本語・英語）。Web のデモと一緒に GitHub Pages の /bukusupe/privacy/ に出す
+├── privacy-policy.html      # プライバシーポリシー（英語、唯一の本文）。Web のデモと一緒に GitHub Pages の /bukusupe/privacy-policy.html に出す
+├── privacy/index.html       # 旧 URL（/bukusupe/privacy/）から privacy-policy.html への転送だけ（本文は置かない）
 ├── public/
 │   ├── manifest.json        # MV3 マニフェスト（そのまま dist/ にコピーされる。名前と説明は __MSG_…__）
 │   ├── _locales/            # 拡張機能の名前と説明（en・ja）

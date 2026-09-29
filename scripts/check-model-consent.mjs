@@ -17,7 +17,7 @@ const { check, problems } = createChecker();
     const text = await app.tryEval("document.getElementById('first-run')?.textContent ?? ''");
     const link = await app.tryEval("document.querySelector('#first-run a')?.href ?? ''");
     check(shown && before.length === 0 && /135\s*MB/.test(text ?? "") &&
-      /端末/.test(text ?? "") && link === "https://j341nono.github.io/bukusupe/privacy/",
+      /端末/.test(text ?? "") && link === "https://j341nono.github.io/bukusupe/privacy-policy.html",
     "初回は説明を出し、「始める」までモデルを取得しない",
     `説明 ${shown ? "あり" : "なし"}・モデル通信 ${before.length} 件`);
     if (shown) {

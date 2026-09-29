@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy for Bukusupe</title>
+    <meta name="description" content="Privacy policy for Bukusupe, a Chrome extension that shows your bookmarks as a night sky. Your bookmark data is processed only in your browser." />
+    <link rel="icon" href="./icons/icon128.png" />
+    <!--
+      Chrome Web Store privacy policy URL: https://j341nono.github.io/bukusupe/privacy-policy.html (built into dist-web/ by vite.config.ts).
+      Keep this page in sync with the code: network access (huggingface.co and *.hf.co, GET only) and storage
+      (IndexedDB, Cache Storage, localStorage, sessionStorage). check-web verifies these statements. No scripts on this page.
+    -->
+    <style>
+      :root {
+        --bg: #070a18; --panel: rgba(255, 255, 255, 0.025); --ink: #ece6d6; --dim: #a29d8c;
+        --faint: rgba(214, 205, 180, 0.2); --link: #d9d2c0; --gold: #d8b86a;
+        --font-name: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+        --font-text: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html { background: var(--bg); }
+      body { margin: 0; background: radial-gradient(ellipse at top, #0e1430 0%, var(--bg) 60%) no-repeat, var(--bg);
+        color: var(--ink); font-family: var(--font-text); line-height: 1.75; font-size: 16px; }
+      main { max-width: 760px; margin: 0 auto; padding: 56px 16px 88px; }
+      h1 { font-family: var(--font-name); font-weight: normal; letter-spacing: 0.04em; font-size: 30px; line-height: 1.3; margin: 0 0 6px; }
+      h2 { font-family: var(--font-name); font-weight: normal; letter-spacing: 0.03em; font-size: 21px; margin: 40px 0 10px;
+        padding-top: 16px; border-top: 1px solid var(--faint); }
+      h3 { font-size: 16px; margin: 20px 0 4px; }
+      p, li { overflow-wrap: anywhere; }
+      .updated { color: var(--dim); font-size: 14px; margin: 0 0 28px; }
+      .summary { background: var(--panel); border: 1px solid var(--faint); border-left: 3px solid var(--gold);
+        border-radius: 8px; padding: 14px 18px; margin: 0 0 8px; }
+      .summary p { margin: 6px 0; }
+      a { color: var(--link); text-underline-offset: 3px; }
+      a:hover { color: #fff; }
+      ul { padding-left: 1.3em; }
+      li { margin: 6px 0; }
+      code { font-size: 14px; color: var(--dim); }
+      table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 8px 0; }
+      th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--faint); }
+      th { font-weight: 600; color: var(--dim); }
+      .table-wrap { overflow-x: auto; }
+      footer { margin-top: 56px; color: var(--dim); font-size: 14px; }
+      @media (max-width: 480px) {
+        main { padding-top: 36px; }
+        h1 { font-size: 25px; }
+        th, td { padding: 6px 6px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Privacy Policy for Bukusupe</h1>
+      <p class="updated">Last updated: September 29, 2026</p>
+
+      <div class="summary">
+        <p><strong>In short:</strong> Bukusupe processes your bookmarks only inside your browser.</p>
+        <p>Bukusupe does not transmit your bookmark data, URLs, titles, folder names, embeddings, or visualization data to external servers.
+          The extension may download static machine learning model files and related resources from Hugging Face.</p>
+        <p>There is no analytics, no telemetry, no error tracking, no advertising, and no account. Bukusupe does not sell your data or share it with third parties.</p>
+      </div>
+
+      <h2>What Bukusupe does</h2>
+      <p>Bukusupe (“Bookmark Space”) is a Chrome extension that shows your Chrome bookmarks as stars in a night sky, arranged so that bookmarks with
+        similar meanings sit close together. With it you can:</p>
+      <ul>
+        <li>see your bookmarks laid out as a star map, grouped into clusters by meaning;</li>
+        <li>search your bookmarks by meaning (“black hole search”), which pulls matching stars toward the center;</li>
+        <li>connect stars you choose into named “constellations” and save them;</li>
+        <li>fly through a 3D view of the map to explore your bookmarks.</li>
+      </ul>
+      <p>Bukusupe has a single purpose: helping you browse, find, and organize your own bookmarks. This policy covers the Chrome extension and the
+        web demo published on GitHub Pages.</p>
+
+      <h2>Accessed Data</h2>
+      <p>Bukusupe accesses and creates the following data. None of it is personally identifying information such as your name or email address,
+        and Bukusupe does not read your browsing history.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>Bookmark titles, URLs, folder structure, date added, and date last used</td>
+              <td>Read from Chrome through the <code>bookmarks</code> permission. Bukusupe only reads bookmarks; it never creates, edits, moves, or deletes them.</td></tr>
+            <tr><td>Site icons (favicons)</td>
+              <td>Displayed from the copy Chrome already keeps on your device (the <code>favicon</code> permission). Bukusupe does not fetch icons from the internet and does not store them.</td></tr>
+            <tr><td>Embedding vectors</td>
+              <td>Numbers that represent the meaning of each bookmark, computed in your browser from its title, folder path, and URL.</td></tr>
+            <tr><td>Layout information</td>
+              <td>Star positions and cluster names on the map, computed in your browser from the embeddings.</td></tr>
+            <tr><td>Constellations</td>
+              <td>Created by you: the name, the bookmarks in it, and, if you made it from a search, the search words and their embedding; “new stars” you dismissed; the time it was saved.</td></tr>
+            <tr><td>Settings and screen state</td>
+              <td>Display language, whether to show the sample universe, whether the first-run notice and hints were shown, and a temporary snapshot of the view (map position, search words, selection) used to resume when you press Back.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>How the Data Is Used</h2>
+      <p>The data above is used only to provide Bukusupe’s features: to place bookmarks on the map, to search them by meaning, to show and save
+        constellations, to show site icons in flight mode, and to remember your settings. A bookmarked page is opened only when you choose it,
+        as a normal page navigation.</p>
+      <p>Bukusupe does <strong>not</strong>:</p>
+      <ul>
+        <li>sell your data;</li>
+        <li>use or transfer your data for purposes unrelated to its single purpose described above;</li>
+        <li>use your data for advertising, including personalized advertising;</li>
+        <li>use or transfer your data to determine creditworthiness or for lending purposes;</li>
+        <li>share your data with third parties.</li>
+      </ul>
+      <p>The use of information received from Google APIs will adhere to the
+        <a href="https://developer.chrome.com/docs/webstore/program-policies/policies">Chrome Web Store User Data Policy</a>, including the Limited Use requirements.</p>
+
+      <h2>Local Processing and Storage</h2>
+      <p>All processing happens inside your browser. Embeddings are computed on your device with a bundled copy of ONNX Runtime Web
+        (WebAssembly). There is no Bukusupe server. The data is stored in the extension’s own storage in your browser:</p>
+      <ul>
+        <li><strong>IndexedDB</strong>: embeddings, layout information, and constellations.</li>
+        <li><strong>Cache Storage</strong>: the downloaded model files (see Third-Party Services).</li>
+        <li><strong>localStorage</strong>: settings (display language, sample universe preference, whether notices were shown).</li>
+        <li><strong>sessionStorage</strong>: the temporary view snapshot used when you press Back; it is removed when it is used or when the tab is closed.</li>
+      </ul>
+      <p>All program code (JavaScript and WebAssembly) is bundled with the extension. Bukusupe does not load or run code from outside the extension.</p>
+
+      <h2>Data Sharing</h2>
+      <p>Bukusupe does not share, sell, rent, or transfer your data to anyone. It does not use analytics, telemetry, crash or error reporting,
+        or advertising services. Your bookmarks, embeddings, layout, and constellations never leave your browser.</p>
+
+      <h2>Data Retention / Deletion</h2>
+      <ul>
+        <li>Data is kept in your browser until you delete it. When a bookmark is removed from Chrome, Bukusupe removes its stored embedding the next time it updates.</li>
+        <li>You can delete a constellation from the “…” menu next to its name.</li>
+        <li>Removing the extension from Chrome deletes everything Bukusupe stored (embeddings, layout, constellations, model files, settings, and screen state).</li>
+        <li>Your bookmarks themselves belong to Chrome. Bukusupe never modifies or deletes them.</li>
+      </ul>
+
+      <h2>Third-Party Services</h2>
+      <h3>Hugging Face (model download)</h3>
+      <p>To compute meanings, Bukusupe uses the open language model <code>Xenova/multilingual-e5-small</code>. After you press “Start” on the
+        first-run notice (and again only if the browser’s cached copy is cleared), the extension downloads the model files
+        (configuration, tokenizer, and ONNX weight files) from Hugging Face (<code>huggingface.co</code> and its delivery hosts under <code>*.hf.co</code>).</p>
+      <ul>
+        <li>These are static data files. The model revision is pinned, and each file is checked against a recorded SHA-256 hash before use.</li>
+        <li>The requests only download files (HTTP GET). They never contain your bookmarks, URLs, titles, folder names, embeddings, search words, or constellations.</li>
+        <li>As with any web request, Hugging Face receives standard request information such as your IP address, browser type (User-Agent),
+          language preferences, and the extension’s origin. This is handled under the
+          <a href="https://huggingface.co/privacy">Hugging Face Privacy Policy</a>.</li>
+      </ul>
+      <h3>GitHub Pages (web demo and this page)</h3>
+      <p>This page and the web demo are hosted on GitHub Pages. The web demo uses only bundled sample bookmarks and never reads your bookmarks.
+        GitHub may log requests to these pages under the
+        <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub General Privacy Statement</a>.</p>
+
+      <h2>Changes to This Privacy Policy</h2>
+      <p>If this policy changes, this page will be updated and the “Last updated” date revised. If a change would send more data out of your
+        browser, it will be announced on this page and in the release notes before the version containing it is published.</p>
+
+      <h2>Contact</h2>
+      <ul>
+        <li>GitHub repository: <a href="https://github.com/j341nono/bukusupe">https://github.com/j341nono/bukusupe</a></li>
+        <li>Issues: <a href="https://github.com/j341nono/bukusupe/issues">https://github.com/j341nono/bukusupe/issues</a></li>
+        <li>Email: <a href="mailto:j341nono.dev@gmail.com">j341nono.dev@gmail.com</a></li>
+      </ul>
+
+      <footer>Bukusupe — Bookmark Space</footer>
+    </main>
+  </body>
+</html>

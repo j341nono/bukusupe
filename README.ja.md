@@ -94,7 +94,7 @@ Chrome は読み込むときに、次の権限を表示します。
 
 ## プライバシー
 
-プライバシーポリシー：https://j341nono.github.io/bukusupe/privacy/ （日本語・English）
+プライバシーポリシー：https://j341nono.github.io/bukusupe/privacy-policy.html （英語）
 
 - ブックマーク（タイトル・URL・フォルダ名・追加日・最終利用日）と星座は、**ブラウザの中だけで扱い、外に送りません**。
   意味の計算・配置・検索・星座の保存は、すべてブラウザの中（IndexedDB など）で行います。

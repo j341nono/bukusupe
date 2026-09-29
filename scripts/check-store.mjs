@@ -42,7 +42,7 @@ for (const [lang, label] of [["en", "英語"], ["ja", "日本語"]]) {
     `${chars(name)} 文字・manifest ${name === wantName ? "と同じ" : `と違う（${wantName}）`}`);
   check(summary && chars(summary) <= 132 && summary === wantSummary, `${label}の掲載文の短い説明が 132 文字以内で、manifest（_locales/${lang}）の description と同じ`,
     `${chars(summary)} 文字・manifest ${summary === wantSummary ? "と同じ" : "と違う"}`);
-  check(description && chars(description) > 300 && description.includes("https://j341nono.github.io/bukusupe/privacy/"),
+  check(description && chars(description) > 300 && description.includes("https://j341nono.github.io/bukusupe/privacy-policy.html"),
     `${label}の詳しい説明があり、プライバシーポリシーのページへ行ける`, `${chars(description)} 文字`);
 }
 check(manifest.default_locale === "en", "主の掲載は英語（manifest の default_locale が en）", manifest.default_locale ?? "無し");

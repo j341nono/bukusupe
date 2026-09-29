@@ -76,7 +76,7 @@ Certifications (check all three):
 Limited Use statement: the privacy policy page (English and Japanese) states *"The use of information received from Google APIs will adhere to the
 Chrome Web Store User Data Policy, including the Limited Use requirements."*
 
-Privacy policy URL: https://j341nono.github.io/bukusupe/privacy/
+Privacy policy URL: https://j341nono.github.io/bukusupe/privacy-policy.html
 
 ---
 
