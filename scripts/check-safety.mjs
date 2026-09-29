@@ -65,7 +65,7 @@ try {
   // --- 2. 形の違う星座の行が IndexedDB にあっても起動する ---
   await gotoManifest();
   await evalIn(`new Promise((resolve, reject) => {
-    const req = indexedDB.open('bukusupe-sample');
+    const req = indexedDB.open('bukusupe-sample-ja');
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       const db = req.result;
@@ -90,7 +90,7 @@ try {
     `準備 ${withBad.ready ? "完了" : "未完"}・一覧 ${JSON.stringify(list)}・例外 ${errorsSince(withBad.since).length} 件・警告 ${skipped.length} 件`);
   // 片付け：確認用の星座の行を消しておく
   await gotoManifest();
-  await evalIn(`new Promise((resolve) => { const req = indexedDB.open('bukusupe-sample'); req.onsuccess = () => {
+  await evalIn(`new Promise((resolve) => { const req = indexedDB.open('bukusupe-sample-ja'); req.onsuccess = () => {
     const tx = req.result.transaction('constellations', 'readwrite'); tx.objectStore('constellations').clear();
     tx.oncomplete = () => { req.result.close(); resolve(true); }; }; })`);
 
