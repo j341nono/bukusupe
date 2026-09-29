@@ -44,7 +44,9 @@
 - `check-web.mjs`：項目 7（画面の言語）を、切り替えで読み込み直る前提に直し、英語のサンプル・日本語のサンプルどちらも
   タイトルに相手の言語の文字が無いことを見るようにした。
 - どちらも、修正前のコード（reload の分岐が無い版）では新しく足した確認が NG になり、直すと通ることを確かめた（規則 8）。
-- `npm run check:ext`（18 本）はすべて OK。
+- **`check:ext` の結果（訂正、2026-09-29）**：この段階のコミットの時点では「`npm run check:ext`（18 本）はすべて OK」と記録していたが、誤りだった。
+  実際には `check-safety` が失敗していた（下の「つまずいた点」）。コミット `f7e5fb3` で直した後、`check:ext` を通しで走らせ直し、
+  18 本すべてが OK（確認 263 項目）になった。
 
 ## つまずいた点
 
@@ -61,3 +63,11 @@
   切り替えただけで（まだ `awaitFirstRunConsent()` の中で、実データを読み込む前）、`state.kind` の既定値が `"sample"` のままなので
   意図せず `location.reload()` してしまい、`check-language.mjs` の switching の確認が原因不明の `TypeError: Cannot set
   properties of null` で落ちた（要素が一瞬で消えたように見えた。実際は reload の途中でスクリプトを評価していた）。
+- **サンプルの DB の名前の変更で `check-safety` が落ちていた（コミットの後に発見）**：この段階で、サンプルの DB を `bukusupe-sample` から
+  `bukusupe-sample-ja` / `bukusupe-sample-en` に分けたが、`scripts/check-safety.mjs` は旧名 `bukusupe-sample` を直接開いていた（2 か所）。
+  旧名で開くと、ストアの無い空の DB ができ、`constellations` の取引が `onsuccess` の中で例外になって Promise が決着せず、
+  `Runtime.evaluate が 60 秒応答しない` で止まった。最初の `check:ext` の結果は `NG` の行ではなくこの例外と `NG（1 件）` として出ていたため、
+  `  NG` の行だけを数えていた集計が見落とし、出力を `tee` に通していたため終了コードも隠れて、「すべて OK」と誤って記録した。
+  コミット `f7e5fb3` で `bukusupe-sample-ja` を開くように直し（直す前は再現して失敗し、直した後に通ることを確かめた。規則 8）、
+  `check:ext` を通しで走らせ直して、18 本すべて OK（確認 263 項目）を確かめた。**教訓**：`check:ext` の合否は、`check:ext` 自体の終了コード
+  （パイプを通さない）と、各スクリプトの最後の `OK` / `NG（n 件）` の行で判断する。DB などの名前を変えたら、`scripts/` の中の直書きも探す。
