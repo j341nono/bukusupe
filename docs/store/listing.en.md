@@ -68,7 +68,7 @@ Bugs and requests: https://github.com/j341nono/bukusupe/issues
 
 ## Images
 
-`docs/store/assets/` (regenerate with `npm run store:assets`). Screenshots are in English (`en/`) for the primary listing and in Japanese (`ja/`)
+`docs/store/assets/` (screenshots and the store icon regenerate with `npm run store:assets`; the promo images are hand-made and kept in the repository, with high-resolution originals `promo-small-1572x1001.png` and `promo-marquee-1983x793.png`). Screenshots are in English (`en/`) for the primary listing and in Japanese (`ja/`)
 for the Japanese listing. Each set's sample universe is shot in the matching language (English or Japanese).
 The promotional images cannot differ by language, so they use English text only.
 
